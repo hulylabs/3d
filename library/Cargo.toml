@@ -1,0 +1,12 @@
+[package]
+name = "library"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cgmath = "0.18.0"
+log = "0.4.26"
+wgpu = "24.0.3"
+winit = "0.30.9"
+bytemuck = { version = "1.22.0", features = ["derive"] }
+pollster = "0.4"

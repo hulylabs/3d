@@ -1,0 +1,1 @@
+﻿pub(crate) const DEFAULT_EPSILON: f32 = 1e-7;
