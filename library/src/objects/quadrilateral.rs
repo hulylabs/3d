@@ -1,4 +1,4 @@
-use crate::geometry::aabb::AABB;
+use crate::geometry::aabb::Aabb;
 use crate::geometry::alias;
 use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
@@ -6,7 +6,6 @@ use cgmath::InnerSpace;
 
 use crate::objects::utils::common_properties::Linkage;
 use crate::objects::utils::serialization_helpers::GpuFloatBufferFiller;
-use crate::panic_if_failed;
 use alias::Point;
 use alias::Vector;
 
@@ -43,8 +42,8 @@ impl Quadrilateral {
     }
 
     #[must_use]
-    pub(crate) fn bounding_box(&self) -> AABB {
-        let result = AABB::from_segment(
+    pub(crate) fn bounding_box(&self) -> Aabb {
+        let result = Aabb::from_segment(
             self.origin,
             self.origin + self.local_x + self.local_y,
         );
@@ -55,7 +54,7 @@ impl Quadrilateral {
     pub(crate) const SERIALIZED_SIZE: usize = Quadrilateral::SERIALIZED_QUARTET_COUNT * <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
 
     pub(crate) fn serialize_into(&self, container: &mut [f32]) {
-        panic_if_failed!(container.len() >= Quadrilateral::SERIALIZED_SIZE, "buffer size is too small");
+        assert!(container.len() >= Quadrilateral::SERIALIZED_SIZE, "buffer size is too small");
 
         let orth = self.local_x.cross(self.local_y);
         let orth_sqr = orth.dot(orth);

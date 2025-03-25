@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use winit::window::Window;
 use log::info;
+use thiserror::Error;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -28,8 +29,26 @@ pub struct Engine {
     window_surface_format: wgpu::TextureFormat,
 }
 
+#[derive(Error, Debug)]
+pub enum EngineInstantiationError {
+    #[error("failed to create window surface: {what:?}")]
+    SurfaceCreationError {
+        what: String,
+    },
+    #[error("failed to request adapter")]
+    AdapterRequisitionError
+    ,
+    #[error("failed to select device: {what:?}")]
+    DeviceSelectionError {
+        what: String,
+    },
+    #[error("surface is incompatible with the device")]
+    SurfaceCompatibilityError
+    ,
+}
+
 impl Engine {
-    pub async fn new(window: Arc<Window>) -> Result<Engine, String> {
+    pub async fn new(window: Arc<Window>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -37,7 +56,7 @@ impl Engine {
 
         let window_pixels_size = window.inner_size();
         let window_surface = wgpu_instance.create_surface(window.clone())
-            .map_err(|e| format!("failed create window surface: {}", e))?;
+            .map_err(|e| EngineInstantiationError::SurfaceCreationError{what: e.to_string()})?;
 
         let graphics_adapter = wgpu_instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -46,7 +65,7 @@ impl Engine {
                 ..Default::default()
             })
             .await
-            .ok_or(String::from("failed to get graphics adapter"))?;
+            .ok_or(EngineInstantiationError::AdapterRequisitionError)?;
 
         let (graphics_device, commands_queue) = graphics_adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -56,11 +75,11 @@ impl Engine {
                 memory_hints: wgpu::MemoryHints::default(),
             }, Some(Path::new("./")))
             .await
-            .map_err(|e| format!("failed to choose a device: {}", e))?;
+            .map_err(|e| EngineInstantiationError::DeviceSelectionError {what: e.to_string()})?;
 
         let surface_capabilities = window_surface.get_capabilities(&graphics_adapter);
         if surface_capabilities.formats.is_empty() {
-            return Err("surface in incompatible with the device".to_string());
+            return Err(EngineInstantiationError::SurfaceCompatibilityError);
         }
 
         let device_was_lost_flag = Arc::new(AtomicBool::new(false));
@@ -68,7 +87,7 @@ impl Engine {
         let lost_device_handler = {
             let device_was_lost = Arc::clone(&device_was_lost_flag);
             move |reason, message| {
-                info!("device lost: {}, {}", format!("{:?}", reason), message);
+                info!("device was lost: {}, {}", format!("{:?}", reason), message);
                 device_was_lost.store(true, Ordering::SeqCst);
             }
         };
@@ -76,9 +95,9 @@ impl Engine {
 
         let ware = Engine {
             device_was_lost: device_was_lost_flag.clone(),
-            graphics_device: graphics_device,
-            commands_queue: commands_queue,
-            window_pixels_size: window_pixels_size,
+            graphics_device,
+            commands_queue,
+            window_pixels_size,
             window_output_surface: window_surface,
             window_surface_format: surface_capabilities.formats[0],
         };

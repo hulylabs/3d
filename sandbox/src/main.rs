@@ -11,7 +11,6 @@ use winit::event_loop::ControlFlow;
 use log::trace;
 use log::info;
 use log::error;
-use colog;
 
 use library::Engine;
 
@@ -55,14 +54,14 @@ impl ApplicationHandler for Application {
                     Ok(e) => {
                         self.engine = Some(e);
                     },
-                    Err(error_message) => {
-                        error!("failed to create an engine: {}", error_message);
+                    Err(error) => {
+                        error!("failed to create an engine: {}", error);
                         event_loop.exit();
                     }
                 }
             }
-            Err(_) => {
-                error!("could not create the window");
+            Err(error) => {
+                error!("could not create the window: {}", error);
                 event_loop.exit();
             }
         }

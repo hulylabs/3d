@@ -1,7 +1,24 @@
-﻿use wgpu::util::DeviceExt;
-use wgpu::TextureView;
+﻿use naga::valid::{Capabilities, ValidationFlags, Validator};
+use thiserror::Error;
+use wgpu::naga::front::wgsl::parse_str;
+use wgpu::util::DeviceExt;
+use wgpu::{BufferUsages, TextureView};
 
 // TODO: work in progress
+
+#[derive(Error, Debug)]
+pub(crate) enum ShaderCreationError {
+    #[error("shader '{shader_name:?}' parse error: {message:?}")]
+    ParseError {
+        shader_name: String,
+        message: String,
+    },
+    #[error("shader '{shader_name:?}' validation error: {message:?}")]
+    ValidationError {
+        shader_name: String,
+        message: String,
+    },
+}
 
 pub(crate) struct Resources {
     device: wgpu::Device,
@@ -10,51 +27,48 @@ pub(crate) struct Resources {
 }
 
 impl Resources {
-    fn create_shader_module(&self, source: &str) -> wgpu::ShaderModule {
-        self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None, //TODO: name the shader
-            source: wgpu::ShaderSource::Wgsl(source.into()),
-        })
+    pub(crate) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> Result<wgpu::ShaderModule, ShaderCreationError> {
+        let module = parse_str(shader_source_code).map_err(|e| ShaderCreationError::ParseError {
+            shader_name: shader_name.to_string(),
+            message: format!("{:?}", e),
+        })?;
+        let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+        validator.validate(&module).map_err(|e| ShaderCreationError::ValidationError {
+            shader_name: shader_name.to_string(),
+            message: format!("{:?}", e),
+        })?;
+
+        Ok(self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(shader_name),
+            source: wgpu::ShaderSource::Wgsl(shader_source_code.into()), //TODO: can we use naga module created above?
+        }))
     }
 
-    pub fn create_uniform_buffer(&self, label: &str, uniform_array: &[u8]) -> (wgpu::Buffer, Vec<u8>) {
+    fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> wgpu::Buffer {
         let uniform_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
-            contents: uniform_array,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            contents: buffer_data,
+            usage,
         });
-        self.queue.write_buffer(&uniform_buffer, 0, uniform_array);
-        (uniform_buffer, uniform_array.to_vec())
+        self.queue.write_buffer(&uniform_buffer, 0, buffer_data);
+
+        uniform_buffer
     }
 
-    pub fn create_storage_buffer_write_only(&self, label: &str, buffer_array: &[u8]) -> (wgpu::Buffer, Vec<u8>) {
-        let storage_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: buffer_array,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-        self.queue.write_buffer(&storage_buffer, 0, buffer_array);
-        (storage_buffer, buffer_array.to_vec())
+    pub(crate) fn create_uniform_buffer(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+        self.create_buffer(label, BufferUsages::UNIFORM | BufferUsages::COPY_DST, buffer_data)
     }
 
-    pub fn create_storage_buffer_read_write(&self, label: &str, buffer_array: &[u8]) -> (wgpu::Buffer, Vec<u8>) {
-        let storage_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: buffer_array,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-        });
-        self.queue.write_buffer(&storage_buffer, 0, buffer_array);
-        (storage_buffer, buffer_array.to_vec())
+    pub fn create_storage_buffer_write_only(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+        self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_DST, buffer_data)
     }
 
-    pub fn create_vertex_buffer(&self, label: &str, buffer_array: &[u8]) -> (wgpu::Buffer, Vec<u8>) {
-        let vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: buffer_array,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-        self.queue.write_buffer(&vertex_buffer, 0, buffer_array);
-        (vertex_buffer, buffer_array.to_vec())
+    pub fn create_storage_buffer_read_write(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+        self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST, buffer_data)
+    }
+
+    pub fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+        self.create_buffer(label, BufferUsages::VERTEX | BufferUsages::COPY_DST, buffer_data)
     }
 
     pub fn create_render_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
@@ -103,7 +117,9 @@ impl Resources {
         surface.get_current_texture().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    pub fn create_render_pass_descriptor(&self, frame_buffer: &TextureView, target: &mut wgpu::RenderPassDescriptor) {
+    pub fn create_render_pass_descriptor(&self, frame_buffer: &TextureView, target: &mut wgpu::RenderPassDescriptor)
+    //    -> wgpu::RenderPassDescriptor
+    {
         // TODO: this could not be implemented
         // wgpu::RenderPassDescriptor {
         //     label: Some("renderPass"),
@@ -189,8 +205,8 @@ impl Resources {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Engine, DEVICE_LABEL};
     use super::*;
+    use crate::DEVICE_LABEL;
 
     #[must_use]
     async fn create_wgpu_device() -> (wgpu::Device, wgpu::Queue) {
@@ -224,16 +240,135 @@ mod tests {
         (device, queue)
     }
 
+    #[must_use]
     fn make_system_under_test() -> Resources {
         let (device, queue) = pollster::block_on(create_wgpu_device());
         Resources {
-            device: device,
-            queue: queue,
+            device,
+            queue,
             presentation_format: wgpu::TextureFormat::Rgba8Unorm,
         }
     }
 
+    const TRIVIAL_SHADER_CODE: &str = r#"
+        @vertex
+        fn vs_main() -> @builtin(position) vec4<f32> {
+            return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+        }
+    "#;
+
+    const SHADER_CODE_WITH_SYNTAX_ERROR: &str = r#"
+        @vertex
+        fn vs_main() -> @builtin(position) vec4<f32> {
+            return 1.0);
+        }
+    "#;
+
+    const SHADER_CODE_WITH_VALIDATION_ERROR: &str = r#"
+        @vertex
+        fn vs_main() -> @builtin(position) vec4<f32> {
+            return vec3<f32>(0, 0, 0, 1);
+        }
+    "#;
+
+    const DUMMY_BYTE_ARRAY: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+
     #[test]
-    fn test_create_shader_module() {
+    fn test_create_shader_module_successful_compilation() {
+        let system_under_test = make_system_under_test();
+
+        let shader = system_under_test.create_shader_module(
+            concat!("unit tests: file ", file!(), ", line: ", line!()), TRIVIAL_SHADER_CODE);
+
+        shader.err().and_then(|error| -> Option<ShaderCreationError>{
+            panic!("{}", error);
+        });
+    }
+
+    #[test]
+    fn test_create_shader_module_syntax_error_compilation() {
+        let system_under_test = make_system_under_test();
+
+        let shader = system_under_test.create_shader_module(
+            concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_SYNTAX_ERROR);
+
+        match shader {
+            Ok(_) => {
+                panic!("shader compilation expected to fail");
+            }
+            Err(error) => {
+                match error {
+                    ShaderCreationError::ParseError { .. } => {}
+                    ShaderCreationError::ValidationError { .. } => {
+                        panic!("parse error expected");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_shader_module_validation_error_compilation() {
+        let system_under_test = make_system_under_test();
+
+        let shader = system_under_test.create_shader_module(
+            concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_VALIDATION_ERROR);
+
+        match shader {
+            Ok(_) => {
+                panic!("shader compilation expected to fail");
+            }
+            Err(error) => {
+                match error {
+                    ShaderCreationError::ParseError { .. } => {
+                        panic!("validation error expected");
+                    }
+                    ShaderCreationError::ValidationError { .. } => {}
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_create_uniform_buffer() {
+        let system_under_test = make_system_under_test();
+
+        let buffer = system_under_test.create_uniform_buffer(
+            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
+
+        // TODO: do we need to wait for the queue to finish write? guess, yes
+        // TODO: system_under_test.queue.submit([]); - this will initiate the actual data transfer on GPU
+
+        assert_eq!(buffer.usage(), BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+    }
+
+    #[test]
+    fn test_create_storage_buffer_write_only() {
+        let system_under_test = make_system_under_test();
+
+        let buffer = system_under_test.create_storage_buffer_write_only(
+            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
+
+        assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_DST);
+    }
+
+    #[test]
+    fn test_create_storage_buffer_read_write() {
+        let system_under_test = make_system_under_test();
+
+        let buffer = system_under_test.create_storage_buffer_read_write(
+            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
+
+        assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST);
+    }
+
+    #[test]
+    fn test_create_vertex_buffer() {
+        let system_under_test = make_system_under_test();
+
+        let buffer = system_under_test.create_vertex_buffer(
+            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
+
+        assert_eq!(buffer.usage(), BufferUsages::VERTEX | BufferUsages::COPY_DST);
     }
 }

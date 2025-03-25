@@ -1,9 +1,8 @@
-use std::ops::Add;
-use crate::geometry::aabb::AABB;
+use crate::geometry::aabb::Aabb;
 use crate::geometry::transform::Transformation;
 use crate::geometry::vertex::Vertex;
 use crate::objects::utils::serialization_helpers::GpuFloatBufferFiller;
-use crate::panic_if_failed;
+use std::ops::Add;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct MeshIndex(pub u32);
@@ -24,8 +23,8 @@ impl TriangleIndex {
 }
 impl Add<usize> for TriangleIndex {
     type Output = TriangleIndex;
-    fn add(self, rhs: usize) -> Self::Output {
-        TriangleIndex {0: self.0 + rhs as u32}
+    fn add(self, right: usize) -> Self::Output {
+        TriangleIndex(self.0 + right as u32)
     }
 }
 
@@ -34,8 +33,6 @@ pub(crate) enum TriangleVertex
     A,
     B,
     C,
-
-    Count,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -53,8 +50,8 @@ impl Triangle {
         Self { a, b, c, in_kind_index, host_mesh_index }
     }
 
-    pub(crate) fn bounding_box(&self) -> AABB {
-        let result = AABB::from_triangle(
+    pub(crate) fn bounding_box(&self) -> Aabb {
+        let result = Aabb::from_triangle(
             &self.a.position(),
             &self.b.position(),
             &self.c.position(),
@@ -76,7 +73,7 @@ impl Triangle {
     pub(crate) const SERIALIZED_SIZE: usize = Triangle::SERIALIZED_QUARTET_COUNT * <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
 
     pub(crate) fn serialize_into(&self, container: &mut [f32]) {
-        panic_if_failed!(container.len() >= Triangle::SERIALIZED_SIZE, "buffer size is too small");
+        assert!(container.len() >= Triangle::SERIALIZED_SIZE, "buffer size is too small");
 
         let mut index = 0;
 
@@ -118,7 +115,7 @@ mod tests {
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::epsilon::DEFAULT_EPSILON;
     use crate::geometry::transform::Affine;
-    use cgmath::{assert_abs_diff_eq, Rad, Transform};
+    use cgmath::{assert_abs_diff_eq, Rad};
     use std::f32::consts::PI;
 
     #[test]

@@ -7,7 +7,6 @@ use crate::geometry::vertex::Vertex;
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex, TriangleVertex};
 use crate::objects::utils::common_properties::Linkage;
 use crate::objects::utils::serialization_helpers::GpuFloatBufferFiller;
-use crate::panic_if_failed;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -34,11 +33,11 @@ impl TriangleMesh {
     #[must_use]
     pub(crate) fn new(
         vertices: &[VertexData],
-        indices: &Vec<u32>,
+        indices: &[u32],
         links: Linkage<MeshIndex>,
         triangles_base_index: TriangleIndex,
     ) -> Self {
-        panic_if_failed!(indices.len() % VERTICES_IN_TRIANGLE == 0, "illegal indices count of {}", indices.len());
+        assert!(indices.len() % VERTICES_IN_TRIANGLE == 0, "illegal indices count of {}", indices.len());
 
         let mut triangles: Vec<Triangle> = Vec::new();
         for triangle in indices.chunks(VERTICES_IN_TRIANGLE) {
@@ -61,7 +60,7 @@ impl TriangleMesh {
     pub(crate) const SERIALIZED_SIZE: usize = TriangleMesh::SERIALIZED_QUARTET_COUNT * <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
 
     pub(crate) fn serialize_into(&self, container: &mut [f32]) {
-        panic_if_failed!(container.len() >= TriangleMesh::SERIALIZED_SIZE, "buffer size is too small");
+        assert!(container.len() >= TriangleMesh::SERIALIZED_SIZE, "buffer size is too small");
         let mut index = 0;
         container.write_and_move_next(self.triangles.len() as f32,          &mut index);
         container.write_and_move_next(self.triangles_base_index.as_f32(),   &mut index);
@@ -120,7 +119,7 @@ mod tests {
     fn test_triangle_mesh_new_illegal_indices_count() {
         let vertices = [VertexData { position: [1.0, 1.0, 1.0], normal: [1.0, 1.0, 1.0]},];
         let indices = vec![0, 0];
-        let system_under_test = TriangleMesh::new(&vertices, &indices, DUMMY_LINKS, TriangleIndex(0));
+        let _system_under_test = TriangleMesh::new(&vertices, &indices, DUMMY_LINKS, TriangleIndex(0));
     }
 
     #[test]

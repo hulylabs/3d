@@ -1,9 +1,8 @@
-﻿use crate::geometry::aabb::AABB;
+﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::alias;
 
 use crate::objects::utils::common_properties::Linkage;
 use crate::objects::utils::serialization_helpers::GpuFloatBufferFiller;
-use crate::panic_if_failed;
 use alias::Point;
 use alias::Vector;
 
@@ -39,9 +38,9 @@ impl Sphere {
         }
     }
 
-    pub(crate) fn bounding_box(&self) -> AABB {
+    pub(crate) fn bounding_box(&self) -> Aabb {
         let radius = Vector::new(self.radius, self.radius, self.radius);
-        AABB::from_segment(
+        Aabb::from_segment(
             self.center - radius,
             self.center + radius,
         )
@@ -51,7 +50,7 @@ impl Sphere {
     pub(crate) const SERIALIZED_SIZE: usize = Sphere::SERIALIZED_QUARTET_COUNT * <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
 
     pub(crate) fn serialize_into(&self, container: &mut [f32]) {
-        panic_if_failed!(container.len() >= Sphere::SERIALIZED_SIZE, "buffer size is too small");
+        assert!(container.len() >= Sphere::SERIALIZED_SIZE, "buffer size is too small");
 
         let mut index = 0;
         container.write_and_move_next(self.center.x,                          &mut index);
