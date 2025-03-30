@@ -1,9 +1,8 @@
-﻿use naga::valid::{Capabilities, ValidationFlags, Validator};
+﻿use std::rc::Rc;
 use thiserror::Error;
-use wgpu::naga::front::wgsl::parse_str;
 use wgpu::util::DeviceExt;
 use wgpu::{BufferUsages, TextureView};
-
+use crate::gpu::context::Context;
 // TODO: work in progress
 
 #[derive(Error, Debug)]
@@ -21,36 +20,40 @@ pub(crate) enum ShaderCreationError {
 }
 
 pub(crate) struct Resources {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    context: Rc<Context>,
     presentation_format: wgpu::TextureFormat,
 }
 
 impl Resources {
-    pub(crate) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> Result<wgpu::ShaderModule, ShaderCreationError> {
-        let module = parse_str(shader_source_code).map_err(|e| ShaderCreationError::ParseError {
-            shader_name: shader_name.to_string(),
-            message: format!("{:?}", e),
-        })?;
-        let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-        validator.validate(&module).map_err(|e| ShaderCreationError::ValidationError {
-            shader_name: shader_name.to_string(),
-            message: format!("{:?}", e),
-        })?;
 
-        Ok(self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    pub fn new(context: Rc<Context>, presentation_format: wgpu::TextureFormat) -> Self {
+        Self { context, presentation_format }
+    }
+
+    pub(crate) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> Result<wgpu::ShaderModule, ShaderCreationError> {
+        // TODO: this validation text output is unreadable =( but create_shader_module panics
+        // let module = parse_str(shader_source_code).map_err(|e| ShaderCreationError::ParseError {
+        //     shader_name: shader_name.to_string(),
+        //     message: format!("{:?}", e),
+        // })?;
+        // let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+        // validator.validate(&module).map_err(|e| ShaderCreationError::ValidationError {
+        //     shader_name: shader_name.to_string(),
+        //     message: format!("{:?}", e),
+        // })?;
+        Ok(self.context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(shader_name),
             source: wgpu::ShaderSource::Wgsl(shader_source_code.into()), //TODO: can we use naga module created above?
         }))
     }
 
     fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> wgpu::Buffer {
-        let uniform_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniform_buffer = self.context.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
             contents: buffer_data,
             usage,
         });
-        self.queue.write_buffer(&uniform_buffer, 0, buffer_data);
+        self.context.queue().write_buffer(&uniform_buffer, 0, buffer_data);
 
         uniform_buffer
     }
@@ -72,9 +75,9 @@ impl Resources {
     }
 
     pub fn create_render_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
-        self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render pipeline"), //TODO: meaningfull label
-            layout: Some(&self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        self.context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("render pipeline"), //TODO: meaningful label
+            layout: Some(&self.context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
@@ -117,33 +120,11 @@ impl Resources {
         surface.get_current_texture().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
-    pub fn create_render_pass_descriptor(&self, frame_buffer: &TextureView, target: &mut wgpu::RenderPassDescriptor)
-    //    -> wgpu::RenderPassDescriptor
-    {
-        // TODO: this could not be implemented
-        // wgpu::RenderPassDescriptor {
-        //     label: Some("renderPass"),
-        //     color_attachments: &[
-        //         Some(wgpu::RenderPassColorAttachment {
-        //             view: frame_buffer,
-        //             resolve_target: None,
-        //             ops: wgpu::Operations {
-        //                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-        //                 store: StoreOp::Store,
-        //             },
-        //         }),
-        //     ],
-        //     depth_stencil_attachment: None,
-        //     occlusion_query_set: None,
-        //     timestamp_writes: None, // TODO: what is this?
-        // }
-    }
-
     pub fn create_compute_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
-        self.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
             compilation_options: Default::default(), //TODO: what options are available?
-            layout: Some(&self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            layout: Some(&self.context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
@@ -155,7 +136,7 @@ impl Resources {
     }
 
     pub fn compute_pass(&self, compute_pipeline: &wgpu::ComputePipeline, bind_group_compute: &wgpu::BindGroup, work_groups_needed: u32) {
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("compute encoder") });
+        let mut encoder = self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("compute encoder") });
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
             {
@@ -168,11 +149,11 @@ impl Resources {
             pass.dispatch_workgroups(work_groups_needed, 1, 1);
         }
         let command_buffer = encoder.finish();
-        self.queue.submit(Some(command_buffer));
+        self.context.queue().submit(Some(command_buffer));
     }
 
     pub fn render_pass(&self, render_pass_descriptor: &mut wgpu::RenderPassDescriptor, render_pipeline: &wgpu::RenderPipeline, bind_group: &wgpu::BindGroup, vertex_buffer: &wgpu::Buffer) {
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render encoder") });
+        let mut encoder = self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render encoder") });
         {
             let mut render_pass = encoder.begin_render_pass(render_pass_descriptor);
             render_pass.set_pipeline(render_pipeline);
@@ -181,11 +162,11 @@ impl Resources {
             render_pass.draw(0..6, 0..1);
         }
         let render_command_buffer = encoder.finish();
-        self.queue.submit(Some(render_command_buffer));
+        self.context.queue().submit(Some(render_command_buffer));
     }
 
     pub fn create_command_encoder(&self, label: &str) -> wgpu::CommandEncoder {
-        self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+        self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
     }
 
     pub fn make_render_pass(&self, render_encoder: &mut wgpu::CommandEncoder, render_pass_descriptor: &wgpu::RenderPassDescriptor, render_pipeline: &wgpu::RenderPipeline, bind_group: &wgpu::BindGroup, vertex_buffer: &wgpu::Buffer, num_draw_calls: u32) {
@@ -199,53 +180,20 @@ impl Resources {
     }
 
     pub fn add_command_buffer_to_queue(&self, render_encoder: wgpu::CommandEncoder) {
-        self.queue.submit([render_encoder.finish()]);
+        self.context.queue().submit([render_encoder.finish()]);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DEVICE_LABEL;
-
-    #[must_use]
-    async fn create_wgpu_device() -> (wgpu::Device, wgpu::Queue) {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..Default::default()
-        });
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: None,
-                ..Default::default()
-            })
-            .await
-            .expect("failed to find an adapter");
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some(DEVICE_LABEL),
-                    required_features: wgpu::Features::default(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                },
-                None,
-            )
-            .await
-            .expect("failed to create device");
-
-        (device, queue)
-    }
+    use crate::gpu::headless_device::create_headless_wgpu_device;
 
     #[must_use]
     fn make_system_under_test() -> Resources {
-        let (device, queue) = pollster::block_on(create_wgpu_device());
+        let context = pollster::block_on(create_headless_wgpu_device());
         Resources {
-            device,
-            queue,
+            context: Rc::new(context),
             presentation_format: wgpu::TextureFormat::Rgba8Unorm,
         }
     }
@@ -371,4 +319,5 @@ mod tests {
 
         assert_eq!(buffer.usage(), BufferUsages::VERTEX | BufferUsages::COPY_DST);
     }
+
 }

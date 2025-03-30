@@ -1,17 +1,23 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::alias;
 
-use crate::objects::utils::common_properties::Linkage;
-use crate::objects::utils::serialization_helpers::GpuFloatBufferFiller;
+use crate::objects::common_properties::Linkage;
+use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
 use alias::Vector;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SphereIndex(pub u32);
+pub struct SphereIndex(pub(crate) usize);
 impl SphereIndex {
     #[must_use]
-    pub(crate) const fn as_f32(&self) -> f32 {
+    pub(crate) const fn as_f32(self) -> f32 {
         self.0 as f32
+    }
+}
+impl From<usize> for SphereIndex {
+    fn from(value: usize) -> Self {
+        SphereIndex(value)
     }
 }
 
@@ -23,54 +29,46 @@ pub(crate) struct Sphere {
 
 impl Sphere {
     #[must_use]
-    pub(crate) fn new(
-        center: Point,
-        radius: f32,
-        links: Linkage<SphereIndex>,
-    ) -> Self {
-        if radius <= 0.0 {
-            panic!("radius must be positive");
-        }
-        Sphere {
-            center,
-            radius,
-            links,
-        }
+    pub(crate) fn new(center: Point, radius: f32, links: Linkage<SphereIndex>) -> Self {
+        assert!(radius > 0.0, "radius must be positive");
+        Sphere { center, radius, links }
     }
 
     pub(crate) fn bounding_box(&self) -> Aabb {
         let radius = Vector::new(self.radius, self.radius, self.radius);
-        Aabb::from_segment(
-            self.center - radius,
-            self.center + radius,
-        )
+        Aabb::from_segment(self.center - radius, self.center + radius)
     }
 
     const SERIALIZED_QUARTET_COUNT: usize = 2;
-    pub(crate) const SERIALIZED_SIZE: usize = Sphere::SERIALIZED_QUARTET_COUNT * <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
+}
 
-    pub(crate) fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Sphere::SERIALIZED_SIZE, "buffer size is too small");
+impl SerializableForGpu for Sphere {
+    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Sphere::SERIALIZED_QUARTET_COUNT);
+
+    fn serialize_into(&self, container: &mut [f32]) {
+        assert!(container.len() >= Sphere::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
 
         let mut index = 0;
-        container.write_and_move_next(self.center.x,                          &mut index);
-        container.write_and_move_next(self.center.y,                          &mut index);
-        container.write_and_move_next(self.center.z,                          &mut index);
-        container.write_and_move_next(self.radius,                            &mut index);
+        container.write_and_move_next(self.center.x, &mut index);
+        container.write_and_move_next(self.center.y, &mut index);
+        container.write_and_move_next(self.center.z, &mut index);
+        container.write_and_move_next(self.radius, &mut index);
 
-        container.write_and_move_next(self.links.global_index().as_f32(),     &mut index);
-        container.write_and_move_next(self.links.in_kind_index().as_f32(),    &mut index);
-        container.write_and_move_next(self.links.material_index().as_f32(),   &mut index);
+        container.write_and_move_next(self.links.global_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.in_kind_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.material_index().as_f32(), &mut index);
         container.pad_to_align(&mut index);
+
+        assert_eq!(index, Sphere::SERIALIZED_SIZE_FLOATS);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use cgmath::EuclideanSpace;
-
     use super::*;
-    use crate::objects::utils::common_properties::{GlobalObjectIndex, Linkage, MaterialIndex};
+    use crate::objects::common_properties::GlobalObjectIndex;
+    use crate::objects::material_index::MaterialIndex;
+    use cgmath::EuclideanSpace;
 
     #[test]
     fn test_origin() {
@@ -94,11 +92,7 @@ mod tests {
         let expected_radius = 6.0;
         let expected_links = Linkage::new(GlobalObjectIndex(7), SphereIndex(9), MaterialIndex(8));
 
-        let system_under_test
-            = Sphere::new(
-            expected_center,
-            expected_radius,
-            expected_links);
+        let system_under_test = Sphere::new(expected_center, expected_radius, expected_links);
 
         assert_eq!(system_under_test.radius, expected_radius);
         assert_eq!(system_under_test.center, expected_center);
@@ -114,7 +108,7 @@ mod tests {
         let bounding_box = system_under_test.bounding_box();
 
         assert_eq!(bounding_box.min(), Point::new(-5.0, -4.0, -3.0));
-        assert_eq!(bounding_box.max(), Point::new( 7.0,  8.0,  9.0));
+        assert_eq!(bounding_box.max(), Point::new(7.0, 8.0, 9.0));
     }
 
     #[test]
@@ -124,14 +118,10 @@ mod tests {
         let expected_global_index = GlobalObjectIndex(4);
         let expected_local_index = SphereIndex(5);
         let expected_material_index = MaterialIndex(6);
-        let system_under_test
-            = Sphere::new(
-            center,
-            radius,
-            Linkage::new(expected_global_index, expected_local_index, expected_material_index));
+        let system_under_test = Sphere::new(center, radius, Linkage::new(expected_global_index, expected_local_index, expected_material_index));
         let container_initial_filler = -1.0;
 
-        let mut container = vec![container_initial_filler; Sphere::SERIALIZED_SIZE + 1];
+        let mut container = vec![container_initial_filler; Sphere::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);
 
         assert_eq!(container[0], center.x);
@@ -151,7 +141,7 @@ mod tests {
     fn test_serialize_into_with_small_buffer() {
         let system_under_test = Sphere::new(Point::origin(), 1.0, DUMMY_LINKS);
 
-        let mut container = vec![0.0; Sphere::SERIALIZED_SIZE - 1];
+        let mut container = vec![0.0; Sphere::SERIALIZED_SIZE_FLOATS - 1];
         system_under_test.serialize_into(&mut container);
     }
 }

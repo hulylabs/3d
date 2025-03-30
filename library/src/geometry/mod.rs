@@ -1,6 +1,7 @@
 ﻿pub(crate) mod aabb;
-pub(crate) mod transform;
-pub(crate) mod alias;
-pub(crate) mod vertex;
+pub mod alias;
+pub(crate) mod axis;
 pub(crate) mod epsilon;
 pub(crate) mod fundamental_constants;
+pub mod transform;
+pub(crate) mod vertex;

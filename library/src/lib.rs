@@ -1,16 +1,23 @@
 //#![deny(warnings)] TODO: switch on, when ready
 
-mod geometry;
-mod objects;
-mod utils;
+pub mod geometry;
+pub mod objects;
 mod gpu;
+pub mod scene;
+mod serialization;
+mod bvh;
 
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use winit::window::Window;
 use log::info;
 use thiserror::Error;
+use crate::gpu::context::Context;
+use crate::gpu::render::Renderer;
+use crate::scene::camera::Camera;
+use crate::scene::container::Container;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -22,11 +29,12 @@ pub struct Engine {
 
     window_pixels_size: winit::dpi::PhysicalSize<u32>,
 
-    graphics_device: wgpu::Device,
-    commands_queue: wgpu::Queue,
+    context: Rc<Context>,
 
     window_output_surface: wgpu::Surface<'static>,
     window_surface_format: wgpu::TextureFormat,
+
+    renderer: Renderer,
 }
 
 #[derive(Error, Debug)]
@@ -45,10 +53,14 @@ pub enum EngineInstantiationError {
     #[error("surface is incompatible with the device")]
     SurfaceCompatibilityError
     ,
+    #[error("internal error: {what:?}")]
+    InternalError {
+        what: String,
+    },
 }
 
 impl Engine {
-    pub async fn new(window: Arc<Window>) -> Result<Engine, EngineInstantiationError> {
+    pub async fn new(window: Arc<Window>, scene: Container, camera: Camera) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -93,13 +105,19 @@ impl Engine {
         };
         graphics_device.set_device_lost_callback(lost_device_handler);
 
+        let context = Rc::new(Context::new(graphics_device, commands_queue));
+        let output_surface_format = surface_capabilities.formats[0];
+
+        let renderer = Renderer::new(context.clone(), scene, camera, output_surface_format, window_pixels_size.width, window_pixels_size.height)
+            .map_err(|e| EngineInstantiationError::InternalError {what: e.to_string()})?;
+
         let ware = Engine {
             device_was_lost: device_was_lost_flag.clone(),
-            graphics_device,
-            commands_queue,
+            context: context.clone(),
             window_pixels_size,
             window_output_surface: window_surface,
-            window_surface_format: surface_capabilities.formats[0],
+            window_surface_format: output_surface_format,
+            renderer,
         };
 
         ware.configure_surface();
@@ -118,7 +136,7 @@ impl Engine {
             desired_maximum_frame_latency: 0,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
-        self.window_output_surface.configure(&self.graphics_device, &surface_config);
+        self.window_output_surface.configure(self.context.device(), &surface_config);
     }
 
     pub fn handle_window_resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -136,36 +154,7 @@ impl Engine {
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
 
-        let texture_view = surface_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                // without add_srgb_suffix() the image we will be working with might not be "gamma correct" TODO: <- do we need this
-                format: Some(self.window_surface_format.add_srgb_suffix()),
-                ..Default::default()
-            });
-
-        let mut encoder = self.graphics_device.create_command_encoder(&Default::default());
-
-        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &texture_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
-        // other drawing commands go here
-
-        drop(render_pass);
-        let command_buffer = encoder.finish();
-        self.commands_queue.submit([command_buffer]);
+        self.renderer.render_animation(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();

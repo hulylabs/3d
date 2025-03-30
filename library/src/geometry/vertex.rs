@@ -19,18 +19,14 @@ impl AbsDiffEq for Vertex {
 
     #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-            Point::abs_diff_eq(&self.position, &other.position, epsilon)
-        && Vector::abs_diff_eq(&self.normal  , &other.normal  , epsilon)
+        Point::abs_diff_eq(&self.position, &other.position, epsilon) && Vector::abs_diff_eq(&self.normal, &other.normal, epsilon)
     }
 }
 
 impl Vertex {
     #[must_use]
     pub(crate) fn new(position: Point, normal: Vector) -> Vertex {
-        Vertex {
-            position,
-            normal
-        }
+        Vertex { position, normal }
     }
 
     #[must_use]
@@ -54,17 +50,17 @@ impl Vertex {
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::PI;
-    use cgmath::{assert_abs_diff_eq, EuclideanSpace, Rad};
-    use crate::geometry::transform::Affine;
     use super::*;
+    use crate::geometry::transform::Affine;
+    use cgmath::{EuclideanSpace, Rad, assert_abs_diff_eq};
+    use std::f32::consts::PI;
 
     #[test]
     fn test_vertex_new() {
         let position = Point::new(1.0, 2.0, 3.0);
         let normal = Vector::new(4.0, 5.0, 6.0);
 
-        let system_under_test   = Vertex::new(position, normal);
+        let system_under_test = Vertex::new(position, normal);
 
         assert_eq!(system_under_test.position(), position);
         assert_eq!(system_under_test.normal(), normal);
@@ -75,10 +71,10 @@ mod tests {
         let position = Point::new(1.0, 2.0, 3.0);
         let normal = Vector::new(4.0, 5.0, 6.0);
 
-        let system_under_test   = Vertex::new(position, normal);
+        let system_under_test = Vertex::new(position, normal);
 
         let epsilon = 0.2;
-        let per_component_epsilon = Vector::new(epsilon/2.0, epsilon/2.0, epsilon/2.0);
+        let per_component_epsilon = Vector::new(epsilon / 2.0, epsilon / 2.0, epsilon / 2.0);
         let expected_position = position + per_component_epsilon;
         let expected_normal = normal + per_component_epsilon;
         assert_abs_diff_eq!(system_under_test.position(), expected_position, epsilon = epsilon);
@@ -92,13 +88,11 @@ mod tests {
 
         let system_under_test = Vertex::new(position, normal);
 
-        let matrix
-            = Affine::from_translation(Vector::unit_x())
+        let matrix = Affine::from_translation(Vector::unit_x())
             * Affine::from_angle_z(Rad(PI / 2.0))
             * Affine::from_angle_x(Rad(-PI / 2.0))
             * Affine::from_translation(-Vector::unit_x())
-            * Affine::from_translation(-Vector::unit_y())
-        ;
+            * Affine::from_translation(-Vector::unit_y());
 
         let actual_vertex = system_under_test.transform(&Transformation::new(matrix));
 
