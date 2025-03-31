@@ -161,16 +161,6 @@ impl Resources {
         self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
     }
 
-    pub fn make_render_pass(&self, render_encoder: &mut wgpu::CommandEncoder, render_pass_descriptor: &wgpu::RenderPassDescriptor, render_pipeline: &wgpu::RenderPipeline, bind_group: &wgpu::BindGroup, vertex_buffer: &wgpu::Buffer, num_draw_calls: u32) {
-        {
-            let mut render_pass = render_encoder.begin_render_pass(render_pass_descriptor);
-            render_pass.set_pipeline(render_pipeline);
-            render_pass.set_bind_group(0, bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.draw(0..num_draw_calls, 0..1);
-        }
-    }
-
     pub fn add_command_buffer_to_queue(&self, render_encoder: wgpu::CommandEncoder) {
         self.context.queue().submit([render_encoder.finish()]);
     }

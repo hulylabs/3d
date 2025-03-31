@@ -154,7 +154,7 @@ impl Engine {
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
 
-        self.renderer.render_animation(&surface_texture);
+        self.renderer.execute(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();

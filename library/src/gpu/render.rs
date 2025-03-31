@@ -126,7 +126,7 @@ impl Renderer {
 
         // TODO: delete model transformations: looks like we can work in global coordinates
         let total_objects_count = scene.get_total_object_count();
-        let mut transformations = vec![0.0; total_objects_count * Transformation::SERIALIZED_SIZE_FLOATS];
+        let mut transformations = vec![0.0_f32; total_objects_count * Transformation::SERIALIZED_SIZE_FLOATS];
         let identity = Transformation::identity();
         for i in 0..total_objects_count {
             identity.serialize_into(&mut transformations[(i * Transformation::SERIALIZED_SIZE_FLOATS)..])
@@ -134,8 +134,8 @@ impl Renderer {
 
         let bvh = scene.evaluate_serialized_bvh();
 
-        let frame_buffer = vec![0.0; (width * height * 4) as usize];
-        let vertex_data = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
+        let frame_buffer: Vec<f32> = vec![0.0; (width * height * 4) as usize];
+        let vertex_data: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_array)),
@@ -204,7 +204,7 @@ impl Renderer {
         let render_pipeline = resources.create_render_pipeline(module);
 
         let bind_group = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("redner pipeline bind group"),
+            label: Some("render pipeline bind group"),
             layout: &render_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -221,7 +221,7 @@ impl Renderer {
         (render_pipeline, bind_group)
     }
 
-    pub fn render_animation(&mut self, surface_texture: &wgpu::SurfaceTexture)  {
+    pub fn execute(&mut self, surface_texture: &wgpu::SurfaceTexture)  {
         {
             self.frame_number += 1;
 
@@ -235,7 +235,7 @@ impl Renderer {
             self.uniforms.camera = self.camera.clone();
 
             {
-                let mut uniform_array = [0.0; Uniforms::SERIALIZED_SIZE_FLOATS];
+                let mut uniform_array = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
                 self.uniforms.serialize_into(&mut uniform_array);
 
                 let bytes: &[u8] = cast_slice(&uniform_array);
@@ -253,7 +253,7 @@ impl Renderer {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
                     store: StoreOp::Store,
                 },
             })],
