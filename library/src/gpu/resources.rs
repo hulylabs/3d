@@ -77,11 +77,7 @@ impl Resources {
     pub fn create_render_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
         self.context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("render pipeline"), //TODO: meaningful label
-            layout: Some(&self.context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            })),
+            layout: None,
             vertex: wgpu::VertexState {
                 module,
                 entry_point: Some("vs"),
