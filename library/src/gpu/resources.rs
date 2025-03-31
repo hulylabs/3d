@@ -124,11 +124,7 @@ impl Resources {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute pipeline"),
             compilation_options: Default::default(), //TODO: what options are available?
-            layout: Some(&self.context.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            })),
+            layout: None,
             module,
             entry_point: Some("computeFrameBuffer"),
             cache: None, // TODO: how can be used?

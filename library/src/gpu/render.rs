@@ -122,7 +122,7 @@ impl Renderer {
         let spheres = scene.evaluate_serialized_spheres();
         let quadrilaterals = scene.evaluate_serialized_quadrilaterals();
         let materials = scene.evaluate_serialized_materials();
-        let triangles = scene.evaluate_serialized_triangles();
+        let triangles = scene.evaluate_serialized_triangles(); // TODO: wgpu fails if we've got zero triangles, we need to handle that
 
         // TODO: delete model transformations: looks like we can work in global coordinates
         let total_objects_count = scene.get_total_object_count();

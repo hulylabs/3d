@@ -50,13 +50,14 @@ impl TriangleMesh {
         }
     }
 
-    // pub(crate) fn transform(&mut self, transformation: &Transformation) {
-    //     for triangle in &mut self.triangles {
-    //         *triangle = triangle.transform(transformation);
-    //     }
-    // }
+
 
     const SERIALIZED_QUARTET_COUNT: usize = 1;
+
+    #[must_use]
+    pub(crate) fn triangles(&self) -> &Vec<Triangle> {
+        &self.triangles
+    }
 }
 
 impl SerializableForGpu for TriangleMesh {

@@ -1,6 +1,6 @@
-﻿use crate::geometry::alias::{Point, Vector};
+﻿use crate::bvh::builder::build_serialized_bvh;
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::axis::Axis;
-use crate::geometry::fundamental_constants::VERTICES_IN_TRIANGLE;
 use crate::geometry::transform::{Affine, TransformableCoordinate};
 use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
 use crate::objects::material::Material;
@@ -16,7 +16,6 @@ use std::io::BufReader;
 use std::path::Path;
 use strum::EnumCount;
 use thiserror::Error;
-use crate::bvh::builder::build_serialized_bvh;
 
 #[derive(Error, Debug)]
 pub enum MeshLoadError {
@@ -83,7 +82,9 @@ impl Container {
             TriangleMesh::new(&vertices, &obj.indices, Linkage::new(GlobalObjectIndex(0), index, material,), TriangleIndex(self.triangles_count))
         });
 
-        self.triangles_count += obj.indices.len() / VERTICES_IN_TRIANGLE;
+        let added = &self.meshes[index.0];
+        self.triangles.extend(added.triangles());
+        self.triangles_count += added.triangles().len();
 
         Ok(index)
     }
@@ -167,4 +168,36 @@ impl Container {
     }
 }
 
-// TODO: unit tests
+// TODO: more unit tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    const DUMMY_OBJ_FILE: &str = r#"
+        v  0.0  1.0  0.0
+        v -1.0 -1.0  0.0
+        v  1.0 -1.0  0.0
+
+        vn  0.0  0.0  1.0
+
+        f 1//1 2//1 3//1
+        "#;
+
+    #[test]
+    fn test_add_mesh() {
+
+        let mut temp_file = NamedTempFile::new_in("./").expect("failed to create temp file");
+        temp_file.write_all(DUMMY_OBJ_FILE.as_bytes()).expect("failed to write dummy data into the temp file");
+
+        let mut system_under_test = Container::new();
+        let dummy_material = system_under_test.add_material(&Material::default());
+        let mesh_index = system_under_test.add_mesh(temp_file.path(), &Affine::from_translation(Vector::new(1.0, 2.0, 3.0)), dummy_material);
+
+        assert_eq!(system_under_test.meshes.len(), 1);
+        assert_eq!(system_under_test.triangles.len(), 1);
+        assert_eq!(system_under_test.triangles_count, system_under_test.triangles.len());
+    }
+}
