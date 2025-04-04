@@ -19,8 +19,8 @@ impl Default for MaterialClass {
 
 impl MaterialClass {
     #[must_use]
-    pub const fn as_f32(self) -> f32 {
-        (self as u32) as f32
+    pub const fn as_f64(self) -> f64 {
+        (self as u32) as f64
     }
 }
 
@@ -29,9 +29,9 @@ pub struct Material {
     albedo: Srgb,
     specular: Srgb,
     emission: Srgb,
-    specular_strength: f32,
-    roughness: f32,
-    refractive_index_eta: f32,
+    specular_strength: f64,
+    roughness: f64,
+    refractive_index_eta: f64,
     class: MaterialClass,
 }
 
@@ -67,17 +67,17 @@ impl Material {
         self
     }
 
-    pub fn with_specular_strength(mut self, specular_strength: f32) -> Self {
+    pub fn with_specular_strength(mut self, specular_strength: f64) -> Self {
         self.specular_strength = specular_strength;
         self
     }
 
-    pub fn with_roughness(mut self, roughness: f32) -> Self {
+    pub fn with_roughness(mut self, roughness: f64) -> Self {
         self.roughness = roughness;
         self
     }
 
-    pub fn with_refractive_index_eta(mut self, refractive_index_eta: f32) -> Self {
+    pub fn with_refractive_index_eta(mut self, refractive_index_eta: f64) -> Self {
         self.refractive_index_eta = refractive_index_eta;
         self
     }
@@ -110,24 +110,24 @@ impl SerializableForGpu for Material {
         assert!(container.len() >= Material::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
 
         let mut index = 0;
-        container.write_and_move_next(self.albedo.red, &mut index);
-        container.write_and_move_next(self.albedo.green, &mut index);
-        container.write_and_move_next(self.albedo.blue, &mut index);
+        container.write_and_move_next(self.albedo.red as f64, &mut index);
+        container.write_and_move_next(self.albedo.green as f64, &mut index);
+        container.write_and_move_next(self.albedo.blue as f64, &mut index);
         container.pad_to_align(&mut index);
 
-        container.write_and_move_next(self.specular.red, &mut index);
-        container.write_and_move_next(self.specular.green, &mut index);
-        container.write_and_move_next(self.specular.blue, &mut index);
+        container.write_and_move_next(self.specular.red as f64, &mut index);
+        container.write_and_move_next(self.specular.green as f64, &mut index);
+        container.write_and_move_next(self.specular.blue as f64, &mut index);
         container.pad_to_align(&mut index);
 
-        container.write_and_move_next(self.emission.red, &mut index);
-        container.write_and_move_next(self.emission.green, &mut index);
-        container.write_and_move_next(self.emission.blue, &mut index);
+        container.write_and_move_next(self.emission.red as f64, &mut index);
+        container.write_and_move_next(self.emission.green as f64, &mut index);
+        container.write_and_move_next(self.emission.blue as f64, &mut index);
         container.write_and_move_next(self.specular_strength, &mut index);
 
         container.write_and_move_next(self.roughness, &mut index);
         container.write_and_move_next(self.refractive_index_eta, &mut index);
-        container.write_and_move_next(self.class.as_f32(), &mut index);
+        container.write_and_move_next(self.class.as_f64(), &mut index);
         container.pad_to_align(&mut index);
 
         assert_eq!(index, Material::SERIALIZED_SIZE_FLOATS);

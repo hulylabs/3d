@@ -1,18 +1,18 @@
 ﻿pub(crate) trait GpuFloatBufferFiller {
-    fn write_and_move_next(&mut self, value: f32, iterator: &mut usize);
+    fn write_and_move_next(&mut self, value: f64, iterator: &mut usize);
 
     const FLOAT_ALIGNMENT_SIZE: usize = 4;
-    const PAD_VALUE: f32 = -7.0;
+    const PAD_VALUE: f32 = -1.0;
 
     fn pad_to_align(&mut self, iterator: &mut usize);
 }
 
-impl GpuFloatBufferFiller for [f32] {
-    fn write_and_move_next(&mut self, value: f32, iterator: &mut usize) {
+impl GpuFloatBufferFiller for [f32]  {
+    fn write_and_move_next(&mut self, value: f64, iterator: &mut usize) {
         if *iterator >= self.len() {
             panic!("index out of bounds");
         }
-        self[*iterator] = value;
+        self[*iterator] = value as f32;
         *iterator += 1;
     }
 
@@ -20,10 +20,10 @@ impl GpuFloatBufferFiller for [f32] {
         if *iterator >= self.len() {
             panic!("index out of bounds");
         }
-        let alignment = <[f32] as GpuFloatBufferFiller>::FLOAT_ALIGNMENT_SIZE;
+        let alignment = Self::FLOAT_ALIGNMENT_SIZE;
         let elements_to_pad = (alignment - (*iterator % alignment)) % alignment;
         for _ in 0..elements_to_pad {
-            self[*iterator] = <[f32] as GpuFloatBufferFiller>::PAD_VALUE;
+            self[*iterator] = Self::PAD_VALUE;
             *iterator += 1;
         }
     }

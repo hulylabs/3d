@@ -11,15 +11,15 @@ use bytemuck::{Pod, Zeroable};
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub(crate) struct VertexData {
-    pub(crate) position: [f32; COMPONENTS_IN_POSITION],
-    pub(crate) normal: [f32; COMPONENTS_IN_NORMAL],
+    pub(crate) position: [f64; COMPONENTS_IN_POSITION],
+    pub(crate) normal: [f64; COMPONENTS_IN_NORMAL],
 }
 impl VertexData {
     #[must_use]
     fn as_vertex(&self) -> Vertex {
         Vertex::new(
-            Point::new(self.position[Axis::X as usize], self.position[Axis::Y as usize], self.position[Axis::Z as usize]),
-            Vector::new(self.normal[Axis::X as usize], self.normal[Axis::Y as usize], self.normal[Axis::Z as usize]),
+            Point::new(self.position[Axis::X as usize] as f64, self.position[Axis::Y as usize] as f64, self.position[Axis::Z as usize] as f64),
+            Vector::new(self.normal[Axis::X as usize] as f64, self.normal[Axis::Y as usize] as f64, self.normal[Axis::Z as usize] as f64),
         )
     }
 }
@@ -33,7 +33,7 @@ pub(crate) struct TriangleMesh {
 impl TriangleMesh {
     #[must_use]
     pub(crate) fn new(vertices: &[VertexData], indices: &[u32], links: Linkage<MeshIndex>, triangles_base_index: TriangleIndex) -> Self {
-        assert!(indices.len() % VERTICES_IN_TRIANGLE == 0, "illegal indices count of {}", indices.len());
+        assert_eq!(indices.len() % VERTICES_IN_TRIANGLE, 0, "illegal indices count of {}", indices.len());
 
         let mut triangles: Vec<Triangle> = Vec::new();
         for triangle in indices.chunks(VERTICES_IN_TRIANGLE) {
@@ -66,10 +66,10 @@ impl SerializableForGpu for TriangleMesh {
     fn serialize_into(&self, container: &mut [f32]) {
         assert!(container.len() >= TriangleMesh::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
         let mut index = 0;
-        container.write_and_move_next(self.triangles.len() as f32, &mut index);
-        container.write_and_move_next(self.triangles_base_index.as_f32(), &mut index);
-        container.write_and_move_next(self.links.global_index().as_f32(), &mut index);
-        container.write_and_move_next(self.links.material_index().as_f32(), &mut index);
+        container.write_and_move_next(self.triangles.len() as f64, &mut index);
+        container.write_and_move_next(self.triangles_base_index.as_f64(), &mut index);
+        container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
+        container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
         assert_eq!(index, TriangleMesh::SERIALIZED_SIZE_FLOATS);
     }
 }
@@ -80,7 +80,7 @@ mod tests {
     use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
     use crate::objects::material_index::MaterialIndex;
 
-    const THREE_VERTICES_DATA: [f32; 18] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0];
+    const THREE_VERTICES_DATA: [f64; 18] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0];
 
     const DUMMY_LINKS: Linkage<MeshIndex> = Linkage::new(GlobalObjectIndex(0), MeshIndex(0), MaterialIndex(0));
 
@@ -168,9 +168,9 @@ mod tests {
 
         let expected = vec![
             (indices.len() / VERTICES_IN_TRIANGLE) as f32,
-            triangles_start.as_f32(),
-            expected_links.global_index().as_f32(),
-            expected_links.material_index().as_f32(),
+            triangles_start.as_f64() as f32,
+            expected_links.global_index().as_f64() as f32,
+            expected_links.material_index().as_f64() as f32,
             container_initial_filler,
         ];
 

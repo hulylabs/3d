@@ -31,7 +31,7 @@ pub struct Engine {
 
     context: Rc<Context>,
 
-    window_output_surface: wgpu::Surface<'static>,
+    window_output_surface: wgpu::Surface<'static>, // TODO: actually this object is not quite 'static; in fact here we do not know anything about that, how static it is
     window_surface_format: wgpu::TextureFormat,
 
     renderer: Renderer,
@@ -129,13 +129,14 @@ impl Engine {
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: self.window_surface_format,
-            view_formats: vec![self.window_surface_format.add_srgb_suffix()],
+            view_formats: vec![self.window_surface_format],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.window_pixels_size.width,
             height: self.window_pixels_size.height,
-            desired_maximum_frame_latency: 0,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Fifo,
+            desired_maximum_frame_latency: 1,
         };
+
         self.window_output_surface.configure(self.context.device(), &surface_config);
     }
 
@@ -152,11 +153,19 @@ impl Engine {
         let surface_texture = self
             .window_output_surface
             .get_current_texture()
-            .expect("failed to acquire next swapchain texture");
+            .expect("failed to acquire next image in the swapchain");
+
+        if surface_texture.suboptimal {
+            // TODO: schedule surface reconfigure
+        }
 
         self.renderer.execute(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();
+    }
+
+    pub fn get_camera(&mut self) -> &mut Camera {
+        self.renderer.camera()
     }
 }

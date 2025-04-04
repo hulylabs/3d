@@ -13,10 +13,10 @@ pub struct Camera {
     look_at: Point,
     up: Vector,
     zoom_direction: Vector,
-    rotate_angle: Deg<f32>,
-    zoom_speed: f32,
-    move_speed: f32,
-    keypress_move_speed: f32,
+    rotate_angle: Deg<f64>,
+    zoom_speed: f64,
+    move_speed: f64,
+    keypress_move_speed: f64,
     moving: bool,
     key_press: bool,
 }
@@ -54,16 +54,17 @@ impl Camera {
         self.view_matrix = Affine::look_at_rh(self.eye, self.look_at, self.up); // TODO: sync with the JS
     }
 
-    pub fn zoom(&mut self, delta: f32) {
+    pub fn zoom(&mut self, delta: f64) {
         let sign = delta.signum();
         self.eye += self.zoom_direction * self.zoom_speed * sign;
         self.set(None, None, None);
+        self.key_press = true;
     }
 
     // TODO: totally rewrite (duplicates, evaluations)
 
-    pub fn move_camera(&mut self, old_coord: Vector2<f32>, new_coord: Vector2<f32>) {
-        let d_x = (new_coord[0] - old_coord[0]) * std::f32::consts::PI / 180.0 * self.move_speed;
+    pub fn move_camera(&mut self, old_coord: Vector2<f64>, new_coord: Vector2<f64>) {
+        let d_x = (new_coord[0] - old_coord[0]) * std::f64::consts::PI / 180.0 * self.move_speed;
 
         self.rotate_angle = Deg(d_x);
 
@@ -71,30 +72,36 @@ impl Camera {
         self.eye = rotation.rotate_point(self.eye);
 
         self.set(None, None, None);
+
+        self.key_press = true;
     }
 
-    pub(crate) fn move_left(&mut self) {
+    pub fn move_left(&mut self) {
         self.eye.x += self.keypress_move_speed;
         self.look_at.x += self.keypress_move_speed;
         self.set(None, None, None);
+        self.key_press = true;
     }
 
-    pub(crate) fn move_right(&mut self) {
+    pub fn move_right(&mut self) {
         self.eye.x -= self.keypress_move_speed;
         self.look_at.x -= self.keypress_move_speed;
         self.set(None, None, None);
+        self.key_press = true;
     }
 
-    pub(crate) fn move_up(&mut self) {
+    pub fn move_up(&mut self) {
         self.eye.y -= self.keypress_move_speed;
         self.look_at.y -= self.keypress_move_speed;
         self.set(None, None, None);
+        self.key_press = true;
     }
 
-    pub(crate) fn move_down(&mut self) {
+    pub fn move_down(&mut self) {
         self.eye.y += self.keypress_move_speed;
         self.look_at.y += self.keypress_move_speed;
         self.set(None, None, None);
+        self.key_press = true;
     }
 
     pub fn moving(&self) -> bool {

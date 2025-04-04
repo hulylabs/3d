@@ -17,7 +17,7 @@ struct Buffers {
     uniforms: wgpu::Buffer,
     spheres: wgpu::Buffer,
     meshes: wgpu::Buffer,
-    quads: wgpu::Buffer,
+    quadriliterals: wgpu::Buffer,
     materials: wgpu::Buffer,
     transforms: wgpu::Buffer,
     bvh: wgpu::Buffer,
@@ -27,8 +27,8 @@ struct Buffers {
 }
 
 struct Uniforms {
-    screen_size_width: f32,
-    screen_size_height: f32,
+    screen_size_width: f64,
+    screen_size_height: f64,
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
@@ -47,7 +47,7 @@ impl SerializableForGpu for Uniforms {
         let mut index = 0;
         container.write_and_move_next(self.screen_size_width, &mut index);
         container.write_and_move_next(self.screen_size_height, &mut index);
-        container.write_and_move_next(self.frame_number as f32, &mut index);
+        container.write_and_move_next(self.frame_number as f64, &mut index);
         container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
 
         self.camera.serialize_into(&mut container[index..]);
@@ -82,8 +82,8 @@ impl Renderer {
         frame_width: u32,
         frame_height: u32) -> anyhow::Result<Self> {
         let uniforms = Uniforms {
-            screen_size_width: frame_width as f32,
-            screen_size_height: frame_height as f32,
+            screen_size_width: frame_width as f64,
+            screen_size_height: frame_height as f64,
             frame_number: 0,
             if_reset_framebuffer: false,
             camera: camera.clone(),
@@ -122,7 +122,6 @@ impl Renderer {
         let spheres = scene.evaluate_serialized_spheres();
         let quadrilaterals = scene.evaluate_serialized_quadrilaterals();
         let materials = scene.evaluate_serialized_materials();
-        let triangles = scene.evaluate_serialized_triangles(); // TODO: wgpu fails if we've got zero triangles, we need to handle that
 
         // TODO: delete model transformations: looks like we can work in global coordinates
         let total_objects_count = scene.get_total_object_count();
@@ -133,18 +132,19 @@ impl Renderer {
         }
 
         let bvh = scene.evaluate_serialized_bvh();
+        let triangles = scene.evaluate_serialized_triangles(); // TODO: wgpu fails if we've got zero triangles, we need to handle that
 
         let frame_buffer: Vec<f32> = vec![0.0; (width * height * 4) as usize];
         let vertex_data: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_array)),
-            spheres: resources.create_storage_buffer_write_only("serialized spheres", cast_slice(&spheres)),
-            meshes: resources.create_storage_buffer_write_only("serialized meshes", cast_slice(&meshes)),
-            quads: resources.create_storage_buffer_write_only("serialized quadriliterals", cast_slice(&quadrilaterals)),
-            materials: resources.create_storage_buffer_write_only("serialized materials", cast_slice(&materials)),
+            spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
+            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(&meshes)),
+            quadriliterals: resources.create_storage_buffer_write_only("quadriliterals", cast_slice(&quadrilaterals)),
+            materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
             transforms: resources.create_storage_buffer_write_only("transformations", cast_slice(&transformations)),
-            bvh: resources.create_storage_buffer_write_only("serialized bvh", cast_slice(&bvh)),
+            bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(&bvh)),
             triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(&triangles)),
             frame_buffer: resources.create_storage_buffer_read_write("frame buffer", cast_slice(&frame_buffer)),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&vertex_data)),
@@ -168,7 +168,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: buffers.quads.as_entire_binding(),
+                    resource: buffers.quadriliterals.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -239,7 +239,7 @@ impl Renderer {
                 self.uniforms.serialize_into(&mut uniform_array);
 
                 let bytes: &[u8] = cast_slice(&uniform_array);
-                self.context.queue().write_buffer(&self.buffers.uniforms, 0, bytes);
+                self.context.queue().write_buffer(&self.buffers.uniforms, 0, bytes); // TODO: rewrite with 'write_buffer_with'. May be we need kind of ping-pong or circular buffer here
             }
         }
 
@@ -248,12 +248,12 @@ impl Renderer {
 
         let view = &surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass_descriptor = wgpu::RenderPassDescriptor {
-            label: Some("renderPass"),
+            label: Some("rasterization pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
+                    load: wgpu::LoadOp::Load, // no need to clear as we will fill entire buffer during render
                     store: StoreOp::Store,
                 },
             })],
@@ -264,5 +264,10 @@ impl Renderer {
 
         self.resources
             .render_pass(&mut render_pass_descriptor, &self.render_pipeline, &self.bind_group, &self.buffers.vertex);
+    }
+
+    #[must_use]
+    pub fn camera(&mut self) -> &mut Camera {
+        &mut self.camera
     }
 }

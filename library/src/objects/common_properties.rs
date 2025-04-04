@@ -4,8 +4,8 @@
 pub(crate) struct GlobalObjectIndex(pub u32);
 impl GlobalObjectIndex {
     #[must_use]
-    pub(crate) const fn as_f32(self) -> f32 {
-        self.0 as f32
+    pub(crate) const fn as_f64(self) -> f64 {
+        self.0 as f64
     }
 }
 

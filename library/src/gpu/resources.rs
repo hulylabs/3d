@@ -3,6 +3,7 @@ use thiserror::Error;
 use wgpu::util::DeviceExt;
 use wgpu::{BufferUsages, TextureView};
 use crate::gpu::context::Context;
+
 // TODO: work in progress
 
 #[derive(Error, Debug)]
@@ -76,7 +77,7 @@ impl Resources {
 
     pub fn create_render_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
         self.context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render pipeline"), //TODO: meaningful label
+            label: Some("rasterization pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module,
@@ -118,7 +119,7 @@ impl Resources {
 
     pub fn create_compute_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Compute pipeline"),
+            label: Some("ray tracing compute pipeline"),
             compilation_options: Default::default(), //TODO: what options are available?
             layout: None,
             module,
@@ -132,7 +133,7 @@ impl Resources {
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
             {
-                label: Some("compute pass"),
+                label: Some("ray tracing compute pass"),
                 timestamp_writes: None, // TODO: what can be used for?
             });
 

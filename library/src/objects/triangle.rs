@@ -10,8 +10,8 @@ use std::ops::Add;
 pub struct MeshIndex(pub(crate) usize);
 impl MeshIndex {
     #[must_use]
-    pub(crate) const fn as_f32(self) -> f32 {
-        self.0 as f32
+    pub(crate) const fn as_f64(self) -> f64 {
+        self.0 as f64
     }
 }
 impl From<usize> for MeshIndex {
@@ -24,8 +24,8 @@ impl From<usize> for MeshIndex {
 pub(crate) struct TriangleIndex(pub(crate) usize);
 impl TriangleIndex {
     #[must_use]
-    pub(crate) const fn as_f32(self) -> f32 {
-        self.0 as f32
+    pub(crate) const fn as_f64(self) -> f64 {
+        self.0 as f64
     }
 }
 impl Add<usize> for TriangleIndex {
@@ -72,7 +72,7 @@ impl Triangle {
 }
 
 impl AbsDiffEq for Triangle {
-    type Epsilon = f32;
+    type Epsilon = f64;
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
@@ -120,12 +120,12 @@ impl SerializableForGpu for Triangle {
         container.write_and_move_next(self.b.normal().x, &mut index);
         container.write_and_move_next(self.b.normal().y, &mut index);
         container.write_and_move_next(self.b.normal().z, &mut index);
-        container.write_and_move_next(self.in_kind_index.as_f32(), &mut index);
+        container.write_and_move_next(self.in_kind_index.as_f64(), &mut index);
 
         container.write_and_move_next(self.c.normal().x, &mut index);
         container.write_and_move_next(self.c.normal().y, &mut index);
         container.write_and_move_next(self.c.normal().z, &mut index);
-        container.write_and_move_next(self.host_mesh_index.as_f32(), &mut index);
+        container.write_and_move_next(self.host_mesh_index.as_f64(), &mut index);
 
         assert_eq!(index, Triangle::SERIALIZED_SIZE_FLOATS);
     }
@@ -207,31 +207,31 @@ mod tests {
         let mut container = vec![container_initial_filler; Triangle::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);
 
-        let expected = vec![
-            a.position().x,
-            a.position().y,
-            a.position().z,
+        let expected: Vec<f32> = vec![
+            a.position().x as f32,
+            a.position().y as f32,
+            a.position().z as f32,
             <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
-            b.position().x,
-            b.position().y,
-            b.position().z,
+            b.position().x as f32,
+            b.position().y as f32,
+            b.position().z as f32,
             <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
-            c.position().x,
-            c.position().y,
-            c.position().z,
+            c.position().x as f32,
+            c.position().y as f32,
+            c.position().z as f32,
             <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
-            a.normal().x,
-            a.normal().y,
-            a.normal().z,
+            a.normal().x as f32,
+            a.normal().y as f32,
+            a.normal().z as f32,
             <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
-            b.normal().x,
-            b.normal().y,
-            b.normal().z,
-            expected_in_kind_index.as_f32(),
-            c.normal().x,
-            c.normal().y,
-            c.normal().z,
-            expected_host_mesh_index.as_f32(),
+            b.normal().x as f32,
+            b.normal().y as f32,
+            b.normal().z as f32,
+            expected_in_kind_index.as_f64() as f32,
+            c.normal().x as f32,
+            c.normal().y as f32,
+            c.normal().z as f32,
+            expected_host_mesh_index.as_f64() as f32,
             container_initial_filler,
         ];
 

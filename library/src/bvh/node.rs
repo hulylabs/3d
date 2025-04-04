@@ -43,13 +43,13 @@ impl BvhNode {
         }
     }
 
-    const GPU_NULL_REFERENCE_MARKER: f32 = -1.0;
+    const GPU_NULL_REFERENCE_MARKER: f64 = -1.0;
 
     #[must_use]
-    fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> f32 {
+    fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> f64 {
         if let Some(node) = &node {
             match node.borrow().serial_index {
-                Some(index) => index as f32,
+                Some(index) => index as f64,
                 None => BvhNode::GPU_NULL_REFERENCE_MARKER,
             }
         } else {
@@ -58,20 +58,20 @@ impl BvhNode {
     }
 
     #[must_use]
-    fn right_offset_index_or_null(&self) -> f32 {
+    fn right_offset_index_or_null(&self) -> f64 {
         BvhNode::index_of_or_null(&self.right_offset)
     }
 
     #[must_use]
-    fn miss_node_index_or_null(&self) -> f32 {
+    fn miss_node_index_or_null(&self) -> f64 {
         BvhNode::index_of_or_null(&self.miss_node)
     }
 
     #[must_use]
-    fn start_index_or_null(&self) -> f32 {
+    fn start_index_or_null(&self) -> f64 {
         match self.start_index {
             None => BvhNode::GPU_NULL_REFERENCE_MARKER,
-            Some(index) => index as f32,
+            Some(index) => index as f64,
         }
     }
 
@@ -223,7 +223,7 @@ impl SerializableForGpu for BvhNode {
         if self.content.is_some() {
             container.write_and_move_next(2.0, &mut index); // TODO: refactor this - 2 is a type for triangle
             container.write_and_move_next(self.start_index_or_null(), &mut index);
-            container.write_and_move_next(self.triangles_count as f32, &mut index);
+            container.write_and_move_next(self.triangles_count as f64, &mut index);
         } else {
             container.write_and_move_next(Self::GPU_NULL_REFERENCE_MARKER, &mut index);
             container.write_and_move_next(Self::GPU_NULL_REFERENCE_MARKER, &mut index);
@@ -231,7 +231,7 @@ impl SerializableForGpu for BvhNode {
         }
 
         container.write_and_move_next(self.miss_node_index_or_null(), &mut index);
-        container.write_and_move_next(self.axis as usize as f32, &mut index);
+        container.write_and_move_next(self.axis as usize as f64, &mut index);
 
         assert_eq!(index, BvhNode::SERIALIZED_SIZE_FLOATS);
     }
@@ -267,7 +267,7 @@ pub(crate) mod tests {
         assert_eq!(system_under_test.axis, Axis::X);
     }
 
-    pub (crate) fn make_triangle(vertex_data: [f32; VERTICES_IN_TRIANGLE * Axis::COUNT]) -> Triangle {
+    pub (crate) fn make_triangle(vertex_data: [f64; VERTICES_IN_TRIANGLE * Axis::COUNT]) -> Triangle {
         Triangle::new(
             Vertex::new(Point::new(vertex_data[0], vertex_data[1], vertex_data[2], ), Vector::zero()),
             Vertex::new(Point::new(vertex_data[3], vertex_data[4], vertex_data[5], ), Vector::zero()),

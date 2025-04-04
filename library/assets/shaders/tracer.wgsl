@@ -100,10 +100,10 @@ struct Triangle {
 }
 
 struct Mesh {
-	num_triangles : i32,
-	offset : i32,
-	global_id : i32,
-	material_id : i32
+	num_triangles : f32,
+	offset : f32,
+	global_id : f32,
+	material_id : f32
 }
 
 struct AABB {
@@ -327,8 +327,8 @@ fn hit_quad(quad : Quad, tmin : f32, tmax : f32, ray : Ray) -> bool {
 fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bool {
 
 	let mesh = meshes[i32(tri.mesh_id)];
-	let invModelMatrix = transforms[mesh.global_id].invModelMatrix;
-	let modelMatrix = transforms[mesh.global_id].modelMatrix;
+	let invModelMatrix = transforms[i32(mesh.global_id)].invModelMatrix;
+	let modelMatrix = transforms[i32(mesh.global_id)].modelMatrix;
 
 	let ray = Ray((invModelMatrix * vec4f(incidentRay.origin, 1)).xyz, (invModelMatrix * vec4f(incidentRay.dir, 0.0)).xyz);
 
@@ -372,15 +372,15 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[mesh.material_id];
+	hitRec.material = materials[i32(mesh.material_id)];
 
 	return true;
 }
 
 // https://medium.com/@bromanz/another-view-on-the-classic-ray-aabb-intersection-algorithm-for-bvh-traversal-41125138b525
-fn hit_aabb(box : AABB, tmin : f32, tmax : f32, ray : Ray, invDir : vec3f) -> bool {
-	var t0s = (box.min - ray.origin) * invDir;
-	var t1s = (box.max - ray.origin) * invDir;
+fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray, invDir : vec3f) -> bool {
+	var t0s = (box_min - ray.origin) * invDir;
+	var t1s = (box_max - ray.origin) * invDir;
 
 	var tsmaller = min(t0s, t1s);
 	var tbigger = max(t0s, t1s);
@@ -566,7 +566,7 @@ fn hitScene(ray : Ray) -> bool
 	while(true) {
 		node = bvh[curNodeIdx];
 
-		if(hit_aabb(node, ray_tmin, closest_so_far, ray, invDir))
+		if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir))
 		{
 			if(i32(node.prim_type) == leafNode)
 			{

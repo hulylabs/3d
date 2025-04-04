@@ -13,8 +13,8 @@ use alias::Vector;
 pub struct QuadrilateralIndex(pub(crate) usize);
 impl QuadrilateralIndex {
     #[must_use]
-    pub(crate) const fn as_f32(self) -> f32 {
-        self.0 as f32
+    pub(crate) const fn as_f64(self) -> f64 {
+        self.0 as f64
     }
 }
 impl From<usize> for QuadrilateralIndex {
@@ -68,12 +68,12 @@ impl SerializableForGpu for Quadrilateral {
         container.write_and_move_next(self.local_x.x, &mut index);
         container.write_and_move_next(self.local_x.y, &mut index);
         container.write_and_move_next(self.local_x.z, &mut index);
-        container.write_and_move_next(self.links.in_kind_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.in_kind_index().as_f64(), &mut index);
 
         container.write_and_move_next(self.local_y.x, &mut index);
         container.write_and_move_next(self.local_y.y, &mut index);
         container.write_and_move_next(self.local_y.z, &mut index);
-        container.write_and_move_next(self.links.global_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
 
         container.write_and_move_next(normal.x, &mut index);
         container.write_and_move_next(normal.y, &mut index);
@@ -83,7 +83,7 @@ impl SerializableForGpu for Quadrilateral {
         container.write_and_move_next(w.x, &mut index);
         container.write_and_move_next(w.y, &mut index);
         container.write_and_move_next(w.z, &mut index);
-        container.write_and_move_next(self.links.material_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
 
         assert_eq!(index, Quadrilateral::SERIALIZED_SIZE_FLOATS);
     }
@@ -139,19 +139,19 @@ mod tests {
         let mut container = vec![buffer_initial_filler; Quadrilateral::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);
 
-        assert_eq!(container[0], origin.x);
-        assert_eq!(container[1], origin.y);
-        assert_eq!(container[2], origin.z);
+        assert_eq!(container[0], origin.x as f32);
+        assert_eq!(container[1], origin.y as f32);
+        assert_eq!(container[2], origin.z as f32);
         assert_eq!(container[3], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
 
-        assert_eq!(container[4], local_x.x);
-        assert_eq!(container[5], local_x.y);
-        assert_eq!(container[6], local_x.z);
+        assert_eq!(container[4], local_x.x as f32);
+        assert_eq!(container[5], local_x.y as f32);
+        assert_eq!(container[6], local_x.z as f32);
         assert_eq!(container[7], expected_local_index.0 as f32);
 
-        assert_eq!(container[8], local_y.x);
-        assert_eq!(container[9], local_y.y);
-        assert_eq!(container[10], local_y.z);
+        assert_eq!(container[8],  local_y.x as f32);
+        assert_eq!(container[9],  local_y.y as f32);
+        assert_eq!(container[10], local_y.z as f32);
         assert_eq!(container[11], expected_global_index.0 as f32);
 
         assert_eq!(container[12], 0.0);

@@ -33,8 +33,8 @@ impl Aabb {
     #[must_use]
     pub(crate) const fn new() -> Self {
         Aabb {
-            min: Point::new(f32::MAX, f32::MAX, f32::MAX),
-            max: Point::new(f32::MIN, f32::MIN, f32::MIN),
+            min: Point::new(f64::MAX, f64::MAX, f64::MAX),
+            max: Point::new(f64::MIN, f64::MIN, f64::MIN),
         }
     }
 
@@ -62,7 +62,7 @@ impl Aabb {
         }
     }
 
-    const PAD_DELTA: f32 = 0.0001 / 2.0;
+    const PAD_DELTA: f64 = 0.0001 / 2.0;
 
     #[must_use]
     pub(crate) fn pad(self) -> Self {
@@ -82,19 +82,19 @@ impl Aabb {
     }
 
     #[must_use]
-    pub(crate) fn centroid(self, axis: Axis) -> f32 {
+    pub(crate) fn centroid(self, axis: Axis) -> f64 {
         let index = axis as usize;
         (self.min[index] + self.max[index]) / 2.0
     }
 
     #[must_use]
-    pub(crate) fn half_surface_area(self) -> f32 {
+    pub(crate) fn half_surface_area(self) -> f64 {
         let extent = self.extent();
         extent.x * extent.y + extent.y * extent.z + extent.z * extent.x
     }
 
     #[must_use]
-    pub(crate) fn axis(self, axis: Axis) -> (f32, f32) {
+    pub(crate) fn axis(self, axis: Axis) -> (f64, f64) {
         let index = axis as usize;
         (self.min[index], self.max[index])
     }
@@ -111,7 +111,7 @@ impl Aabb {
 }
 
 impl AbsDiffEq for Aabb {
-    type Epsilon = f32;
+    type Epsilon = f64;
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
@@ -145,8 +145,8 @@ mod tests {
     #[test]
     fn test_aabb_new() {
         let system_under_test = Aabb::new();
-        assert_eq!(system_under_test.min, Point::new(f32::MAX, f32::MAX, f32::MAX));
-        assert_eq!(system_under_test.max, Point::new(f32::MIN, f32::MIN, f32::MIN));
+        assert_eq!(system_under_test.min, Point::new(f64::MAX, f64::MAX, f64::MAX));
+        assert_eq!(system_under_test.max, Point::new(f64::MIN, f64::MIN, f64::MIN));
     }
 
     #[test]

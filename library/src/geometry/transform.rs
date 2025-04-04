@@ -2,11 +2,10 @@
 use crate::geometry::axis::Axis;
 use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
-use cgmath::SquareMatrix;
-use cgmath::{Matrix, Matrix4, Transform};
+use cgmath::{Matrix, Matrix4, SquareMatrix, Transform};
 use strum::EnumCount;
 
-pub type Affine = Matrix4<f32>;
+pub type Affine = Matrix4<f64>;
 
 pub(crate) struct Transformation {
     forward: Affine,
@@ -68,14 +67,14 @@ impl SerializableForGpu for Transformation {
 }
 
 pub(crate) trait TransformableCoordinate {
-    fn new(x: f32, y: f32, z: f32) -> Self;
+    fn new(x: f64, y: f64, z: f64) -> Self;
     fn transform(self, transformation: &Affine) -> Self;
-    fn to_array(self) -> [f32; Axis::COUNT];
+    fn to_array(self) -> [f64; Axis::COUNT];
 }
 
 impl TransformableCoordinate for Point {
     #[must_use]
-    fn new(x: f32, y: f32, z: f32) -> Self {
+    fn new(x: f64, y: f64, z: f64) -> Self {
         Point::new(x, y, z)
     }
 
@@ -85,14 +84,14 @@ impl TransformableCoordinate for Point {
     }
 
     #[must_use]
-    fn to_array(self) -> [f32; Axis::COUNT] {
+    fn to_array(self) -> [f64; Axis::COUNT] {
         [self.x, self.y, self.z]
     }
 }
 
 impl TransformableCoordinate for Vector {
     #[must_use]
-    fn new(x: f32, y: f32, z: f32) -> Self {
+    fn new(x: f64, y: f64, z: f64) -> Self {
         Vector::new(x, y, z)
     }
 
@@ -102,7 +101,7 @@ impl TransformableCoordinate for Vector {
     }
 
     #[must_use]
-    fn to_array(self) -> [f32; Axis::COUNT] {
+    fn to_array(self) -> [f64; Axis::COUNT] {
         [self.x, self.y, self.z]
     }
 }

@@ -10,7 +10,7 @@ pub(crate) struct Vertex {
 }
 
 impl AbsDiffEq for Vertex {
-    type Epsilon = f32;
+    type Epsilon = f64;
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
@@ -53,7 +53,7 @@ mod tests {
     use super::*;
     use crate::geometry::transform::Affine;
     use cgmath::{EuclideanSpace, Rad, assert_abs_diff_eq};
-    use std::f32::consts::PI;
+    use std::f64::consts::PI;
 
     #[test]
     fn test_vertex_new() {
@@ -89,8 +89,8 @@ mod tests {
         let system_under_test = Vertex::new(position, normal);
 
         let matrix = Affine::from_translation(Vector::unit_x())
-            * Affine::from_angle_z(Rad(PI / 2.0))
-            * Affine::from_angle_x(Rad(-PI / 2.0))
+            * Affine::from_angle_z(Rad::<f64>(PI / 2.0))
+            * Affine::from_angle_x(Rad::<f64>(-PI / 2.0))
             * Affine::from_translation(-Vector::unit_x())
             * Affine::from_translation(-Vector::unit_y());
 

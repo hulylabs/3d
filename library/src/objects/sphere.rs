@@ -11,8 +11,8 @@ use alias::Vector;
 pub struct SphereIndex(pub(crate) usize);
 impl SphereIndex {
     #[must_use]
-    pub(crate) const fn as_f32(self) -> f32 {
-        self.0 as f32
+    pub(crate) const fn as_f64(self) -> f64 {
+        self.0 as f64
     }
 }
 impl From<usize> for SphereIndex {
@@ -23,13 +23,13 @@ impl From<usize> for SphereIndex {
 
 pub(crate) struct Sphere {
     center: Point,
-    radius: f32,
+    radius: f64,
     links: Linkage<SphereIndex>,
 }
 
 impl Sphere {
     #[must_use]
-    pub(crate) fn new(center: Point, radius: f32, links: Linkage<SphereIndex>) -> Self {
+    pub(crate) fn new(center: Point, radius: f64, links: Linkage<SphereIndex>) -> Self {
         assert!(radius > 0.0, "radius must be positive");
         Sphere { center, radius, links }
     }
@@ -54,9 +54,9 @@ impl SerializableForGpu for Sphere {
         container.write_and_move_next(self.center.z, &mut index);
         container.write_and_move_next(self.radius, &mut index);
 
-        container.write_and_move_next(self.links.global_index().as_f32(), &mut index);
-        container.write_and_move_next(self.links.in_kind_index().as_f32(), &mut index);
-        container.write_and_move_next(self.links.material_index().as_f32(), &mut index);
+        container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
+        container.write_and_move_next(self.links.in_kind_index().as_f64(), &mut index);
+        container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
         container.pad_to_align(&mut index);
 
         assert_eq!(index, Sphere::SERIALIZED_SIZE_FLOATS);
@@ -124,10 +124,10 @@ mod tests {
         let mut container = vec![container_initial_filler; Sphere::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);
 
-        assert_eq!(container[0], center.x);
-        assert_eq!(container[1], center.y);
-        assert_eq!(container[2], center.z);
-        assert_eq!(container[3], radius);
+        assert_eq!(container[0], center.x as f32);
+        assert_eq!(container[1], center.y as f32);
+        assert_eq!(container[2], center.z as f32);
+        assert_eq!(container[3], radius as f32);
         assert_eq!(container[4], expected_global_index.0 as f32);
         assert_eq!(container[5], expected_local_index.0 as f32);
         assert_eq!(container[6], expected_material_index.0 as f32);
