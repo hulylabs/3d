@@ -194,11 +194,19 @@ mod tests {
 
         let mut system_under_test = Container::new();
         let dummy_material = system_under_test.add_material(&Material::default());
-        let mesh_index = system_under_test.add_mesh(temp_file.path(), &Affine::from_translation(Vector::new(1.0, 2.0, 3.0)), dummy_material);
+        let first_mesh_index = system_under_test.add_mesh(temp_file.path(), &Affine::from_translation(Vector::new(1.0, 2.0, 3.0)), dummy_material);
 
         assert_eq!(system_under_test.meshes.len(), 1);
         assert_eq!(system_under_test.triangles.len(), 1);
         assert_eq!(system_under_test.triangles_count, system_under_test.triangles.len());
+
+        let second_mesh_index = system_under_test.add_mesh(temp_file.path(), &Affine::from_translation(Vector::new(1.0, 2.0, 3.0)), dummy_material);
+
+        assert_eq!(system_under_test.meshes.len(), 2);
+        assert_eq!(system_under_test.triangles.len(), 2);
+        assert_eq!(system_under_test.triangles_count, system_under_test.triangles.len());
+
+        assert_ne!(first_mesh_index.unwrap(), second_mesh_index.unwrap());
     }
 
     const CUBE_OBJ_FILE: &str = r#"
@@ -254,11 +262,11 @@ mod tests {
 
         let mut system_under_test = Container::new();
         let dummy_material = system_under_test.add_material(&Material::default());
+
         let mesh_index = system_under_test.add_mesh(temp_file.path(), &Affine::identity(), dummy_material);
+        assert!(!mesh_index.is_err());
 
-        let bvh = system_under_test.evaluate_serialized_bvh();
         let actual_triangles = system_under_test.evaluate_serialized_triangles();
-
         assert_eq!(actual_triangles, SERIALIZED_CUBE_TRIANGLES);
     }
 }

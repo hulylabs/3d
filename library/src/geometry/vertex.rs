@@ -1,6 +1,5 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::epsilon::DEFAULT_EPSILON;
-use crate::geometry::transform::Transformation;
 use cgmath::AbsDiffEq;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -30,14 +29,6 @@ impl Vertex {
     }
 
     #[must_use]
-    pub(crate) fn transform(&self, transformation: &Transformation) -> Vertex {
-        Vertex {
-            position: transformation.of_point(&self.position),
-            normal: transformation.of_surface_vector(&self.normal),
-        }
-    }
-
-    #[must_use]
     pub(crate) fn position(&self) -> Point {
         self.position
     }
@@ -51,9 +42,7 @@ impl Vertex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::transform::Affine;
-    use cgmath::{EuclideanSpace, Rad, assert_abs_diff_eq};
-    use std::f64::consts::PI;
+    use cgmath::{assert_abs_diff_eq, EuclideanSpace};
 
     #[test]
     fn test_vertex_new() {
@@ -79,28 +68,6 @@ mod tests {
         let expected_normal = normal + per_component_epsilon;
         assert_abs_diff_eq!(system_under_test.position(), expected_position, epsilon = epsilon);
         assert_abs_diff_eq!(system_under_test.normal(), expected_normal, epsilon = epsilon);
-    }
-
-    #[test]
-    fn test_vertex_transform() {
-        let position = Point::new(1.0, 1.0, 1.0);
-        let normal = Vector::new(1.0, 0.0, 0.0);
-
-        let system_under_test = Vertex::new(position, normal);
-
-        let matrix = Affine::from_translation(Vector::unit_x())
-            * Affine::from_angle_z(Rad::<f64>(PI / 2.0))
-            * Affine::from_angle_x(Rad::<f64>(-PI / 2.0))
-            * Affine::from_translation(-Vector::unit_x())
-            * Affine::from_translation(-Vector::unit_y());
-
-        let actual_vertex = system_under_test.transform(&Transformation::new(matrix));
-
-        let expected_position = Point::origin();
-        let expected_normal = Vector::new(0.0, 1.0, 0.0);
-
-        assert_abs_diff_eq!(actual_vertex.position(), expected_position, epsilon = DEFAULT_EPSILON);
-        assert_abs_diff_eq!(actual_vertex.normal(), expected_normal, epsilon = DEFAULT_EPSILON);
     }
 
     #[test]

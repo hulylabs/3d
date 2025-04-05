@@ -134,7 +134,7 @@ mod tests {
         let expected_local_index = QuadrilateralIndex(13);
         let expected_material_index = MaterialIndex(17);
         let system_under_test = Quadrilateral::new(origin, local_x, local_y, Linkage::new(expected_global_index, expected_local_index, expected_material_index));
-        let buffer_initial_filler = -1.0;
+        let buffer_initial_filler = -7.0;
 
         let mut container = vec![buffer_initial_filler; Quadrilateral::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);

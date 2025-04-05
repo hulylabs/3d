@@ -168,32 +168,6 @@ mod tests {
         assert_eq!(actual_bounding_box.max(), Point::new(0.2, 0.4, 0.6));
     }
 
-    // #[test]
-    // fn test_triangle_transform() {
-    //     let a = Vertex::new(Point::new(0.0, 0.0, 0.0), Vector::new(1.0, 0.0, 0.0));
-    //     let b = Vertex::new(Point::new(0.0, 1.0, 0.0), Vector::new(0.0, 1.0, 0.0));
-    //     let c = Vertex::new(Point::new(0.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
-    //     let expected_in_kind_index = TriangleIndex(0);
-    //     let expected_host_mesh_index = MeshIndex(0);
-    //     let system_under_test = Triangle::new(a, b, c, expected_in_kind_index, expected_host_mesh_index);
-    //
-    //     let matrix = Affine::from_translation(Vector::unit_x()) * Affine::from_angle_z(Rad(PI / 2.0));
-    //
-    //     let actual_triangle = system_under_test.transform(&Transformation::new(matrix));
-    //
-    //     let expected_a = Vertex::new(Point::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0));
-    //     let expected_b = Vertex::new(Point::new(0.0, 0.0, 0.0), Vector::new(-1.0, 0.0, 0.0));
-    //     let expected_c = Vertex::new(Point::new(1.0, 0.0, 1.0), Vector::new(0.0, 0.0, 1.0));
-    //
-    //     let epsilon = DEFAULT_EPSILON;
-    //     assert_abs_diff_eq!(actual_triangle.a, expected_a, epsilon=epsilon);
-    //     assert_abs_diff_eq!(actual_triangle.b, expected_b, epsilon=epsilon);
-    //     assert_abs_diff_eq!(actual_triangle.c, expected_c, epsilon=epsilon);
-    //
-    //     assert_eq!(actual_triangle.host_mesh_index, expected_host_mesh_index);
-    //     assert_eq!(actual_triangle.in_kind_index, expected_in_kind_index);
-    // }
-
     #[test]
     fn test_triangle_serialization() {
         let a = Vertex::new(Point::new(1.0, 2.0, 3.0), Vector::new(10.0, 11.0, 12.0));

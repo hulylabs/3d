@@ -22,7 +22,6 @@ impl MinMax for Point {
     fn component_wise_min(self, other: Point) -> Self {
         Point::new(self.x.min(other.x), self.y.min(other.y), self.z.min(other.z))
     }
-
     #[must_use]
     fn component_wise_max(self, other: Point) -> Self {
         Point::new(self.x.max(other.x), self.y.max(other.y), self.z.max(other.z))
@@ -67,7 +66,7 @@ impl Aabb {
     #[must_use]
     pub(crate) fn pad(self) -> Self {
         let mut result = Aabb { min: self.min, max: self.max };
-        for i in 0..Axis::COUNT as usize {
+        for i in 0..Axis::COUNT {
             if result.max[i] - self.min[i] < Aabb::PAD_DELTA {
                 result.max[i] += Aabb::PAD_DELTA;
                 result.min[i] -= Aabb::PAD_DELTA;

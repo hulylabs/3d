@@ -1,8 +1,9 @@
-﻿use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+﻿use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use palette::Srgb;
+use strum_macros::{EnumCount, EnumIter};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, EnumCount, EnumIter)]
 pub enum MaterialClass {
     Lambert,
     Mirror,
@@ -24,7 +25,7 @@ impl MaterialClass {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Material {
     albedo: Srgb,
     specular: Srgb,
@@ -37,6 +38,8 @@ pub struct Material {
 
 impl Material {
     const SERIALIZED_QUARTET_COUNT: usize = 4;
+
+    const ZERO_COLOR: Srgb = Srgb::new(0.0, 0.0, 0.0);
 
     #[must_use]
     pub fn new() -> Self {
@@ -92,9 +95,9 @@ impl Default for Material {
     #[must_use]
     fn default() -> Self {
         Material {
-            albedo: Srgb::new(0.0, 0.0, 0.0),
-            specular: Srgb::new(0.0, 0.0, 0.0),
-            emission: Srgb::new(0.0, 0.0, 0.0),
+            albedo: Self::ZERO_COLOR,
+            specular: Self::ZERO_COLOR,
+            emission: Self::ZERO_COLOR,
             specular_strength: 0.0,
             roughness: 0.0,
             refractive_index_eta: 0.0,
@@ -134,4 +137,122 @@ impl SerializableForGpu for Material {
     }
 }
 
-// TODO: unit tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    #[test]
+    fn test_serialize_into() {
+        let expected_albedo = Srgb::new(0.5, 0.6, 0.7);
+        let expected_specular = Srgb::new(0.8, 0.9, 1.0);
+        let expected_emission = Srgb::new(1.1, 2.2, 3.3);
+        let expected_specular_strength = 0.5;
+        let expected_roughness = 0.7;
+        let expected_refractive_index = 1.5;
+        let expected_class = MaterialClass::Glass;
+
+        let system_under_test = Material::new()
+            .with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue)
+            .with_specular(expected_specular.red, expected_specular.green, expected_specular.blue)
+            .with_emission(expected_emission.red, expected_emission.green, expected_emission.blue)
+            .with_specular_strength(expected_specular_strength)
+            .with_roughness(expected_roughness)
+            .with_refractive_index_eta(expected_refractive_index)
+            .with_class(expected_class);
+
+        let buffer_initial_filler = -1.0;
+
+        let mut container = vec![buffer_initial_filler; Material::SERIALIZED_SIZE_FLOATS + 1];
+        system_under_test.serialize_into(&mut container);
+
+        assert_eq!(container[0], expected_albedo.red);
+        assert_eq!(container[1], expected_albedo.green);
+        assert_eq!(container[2], expected_albedo.blue);
+        assert_eq!(container[3], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+
+        assert_eq!(container[4], expected_specular.red);
+        assert_eq!(container[5], expected_specular.green);
+        assert_eq!(container[6], expected_specular.blue);
+        assert_eq!(container[7], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+
+        assert_eq!(container[8],  expected_emission.red);
+        assert_eq!(container[9],  expected_emission.green);
+        assert_eq!(container[10], expected_emission.blue);
+        assert_eq!(container[11], expected_specular_strength as f32);
+
+        assert_eq!(container[12], expected_roughness as f32);
+        assert_eq!(container[13], expected_refractive_index as f32);
+        assert_eq!(container[14], expected_class.as_f64() as f32);
+        assert_eq!(container[15], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+    }
+
+    #[test]
+    fn test_material_class_as_f64() {
+        for system_under_test in MaterialClass::iter()  {
+            let value = system_under_test.as_f64();
+            assert_eq!(value, value as usize as f64);
+        }
+    }
+
+    #[test]
+    fn test_material_default() {
+        let system_under_test = Material::default();
+        assert_eq!(system_under_test.albedo, Material::ZERO_COLOR);
+        assert_eq!(system_under_test.specular, Material::ZERO_COLOR);
+        assert_eq!(system_under_test.emission, Material::ZERO_COLOR);
+        assert_eq!(system_under_test.specular_strength, 0.0);
+        assert_eq!(system_under_test.roughness, 0.0);
+        assert_eq!(system_under_test.refractive_index_eta, 0.0);
+        assert_eq!(system_under_test.class, MaterialClass::Lambert);
+    }
+
+    #[test]
+    fn test_material_with_albedo() {
+        let expected_albedo = Srgb::new(0.5, 0.6, 0.7);
+        let system_under_test = Material::default().with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue);
+        assert_eq!(system_under_test, Material { albedo: expected_albedo, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_specular() {
+        let expected_specular = Srgb::new(0.8, 0.9, 1.0);
+        let system_under_test = Material::default().with_specular(expected_specular.red, expected_specular.green, expected_specular.blue);
+        assert_eq!(system_under_test, Material { specular: expected_specular, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_emission() {
+        let expected_emission = Srgb::new(1.1, 2.2, 3.3);
+        let system_under_test = Material::default().with_emission(expected_emission.red, expected_emission.green, expected_emission.blue);
+        assert_eq!(system_under_test, Material { emission: expected_emission, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_specular_strength() {
+        let expected_specular_strength = 0.5;
+        let system_under_test = Material::default().with_specular_strength(expected_specular_strength);
+        assert_eq!(system_under_test, Material { specular_strength: expected_specular_strength, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_roughness() {
+        let expected_roughness = 0.7;
+        let system_under_test = Material::default().with_roughness(expected_roughness);
+        assert_eq!(system_under_test, Material { roughness: expected_roughness, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_refractive_index_eta() {
+        let expected_refractive_index = 1.5;
+        let system_under_test = Material::default().with_refractive_index_eta(expected_refractive_index);
+        assert_eq!(system_under_test, Material { refractive_index_eta: expected_refractive_index, ..Default::default() });
+    }
+
+    #[test]
+    fn test_material_with_class() {
+        let expected_class = MaterialClass::Glass;
+        let system_under_test = Material::default().with_class(expected_class);
+        assert_eq!(system_under_test, Material { class: expected_class, ..Default::default() });
+    }
+}

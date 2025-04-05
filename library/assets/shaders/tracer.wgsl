@@ -163,9 +163,6 @@ fn near_zero(v : vec3f) -> bool {
 }
 
 fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
-
-	// let ray = Ray((vec4f(incidentRay.origin, 1) * transforms[i32(sphere.id)].invModelMatrix).xyz, (vec4f(incidentRay.dir, 0) * transforms[i32(sphere.id)].invModelMatrix).xyz);
-
 	let oc = ray.origin - sphere.center;
 	let a = dot(ray.dir, ray.dir);
 	let half_b = dot(ray.dir, oc);
@@ -190,12 +187,7 @@ fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	hitRec.t = root;
 	hitRec.p = at(ray, root);
 
-	// hitRec.p = (vec4f(hitRec.p, 1) * transforms[i32(sphere.id)].invModelMatrix).xyz;
-	// hitRec.t = distance(hitRec.p, incidentRay.origin);
-
 	hitRec.normal = normalize((hitRec.p - sphere.center) / sphere.r);
-
-	// hitRec.normal = normalize((vec4f(hitRec.normal, 0) * transpose(transforms[i32(sphere.id)].modelMatrix)).xyz);
 
 	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
@@ -203,14 +195,11 @@ fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
 		hitRec.normal = -hitRec.normal;
 	}
 
-
 	hitRec.material = materials[i32(sphere.material_id)];
 	return true;
 }
 
 fn hit_sphere_local(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> f32 {
-
-	// let ray = Ray((vec4f(incidentRay.origin, 1) * transforms[i32(sphere.id)].invModelMatrix).xyz, (vec4f(incidentRay.dir, 0) * transforms[i32(sphere.id)].invModelMatrix).xyz);
 	let oc = ray.origin - sphere.center;
 	let a = dot(ray.dir, ray.dir);
 	let half_b = dot(ray.dir, oc);
@@ -359,9 +348,6 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 
 	hitRec.t = dst;
 	hitRec.p = at(incidentRay, dst);
-
-	// hitRec.p = (vec4f(at(ray, dst), 1) * modelMatrix).xyz;
-	// hitRec.t = length(hitRec.p - incidentRay.origin);
 
 	hitRec.normal = tri.normalA * w + tri.normalB * u + tri.normalC * v;
 	hitRec.normal = normalize((transpose(invModelMatrix) * vec4f(hitRec.normal, 0)).xyz);
@@ -537,12 +523,6 @@ fn hitScene(ray : Ray) -> bool
 				closest_so_far = hitRec.t;
 			}
 		}
-
-		// if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-		// {
-		// 	hit_anything = true;
-		// 	closest_so_far = hitRec.t;
-		// }
 	}
 
 	for(var i = 0; i < NUM_QUADS; i++)
@@ -570,7 +550,6 @@ fn hitScene(ray : Ray) -> bool
 		{
 			if(i32(node.prim_type) == leafNode)
 			{
-
 				let startPrim = i32(node.prim_id);
 				let countPrim = i32(node.prim_count);
 				for(var j = 0; j < countPrim; j++)
@@ -606,7 +585,6 @@ fn hitScene(ray : Ray) -> bool
 				}
 			}
 		}
-
 		else
 		{
 			if(toVisitOffset == 0)
@@ -838,13 +816,6 @@ fn material_scatter(ray_in : Ray) -> Ray {
 
 		doSpecular = select(0.0, 1.0, rand2D() < hitRec.material.specularStrength);
 
-		// var diffuse_dir = uniform_sampling_hemisphere();
-		// var diffuse_dir = cosine_sampling_hemisphere();
-		// if(near_zero(diffuse_dir)) {
-		// 	diffuse_dir = hitRec.normal;
-		// }
-
-		// scattered = Ray(hitRec.p, normalize(diffuse_dir));
 		var specular_dir = reflect(ray_in.dir, hitRec.normal);
 		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitRec.material.roughness));
 
@@ -878,7 +849,6 @@ fn material_scatter(ray_in : Ray) -> Ray {
 
 		var direction = vec3f(0);
 		if(ir * sin_theta > 1.0 || reflectance(cos_theta, ir) > rand2D()) {
-		// if(ir * sin_theta > 1.0) {
 			direction = reflect(unit_direction, hitRec.normal);
 		}
 		else {
@@ -896,12 +866,7 @@ fn material_scatter(ray_in : Ray) -> Ray {
 	}
 
 	else if(hitRec.material.material_type == ISOTROPIC) {
-		// scattered = Ray(hitRec.p, uniform_random_in_unit_sphere());
-		// scatterRec.skip_pdf = true;
-		// scatterRec.skip_pdf_ray = scattered;
-
 		let g = hitRec.material.specularStrength;
-		// let cos_hg = (1 - g*g) / (4 * PI * pow(1 + g*g - 2*g*cos(2 * PI * rand2D()), 3/2));
 		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand2D())), 2.0)) / (2 * g);
 		let sin_hg = sqrt(1 - cos_hg * cos_hg);
 		let phi = 2 * PI * rand2D();
@@ -911,7 +876,6 @@ fn material_scatter(ray_in : Ray) -> Ray {
 		let uvw = onb_build_from_w(ray_in.dir);
 		scattered = Ray(hitRec.p, normalize(onb_get_local(hg_dir)));
 
-		// scatterRec.pdf = (1 - g*g) / (4 * PI * pow(1 + g*g - 2*g*cos(2 * PI * rand2D()), 3/2));
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
@@ -1053,43 +1017,27 @@ struct Vertex {
 	@location(0) position: vec2f,
 };
 
-@vertex fn vs(
-	vert: Vertex) -> @builtin(position) vec4f {
+@vertex fn vs(vert: Vertex) -> @builtin(position) vec4f {
+    return vec4f(vert.position, 0.0, 1.0);
+}
 
-	return vec4f(vert.position, 0.0, 1.0);
-  }
+/// fragment
 
-  /// fragment
+fn get2Dfrom1D(pos: vec2f) -> u32 {
+    return (u32(pos.y) * u32(uniforms.screenDims.x) + u32(pos.x));
+}
 
-  fn get2Dfrom1D(pos: vec2f) -> u32 {
+@fragment fn fs(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
+    let i = get2Dfrom1D(fragCoord.xy);
+    var color = framebuffer[i].xyz / uniforms.frameNum;
 
-      return (u32(pos.y) * u32(uniforms.screenDims.x) + u32(pos.x));
-  }
+    color = aces_approx(color.xyz);
+    color = pow(color.xyz, vec3f(1/2.2));
 
-  // fn aces_approx(v : vec3f) -> vec3f
-  // {
-  //     let v1 = v * 0.6f;
-  //     const a = 2.51f;
-  //     const b = 0.03f;
-  //     const c = 2.43f;
-  //     const d = 0.59f;
-  //     const e = 0.14f;
-  //     return clamp((v1*(a*v1+b))/(v1*(c*v1+d)+e), vec3(0.0f), vec3(1.0f));
-  // }
-
-
-  @fragment fn fs(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
-
-  	let i = get2Dfrom1D(fragCoord.xy);
-  	var color = framebuffer[i].xyz / uniforms.frameNum;
-
-  	color = aces_approx(color.xyz);
-  	color = pow(color.xyz, vec3f(1/2.2));
-
-  	if(uniforms.resetBuffer == 1)
-  	{
-  		framebuffer[i] = vec4f(0);
-  	}
-
-  	return vec4f(color, 1);
+    if(uniforms.resetBuffer == 1)
+    {
+        framebuffer[i] = vec4f(0);
     }
+
+    return vec4f(color, 1);
+}

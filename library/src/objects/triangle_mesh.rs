@@ -18,8 +18,8 @@ impl VertexData {
     #[must_use]
     fn as_vertex(&self) -> Vertex {
         Vertex::new(
-            Point::new(self.position[Axis::X as usize] as f64, self.position[Axis::Y as usize] as f64, self.position[Axis::Z as usize] as f64),
-            Vector::new(self.normal[Axis::X as usize] as f64, self.normal[Axis::Y as usize] as f64, self.normal[Axis::Z as usize] as f64),
+            Point::new(self.position[Axis::X as usize], self.position[Axis::Y as usize], self.position[Axis::Z as usize]),
+            Vector::new(self.normal[Axis::X as usize], self.normal[Axis::Y as usize], self.normal[Axis::Z as usize]),
         )
     }
 }
@@ -49,8 +49,6 @@ impl TriangleMesh {
             triangles_base_index,
         }
     }
-
-
 
     const SERIALIZED_QUARTET_COUNT: usize = 1;
 
@@ -119,37 +117,6 @@ mod tests {
         let indices = vec![0, 0];
         let _system_under_test = TriangleMesh::new(&vertices, &indices, DUMMY_LINKS, TriangleIndex(0));
     }
-
-    // #[test]
-    // fn test_transform() {
-    //     let vertices: &[VertexData] = bytemuck::cast_slice(&THREE_VERTICES_DATA);
-    //     let indices = vec![0, 1, 2, 0, 1, 2];
-    //
-    //     let mut system_under_test = TriangleMesh::new(&vertices, &indices, DUMMY_LINKS, TriangleIndex(4));
-    //     let matrix = Affine::from_translation(Vector::new(-1.0, -2.0, -3.0));
-    //
-    //     system_under_test.transform(&Transformation::new(matrix));
-    //
-    //     let expected_triangles = vec![
-    //         Triangle::new(
-    //             Vertex::new(Point::new( 0.0,  0.0,  0.0), Vector::new( 4.0,  5.0,  6.0)),
-    //             Vertex::new(Point::new( 6.0,  6.0,  6.0), Vector::new(10.0, 11.0, 12.0)),
-    //             Vertex::new(Point::new(10.0, 10.0, 10.0), Vector::new(14.0, 15.0, 16.0)),
-    //             TriangleIndex(4),
-    //             DUMMY_LINKS.in_kind_index(),),
-    //         Triangle::new(
-    //             Vertex::new(Point::new( 0.0,  0.0,  0.0), Vector::new( 4.0,  5.0,  6.0)),
-    //             Vertex::new(Point::new( 6.0,  6.0,  6.0), Vector::new(10.0, 11.0, 12.0)),
-    //             Vertex::new(Point::new(10.0, 10.0, 10.0), Vector::new(14.0, 15.0, 16.0)),
-    //             TriangleIndex(5),
-    //             DUMMY_LINKS.in_kind_index(),)
-    //     ];
-    //
-    //     assert_eq!(system_under_test.triangles.len(), expected_triangles.len());
-    //     for i in 0..expected_triangles.len() {
-    //         assert_eq!(system_under_test.triangles[i], expected_triangles[i]);
-    //     }
-    // }
 
     #[test]
     fn test_serialize_into() {

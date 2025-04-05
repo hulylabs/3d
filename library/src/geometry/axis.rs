@@ -4,8 +4,6 @@
 pub(crate) enum Axis {
     #[default]
     X,
-
     Y,
-
     Z,
 }
