@@ -127,10 +127,10 @@ impl ApplicationHandler for Application {
                 scene.add_sphere(Point::new(1.5, 0.0, -1.0), 0.25, green_mirror);
                 scene.add_sphere(Point::new(0.0, 0.0, -1.0), 0.25, coral_material);
 
-                scene.add_quadrilateral(Point::new(-1.0, 1.0, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), light_material);
-                scene.add_quadrilateral(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), black_material);
-                scene.add_quadrilateral(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), red_material);
-                scene.add_quadrilateral(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), green_material);
+                scene.add_parallelogram(Point::new(-1.0, 1.0, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), light_material);
+                scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), black_material);
+                scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), red_material);
+                scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), green_material);
 
                 match cube_mesh_or_error {
                     Ok(cube_mesh) => {

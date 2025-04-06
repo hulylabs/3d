@@ -34,7 +34,7 @@ impl BvhNodeContent {
     }
 }
 
-pub(super) struct BvhNode {
+pub(crate) struct BvhNode {
     left: Option<Rc<RefCell<BvhNode>>>,
     right: Option<Rc<RefCell<BvhNode>>>,
     bounding_box: Aabb,
@@ -205,7 +205,7 @@ impl BvhNode {
         BvhNode::box_z_compare,
     ];
 
-    const SERIALIZED_QUARTET_COUNT: usize = 3;
+    pub(crate) const SERIALIZED_QUARTET_COUNT: usize = 3;
 }
 
 impl SerializableForGpu for BvhNode {

@@ -11,6 +11,35 @@ use crate::objects::triangle_mesh::TriangleMesh;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 
+pub(crate) struct GpuReadyTriangles {
+    meshes: Vec<f32>,
+    triangles: Vec<f32>,
+    bvh: Vec<f32>,
+}
+
+impl GpuReadyTriangles {
+    #[must_use]
+    pub(crate) fn meshes(&self) -> &Vec<f32> {
+        &self.meshes
+    }
+    #[must_use]
+    pub(crate) fn geometry(&self) -> &Vec<f32> {
+        &self.triangles
+    }
+    #[must_use]
+    pub(crate) fn bvh(&self) -> &Vec<f32> {
+        &self.bvh
+    }
+    #[must_use]
+    pub(crate) fn empty(&self) -> bool {
+        self.meshes.is_empty()
+    }
+
+    pub fn new(meshes: Vec<f32>, triangles: Vec<f32>, bvh: Vec<f32>) -> Self {
+        Self { meshes, triangles, bvh }
+    }
+}
+
 #[derive(Default)]
 pub struct Container {
     spheres: Vec<Sphere>,
@@ -22,6 +51,7 @@ pub struct Container {
 }
 
 impl Container {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             data_version: 0,
@@ -32,6 +62,21 @@ impl Container {
     #[must_use]
     pub(crate) fn get_total_object_count(&self) -> usize {
         self.spheres.len() + self.parallelograms.len() + self.meshes.len()
+    }
+
+    #[must_use]
+    pub(crate) fn spheres_count(&self) -> usize {
+        self.spheres.len()
+    }
+
+    #[must_use]
+    pub(crate) fn parallelograms_count(&self) -> usize {
+        self.parallelograms.len()
+    }
+
+    #[must_use]
+    pub(crate) fn materials_count(&self) -> usize {
+        self.materials.len()
     }
 
     #[must_use]
@@ -46,7 +91,7 @@ impl Container {
         })
     }
 
-    pub fn add_quadrilateral(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ParallelogramIndex {
+    pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ParallelogramIndex {
         Container::add_object(&mut self.parallelograms, &mut self.data_version, |index| {
             Parallelogram::new(origin, local_x, local_y, Linkage::new(GlobalObjectIndex(0), index, material))
         })
@@ -85,18 +130,11 @@ impl Container {
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_bvh(&mut self) -> Vec<f32> {
-        build_serialized_bvh(&mut self.triangles) // TODO: is it ok, to reorder triangles here? -> seems ok: no ids usage in the shader
-    }
-
-    #[must_use]
-    pub(crate) fn evaluate_serialized_triangles(&self) -> Vec<f32> {
-        Container::serialize(&self.triangles)
-    }
-
-    #[must_use]
-    pub(crate) fn evaluate_serialized_meshes(&self) -> Vec<f32> {
-        Container::serialize(&self.meshes)
+    pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
+        let meshes = Container::serialize(&self.meshes);
+        let bvh = build_serialized_bvh(&mut self.triangles);
+        let triangles = Container::serialize(&self.triangles);
+        GpuReadyTriangles::new(meshes, triangles, bvh)
     }
 
     #[must_use]
@@ -132,4 +170,49 @@ impl Container {
 // TODO: more unit tests
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::geometry::alias::Point;
+    use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
+    use crate::objects::material::Material;
+    use crate::objects::sphere::{Sphere, SphereIndex};
+    use crate::scene::container::Container;
+    use crate::serialization::serializable_for_gpu::SerializableForGpu;
+
+    #[test]
+    fn test_container_initialization() {
+        let system_under_test = Container::new();
+        assert_eq!(system_under_test.get_total_object_count(), 0);
+    }
+
+    #[test]
+    fn test_add_sphere() {
+
+        let mut system_under_test = Container::new();
+
+        let dummy_material = system_under_test.add_material(&Material::default());
+        let sphere_material = system_under_test.add_material(&Material::default().with_albedo(1.0, 0.0, 0.0));
+        assert_ne!(dummy_material, sphere_material);
+
+        let expected_sphere_center = Point::new(1.0, 2.0, 3.0);
+        let expected_sphere_radius = 1.5;
+
+        const SPHERES_TO_ADD: usize = 3;
+        let mut expected_serialized_spheres = vec![0.0; Sphere::SERIALIZED_SIZE_FLOATS * SPHERES_TO_ADD];
+        for i in 0..SPHERES_TO_ADD {
+            let linkage = Linkage::new(GlobalObjectIndex(0), SphereIndex(i), sphere_material);
+            let expected_sphere = Sphere::new(expected_sphere_center, expected_sphere_radius, linkage);
+            expected_sphere.serialize_into(&mut expected_serialized_spheres[i*Sphere::SERIALIZED_SIZE_FLOATS..]);
+        }
+
+        for _ in 0..SPHERES_TO_ADD {
+            let data_version_before_addition = system_under_test.data_version();
+            system_under_test.add_sphere(expected_sphere_center, expected_sphere_radius, sphere_material);
+            let data_version_after_addition = system_under_test.data_version();
+            assert_ne!(data_version_before_addition, data_version_after_addition);
+        }
+        let serialized = system_under_test.evaluate_serialized_spheres();
+
+        assert_eq!(system_under_test.get_total_object_count(), SPHERES_TO_ADD);
+        assert_eq!(serialized, expected_serialized_spheres);
+    }
+}

@@ -415,10 +415,23 @@ fn aces_approx(v : vec3f) -> vec3f
 	cam_origin = (uniforms.viewMatrix * vec4f(0, 0, 0, 1)).xyz;
 
 	NUM_SPHERES = i32(arrayLength(&sphere_objs));
+	if (sphere_objs[0].r < 0.0) { // in WGPU there is no way to bind an ampty buffer, so we use a marker objects to indicate the situation
+	    NUM_SPHERES = 0;
+	}
+
 	NUM_QUADS = i32(arrayLength(&quad_objs));
+	if (quad_objs[0].material_id < 0.0) {
+	    NUM_QUADS = 0;
+	}
+
 	NUM_MESHES = i32(arrayLength(&meshes));
 	NUM_TRIANGLES = i32(arrayLength(&triangles));
 	NUM_AABB = i32(arrayLength(&bvh));
+    if (meshes[0].num_triangles < 0.0) {
+        NUM_MESHES = 0;
+        NUM_TRIANGLES = 0;
+        NUM_AABB = 0;
+    }
 
 	randState = pixelIndex + u32(uniforms.frameNum) * 719393;
 

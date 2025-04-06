@@ -9,6 +9,12 @@ use bytemuck::checked::cast_slice;
 use std::rc::Rc;
 use wgpu::{BindGroup, RenderPipeline, StoreOp};
 use winit::dpi::PhysicalSize;
+use crate::bvh::node::BvhNode;
+use crate::objects::material::Material;
+use crate::objects::parallelogram::Parallelogram;
+use crate::objects::sphere::Sphere;
+use crate::objects::triangle::Triangle;
+use crate::objects::triangle_mesh::TriangleMesh;
 // TODO: work in progress: the whole file will be rewritten
 
 pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
@@ -137,39 +143,63 @@ impl Renderer {
         })
     }
 
-    fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, width: u32, height: u32) -> Buffers {
-        let mut uniform_array = [0.0; Uniforms::SERIALIZED_SIZE_FLOATS];
-        uniforms.serialize_into(&mut uniform_array);
+    fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_width: u32, frame_buffer_height: u32) -> Buffers {
+        assert!(frame_buffer_width > 0);
+        assert!(frame_buffer_height > 0);
 
-        let meshes = scene.evaluate_serialized_meshes();
-        let spheres = scene.evaluate_serialized_spheres();
-        let parallelograms = scene.evaluate_serialized_parallelograms();
-        let materials = scene.evaluate_serialized_materials();
+        let uniform_values = {
+            let mut buffer = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
+            uniforms.serialize_into(&mut buffer);
+            buffer
+        };
+
+        let empty_meshes_marker: Vec<f32> = vec![-1.0_f32; TriangleMesh::SERIALIZED_SIZE_FLOATS];
+        let empty_triangles_marker: Vec<f32> = vec![-1.0_f32; Triangle::SERIALIZED_SIZE_FLOATS];
+        let empty_bvh_marker: Vec<f32> = vec![-1.0_f32; BvhNode::SERIALIZED_SIZE_FLOATS];
+
+        let serialized_triangles = scene.evaluate_serialized_triangles();
+        let meshes = if serialized_triangles.empty()
+        { &empty_meshes_marker } else { serialized_triangles.meshes() };
+        let triangles = if serialized_triangles.empty()
+        { &empty_triangles_marker } else { serialized_triangles.geometry() };
+        let bvh = if serialized_triangles.empty()
+        { &empty_bvh_marker } else { serialized_triangles.bvh() };
+
+        let materials = if scene.materials_count() > 0
+            { scene.evaluate_serialized_materials() } else { vec![0.0; Material::SERIALIZED_SIZE_FLOATS] };
+
+        let spheres = if scene.spheres_count() > 0
+            { scene.evaluate_serialized_spheres() } else { vec![-1.0; Sphere::SERIALIZED_SIZE_FLOATS] };
+
+        let parallelograms = if scene.parallelograms_count() > 0
+            { scene.evaluate_serialized_parallelograms() } else { vec![-1.0; Parallelogram::SERIALIZED_SIZE_FLOATS] };
 
         // TODO: delete model transformations: looks like we can work in global coordinates
         let total_objects_count = scene.get_total_object_count();
-        let mut transformations = vec![0.0_f32; total_objects_count * Transformation::SERIALIZED_SIZE_FLOATS];
-        let identity = Transformation::identity();
-        for i in 0..total_objects_count {
-            identity.serialize_into(&mut transformations[(i * Transformation::SERIALIZED_SIZE_FLOATS)..])
+        let mut transformations: Vec<f32> = vec![0.0_f32; total_objects_count * Transformation::SERIALIZED_SIZE_FLOATS];
+        if total_objects_count <= 0 {
+            transformations = vec![0.0_f32; Transformation::SERIALIZED_SIZE_FLOATS]
+        } else {
+            let identity = Transformation::identity();
+            for i in 0..total_objects_count {
+                identity.serialize_into(&mut transformations[(i * Transformation::SERIALIZED_SIZE_FLOATS)..])
+            }
         }
 
-        let bvh = scene.evaluate_serialized_bvh();
-        let triangles = scene.evaluate_serialized_triangles(); // TODO: wgpu fails if we've got zero triangles, we need to handle that
-
-        let vertex_data: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
+        // TODO: we can use inline defined shader data, rather than this complication
+        let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
-            uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_array)),
+            uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_values)),
             spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
-            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(&meshes)),
-            parallelograms: resources.create_storage_buffer_write_only("quadriliterals", cast_slice(&parallelograms)),
+            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
+            parallelograms: resources.create_storage_buffer_write_only("parallelograms", cast_slice(&parallelograms)),
             materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
             transforms: resources.create_storage_buffer_write_only("transformations", cast_slice(&transformations)),
-            bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(&bvh)),
-            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(&triangles)),
-            frame_buffer: resources.create_frame_buffer(width, height),
-            vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&vertex_data)),
+            bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(bvh)),
+            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(triangles)),
+            frame_buffer: resources.create_frame_buffer(frame_buffer_width, frame_buffer_height),
+            vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
     }
 

@@ -18,6 +18,8 @@ pub enum MeshLoadError {
     IoError { what: String },
     #[error("format problem while loading mesh: {what:?}")]
     FormatError { what: String },
+    #[error("invalid mesh content: {what:?}")]
+    ContentError {what: String}
 }
 
 struct RawMesh {
@@ -42,6 +44,10 @@ impl MeshWarehouse {
         let file = File::open(source_file).map_err(|e| MeshLoadError::IoError { what: e.to_string() })?;
         let reader = BufReader::new(file);
         let obj: Obj<obj::Vertex, u32> = obj::load_obj::<obj::Vertex, BufReader<File>, u32>(reader).map_err(|e| MeshWarehouse::translate_error(e))?;
+
+        if obj.indices.is_empty() || obj.vertices.is_empty() {
+            return Err(MeshLoadError::ContentError { what: "empty mesh".to_string() });
+        }
 
         let vertices: Vec<VertexData> = {
             let vertices_bytes = bytemuck::cast_slice(&obj.vertices);

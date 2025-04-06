@@ -1,2 +1,2 @@
 ﻿pub(crate) mod builder;
-mod node;
+pub(crate) mod node;
