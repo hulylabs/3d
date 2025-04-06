@@ -10,8 +10,6 @@ use winit::window::Window;
 use winit::window::WindowId;
 use winit::event_loop::ControlFlow;
 
-use cgmath::{Matrix, Matrix4, SquareMatrix, Transform};
-
 use log::{trace, warn};
 use log::info;
 use log::error;
@@ -22,7 +20,7 @@ use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
 use library::scene::camera::Camera;
 use library::scene::container::Container;
-use library::scene::mesh_warehouse::{MeshLoadError, MeshWarehouse, WarehouseSlot};
+use library::scene::mesh_warehouse::MeshWarehouse;
 
 const WINDOW_TITLE: &str = "Rust Tracer Sandbox";
 

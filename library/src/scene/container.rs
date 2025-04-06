@@ -110,7 +110,7 @@ impl Container {
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_quadrilaterals(&self) -> Vec<f32> {
+    pub(crate) fn evaluate_serialized_parallelograms(&self) -> Vec<f32> {
         Container::serialize(&self.parallelograms)
     }
 

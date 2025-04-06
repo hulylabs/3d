@@ -8,7 +8,7 @@ use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
 use wgpu::{BindGroup, RenderPipeline, StoreOp};
-
+use winit::dpi::PhysicalSize;
 // TODO: work in progress: the whole file will be rewritten
 
 pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
@@ -17,7 +17,7 @@ struct Buffers {
     uniforms: wgpu::Buffer,
     spheres: wgpu::Buffer,
     meshes: wgpu::Buffer,
-    quadriliterals: wgpu::Buffer,
+    parallelograms: wgpu::Buffer,
     materials: wgpu::Buffer,
     transforms: wgpu::Buffer,
     bvh: wgpu::Buffer,
@@ -27,14 +27,38 @@ struct Buffers {
 }
 
 struct Uniforms {
-    screen_size_width: f64,
-    screen_size_height: f64,
+    out_frame_width: u32,
+    out_frame_height: u32,
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
 }
 
 impl Uniforms {
+    fn reset_frame_accumulation(&mut self) {
+        self.if_reset_framebuffer = true;
+        self.frame_number = 0;
+    }
+
+    fn drop_reset_flag(&mut self) {
+        self.if_reset_framebuffer = false;
+    }
+
+    fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
+        self.out_frame_width = new_size.width;
+        self.out_frame_height = new_size.height;
+        self.reset_frame_accumulation();
+    }
+
+    fn next_frame(&mut self) {
+        self.frame_number += 1;
+    }
+
+    #[must_use]
+    fn frame_size(&self) -> u32 {
+        self.out_frame_width * self.out_frame_height
+    }
+
     const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
 }
 
@@ -45,8 +69,8 @@ impl SerializableForGpu for Uniforms {
         assert!(container.len() >= Uniforms::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
 
         let mut index = 0;
-        container.write_and_move_next(self.screen_size_width, &mut index);
-        container.write_and_move_next(self.screen_size_height, &mut index);
+        container.write_and_move_next(self.out_frame_width as f64, &mut index);
+        container.write_and_move_next(self.out_frame_height as f64, &mut index);
         container.write_and_move_next(self.frame_number as f64, &mut index);
         container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
 
@@ -62,15 +86,13 @@ pub struct Renderer {
     resources: Resources,
     buffers: Buffers,
     uniforms: Uniforms,
-    compute_pipeline: wgpu::ComputePipeline,
-    render_pipeline: RenderPipeline,
+    pipeline_compute: wgpu::ComputePipeline,
+    pipeline_rasterization: RenderPipeline,
     bind_group_compute: BindGroup,
-    bind_group: BindGroup,
-    frame_number: u32,
+    bind_group_rasterization: BindGroup,
+    shader_module: wgpu::ShaderModule,
     camera: Camera,
     scene: Container,
-    width: u32,
-    height: u32,
 }
 
 impl Renderer {
@@ -78,12 +100,15 @@ impl Renderer {
         context: Rc<Context>,
         scene_container: Container,
         camera: Camera,
-        presentation_format: wgpu::TextureFormat, // TODO: can we get this form 'frame_buffer'?
-        frame_width: u32,
-        frame_height: u32) -> anyhow::Result<Self> {
+        presentation_format: wgpu::TextureFormat,
+        out_frame_width: u32,
+        out_frame_height: u32)
+    -> anyhow::Result<Self> {
+        assert!(out_frame_width > 0);
+        assert!(out_frame_height > 0);
         let uniforms = Uniforms {
-            screen_size_width: frame_width as f64,
-            screen_size_height: frame_height as f64,
+            out_frame_width,
+            out_frame_height,
             frame_number: 0,
             if_reset_framebuffer: false,
             camera: camera.clone(),
@@ -93,24 +118,22 @@ impl Renderer {
 
         let resources = Resources::new(context.clone(), presentation_format);
         let shader_module = resources.create_shader_module("tracer shader", CODE_FOR_GPU)?;
-        let buffers = Self::init_buffers(&mut scene, &uniforms, &resources, frame_width, frame_height);
+        let buffers = Self::init_buffers(&mut scene, &uniforms, &resources, out_frame_width, out_frame_height);
         let compute = Self::create_compute_pipeline(&context, &resources, &buffers, &shader_module);
-        let render = Self::create_render_pipeline(&resources, &context, &buffers, &shader_module);
+        let rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
 
         Ok(Self {
             context,
             resources,
             buffers,
             uniforms,
-            compute_pipeline: compute.0,
-            render_pipeline: render.0,
+            pipeline_compute: compute.0,
+            pipeline_rasterization: rasterization.0,
             bind_group_compute: compute.1,
-            bind_group: render.1,
-            frame_number: 0,
+            bind_group_rasterization: rasterization.1,
+            shader_module,
             camera,
             scene,
-            width: frame_width,
-            height: frame_height,
         })
     }
 
@@ -120,7 +143,7 @@ impl Renderer {
 
         let meshes = scene.evaluate_serialized_meshes();
         let spheres = scene.evaluate_serialized_spheres();
-        let quadrilaterals = scene.evaluate_serialized_quadrilaterals();
+        let parallelograms = scene.evaluate_serialized_parallelograms();
         let materials = scene.evaluate_serialized_materials();
 
         // TODO: delete model transformations: looks like we can work in global coordinates
@@ -134,19 +157,18 @@ impl Renderer {
         let bvh = scene.evaluate_serialized_bvh();
         let triangles = scene.evaluate_serialized_triangles(); // TODO: wgpu fails if we've got zero triangles, we need to handle that
 
-        let frame_buffer: Vec<f32> = vec![0.0; (width * height * 4) as usize];
         let vertex_data: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_array)),
             spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
             meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(&meshes)),
-            quadriliterals: resources.create_storage_buffer_write_only("quadriliterals", cast_slice(&quadrilaterals)),
+            parallelograms: resources.create_storage_buffer_write_only("quadriliterals", cast_slice(&parallelograms)),
             materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
             transforms: resources.create_storage_buffer_write_only("transformations", cast_slice(&transformations)),
             bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(&bvh)),
             triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(&triangles)),
-            frame_buffer: resources.create_storage_buffer_read_write("frame buffer", cast_slice(&frame_buffer)),
+            frame_buffer: resources.create_frame_buffer(width, height),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&vertex_data)),
         }
     }
@@ -168,7 +190,7 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: buffers.quadriliterals.as_entire_binding(),
+                    resource: buffers.parallelograms.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -200,8 +222,8 @@ impl Renderer {
         (compute_pipeline, bind_group_compute)
     }
 
-    fn create_render_pipeline(resources: &Resources, context: &Context, buffers: &Buffers, module: &wgpu::ShaderModule) -> (RenderPipeline, BindGroup) {
-        let render_pipeline = resources.create_render_pipeline(module);
+    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> (RenderPipeline, BindGroup) {
+        let render_pipeline = resources.create_rasterization_pipeline(module);
 
         let bind_group = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("render pipeline bind group"),
@@ -221,15 +243,33 @@ impl Renderer {
         (render_pipeline, bind_group)
     }
 
+    pub(crate) fn set_output_size(&mut self, new_size: PhysicalSize<u32>) {
+        let previous_frame_size = self.uniforms.frame_size();
+        self.uniforms.set_frame_size(new_size);
+        let new_frame_size = self.uniforms.frame_size();
+
+        if previous_frame_size < new_frame_size {
+            let frame_buffer = self.resources.create_frame_buffer(self.uniforms.out_frame_width, self.uniforms.out_frame_height);
+
+            self.buffers.frame_buffer = frame_buffer;
+
+            let compute = Self::create_compute_pipeline(&self.context, &self.resources, &self.buffers, &self.shader_module);
+            let rasterization = Self::create_rasterization_pipeline(&self.context, &self.resources, &self.buffers, &self.shader_module);
+
+            self.pipeline_compute = compute.0;
+            self.pipeline_rasterization = rasterization.0;
+            self.bind_group_compute = compute.1;
+            self.bind_group_rasterization = rasterization.1;
+        }
+    }
+
     pub fn execute(&mut self, surface_texture: &wgpu::SurfaceTexture)  {
         {
-            self.frame_number += 1;
-
-            self.uniforms.frame_number = self.frame_number;
-            self.uniforms.if_reset_framebuffer = self.camera.moving() || self.camera.key_press();
+            self.uniforms.next_frame();
 
             if self.camera.moving() || self.camera.key_press() {
-                self.frame_number = 1;
+                self.uniforms.reset_frame_accumulation();
+                self.uniforms.next_frame();
                 self.camera.set_key_press(false);
             }
             self.uniforms.camera = self.camera.clone();
@@ -241,10 +281,12 @@ impl Renderer {
                 let bytes: &[u8] = cast_slice(&uniform_array);
                 self.context.queue().write_buffer(&self.buffers.uniforms, 0, bytes); // TODO: rewrite with 'write_buffer_with'. May be we need kind of ping-pong or circular buffer here
             }
+
+            self.uniforms.drop_reset_flag();
         }
 
-        let work_groups_needed = (self.width * self.height) / 64;
-        self.resources.compute_pass(&self.compute_pipeline, &self.bind_group_compute, work_groups_needed);
+        let work_groups_needed = (self.uniforms.out_frame_width * self.uniforms.out_frame_height) / 64; // TODO: 64?
+        self.resources.compute_pass(&self.pipeline_compute, &self.bind_group_compute, work_groups_needed);
 
         let view = &surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass_descriptor = wgpu::RenderPassDescriptor {
@@ -263,7 +305,7 @@ impl Renderer {
         };
 
         self.resources
-            .render_pass(&mut render_pass_descriptor, &self.render_pipeline, &self.bind_group, &self.buffers.vertex);
+            .render_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.bind_group_rasterization, &self.buffers.vertex);
     }
 
     #[must_use]

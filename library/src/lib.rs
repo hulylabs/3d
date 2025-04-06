@@ -28,6 +28,7 @@ pub struct Engine {
     device_was_lost: Arc<AtomicBool>,
 
     window_pixels_size: winit::dpi::PhysicalSize<u32>,
+    ignore_render_requests: bool,
 
     context: Rc<Context>,
 
@@ -115,6 +116,7 @@ impl Engine {
             device_was_lost: device_was_lost_flag.clone(),
             context: context.clone(),
             window_pixels_size,
+            ignore_render_requests: false,
             window_output_surface: window_surface,
             window_surface_format: output_surface_format,
             renderer,
@@ -140,12 +142,37 @@ impl Engine {
         self.window_output_surface.configure(self.context.device(), &surface_config);
     }
 
+    fn configure_render(&mut self) {
+        self.renderer.set_output_size(self.window_pixels_size);
+    }
+
+    // TODO: add handling of window obscuring → request to unload all occupied resources (iOS)
+
     pub fn handle_window_resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width <= 0 || new_size.height <= 0 {
+            info!("window resized to zero — will not respond to render requests");
+            self.ignore_render_requests = true;
+            return;
+        }
+
+        if self.ignore_render_requests {
+            info!("window resized — will respond to render requests");
+            self.ignore_render_requests = false;
+        }
+
+        if new_size == self.window_pixels_size {
+            return;
+        }
         self.window_pixels_size = new_size;
         self.configure_surface();
+        self.configure_render();
     }
 
     pub fn render<Code>(&mut self, pre_present_notify: Code) where Code : Fn() {
+        if self.ignore_render_requests {
+            return;
+        }
+
         if self.device_was_lost.load(Ordering::SeqCst) {
             // TODO: handle lost device
         }
