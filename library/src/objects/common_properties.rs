@@ -10,8 +10,7 @@ impl GlobalObjectIndex {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Linkage<InKindObjectIndex: Copy>
-{
+pub(crate) struct Linkage<InKindObjectIndex: Copy> {
     global_index: GlobalObjectIndex,
     in_kind_index: InKindObjectIndex,
     material_index: MaterialIndex,

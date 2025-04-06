@@ -87,4 +87,41 @@ mod tests {
 
         assert_eq!(system_under_test.normal(), expected_normal);
     }
+
+    #[test]
+    fn test_abs_diff_eq_with_tolerance() {
+        let left = Vertex::new(
+            Point::new(1.0, 2.0, 3.0),
+            Vector::new(0.0, 1.0, 0.0));
+        let right = Vertex::new(
+            Point::new(1.0 + Vertex::default_epsilon() / 2.0, 2.0, 3.0),
+            Vector::new(0.0, 1.0 + Vertex::default_epsilon() / 2.0, 0.0));
+
+        assert!(left.abs_diff_eq(&right, Vertex::default_epsilon()));
+    }
+
+    #[test]
+    fn test_abs_diff_eq_outside_tolerance() {
+        let left = Vertex::new(
+            Point::new(1.0, 2.0, 3.0),
+            Vector::new(0.0, 1.0, 0.0));
+        let right = Vertex::new(
+            Point::new(1.0 + Vertex::default_epsilon() * 2.0, 2.0, 3.0),
+            Vector::new(0.0, 1.0 + Vertex::default_epsilon() * 2.0, 0.0));
+
+        assert!(!left.abs_diff_eq(&right, Vertex::default_epsilon()));
+    }
+
+    #[test]
+    fn test_abs_diff_eq_partial_match() {
+        let left = Vertex::new(
+            Point::new(1.0, 2.0, 3.0),
+            Vector::new(0.0, 1.0, 0.0));
+
+        let right = Vertex::new(
+            Point::new(1.0, 2.0 + Vertex::default_epsilon() * 2.0, 3.0),
+            Vector::new(0.0, 1.0, 0.0));
+
+        assert!(!left.abs_diff_eq(&right, Vertex::default_epsilon()));
+    }
 }

@@ -1,11 +1,9 @@
-﻿use crate::geometry::aabb::Aabb;
-use crate::geometry::alias;
+﻿use crate::geometry::alias;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
-use alias::Vector;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SphereIndex(pub(crate) usize);
@@ -32,11 +30,6 @@ impl Sphere {
     pub(crate) fn new(center: Point, radius: f64, links: Linkage<SphereIndex>) -> Self {
         assert!(radius > 0.0, "radius must be positive");
         Sphere { center, radius, links }
-    }
-
-    pub(crate) fn bounding_box(&self) -> Aabb {
-        let radius = Vector::new(self.radius, self.radius, self.radius);
-        Aabb::from_segment(self.center - radius, self.center + radius)
     }
 
     const SERIALIZED_QUARTET_COUNT: usize = 2;
@@ -100,18 +93,6 @@ mod tests {
     }
 
     #[test]
-    fn test_bounding_box() {
-        let center = Point::new(1.0, 2.0, 3.0);
-        let expected_radius = 6.0;
-        let system_under_test = Sphere::new(center, expected_radius, DUMMY_LINKS);
-
-        let bounding_box = system_under_test.bounding_box();
-
-        assert_eq!(bounding_box.min(), Point::new(-5.0, -4.0, -3.0));
-        assert_eq!(bounding_box.max(), Point::new(7.0, 8.0, 9.0));
-    }
-
-    #[test]
     fn test_serialize_into() {
         let center = Point::new(1.0, 2.0, 3.0);
         let radius = 4.0;
@@ -119,7 +100,7 @@ mod tests {
         let expected_local_index = SphereIndex(5);
         let expected_material_index = MaterialIndex(6);
         let system_under_test = Sphere::new(center, radius, Linkage::new(expected_global_index, expected_local_index, expected_material_index));
-        let container_initial_filler = -1.0;
+        let container_initial_filler = -7.0;
 
         let mut container = vec![container_initial_filler; Sphere::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);

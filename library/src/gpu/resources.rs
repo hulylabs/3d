@@ -170,7 +170,7 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::create_headless_wgpu_device;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_device;
 
     #[must_use]
     fn make_system_under_test() -> Resources {

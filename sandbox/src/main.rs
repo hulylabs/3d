@@ -12,16 +12,17 @@ use winit::event_loop::ControlFlow;
 
 use cgmath::{Matrix, Matrix4, SquareMatrix, Transform};
 
-use log::trace;
+use log::{trace, warn};
 use log::info;
 use log::error;
 use winit::keyboard::{Key, NamedKey};
 use library::Engine;
 use library::geometry::alias::{Point, Vector};
-use library::geometry::transform::{Affine};
+use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
 use library::scene::camera::Camera;
 use library::scene::container::Container;
+use library::scene::mesh_warehouse::{MeshLoadError, MeshWarehouse, WarehouseSlot};
 
 const WINDOW_TITLE: &str = "Rust Tracer Sandbox";
 
@@ -67,6 +68,10 @@ impl ApplicationHandler for Application {
 
                 let mut camera = Camera::new();
                 camera.set(Some(Point::new(0.5, 0.0, 0.8)), Some(Point::new(0.5, 0.0, 0.0)), Some(Vector::new(0.0, 1.0, 0.0)));
+
+                let mut meshes = MeshWarehouse::new();
+
+                let cube_mesh_or_error = meshes.load(Path::new("assets/cube.obj"));
 
                 let mut scene = Container::new();
 
@@ -129,26 +134,32 @@ impl ApplicationHandler for Application {
                 scene.add_quadrilateral(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), red_material);
                 scene.add_quadrilateral(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), green_material);
 
-                let large_box_material = scene.add_material(&Material::new()
-                    .with_albedo(0.95, 0.95, 0.95)
-                    .with_refractive_index_eta(2.5));
-                let large_box_location =
-                    Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) * Affine::from_nonuniform_scale(3.65, 0.8, 0.25);
-                let large_box = scene.add_mesh(Path::new("assets/cube.obj"), &large_box_location, large_box_material)
-                    .inspect_err(|error| error!("failed to load cube from file: {}", error)); // TODO: handle file load failure
+                match cube_mesh_or_error {
+                    Ok(cube_mesh) => {
+                        let large_box_material = scene.add_material(&Material::new()
+                            .with_albedo(0.95, 0.95, 0.95)
+                            .with_refractive_index_eta(2.5));
+                        let large_box_location =
+                            Transformation::new(
+                                Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) *
+                                    Affine::from_nonuniform_scale(3.65, 0.8, 0.25));
+                        scene.add_mesh(&meshes, cube_mesh, &large_box_location, large_box_material);
 
-                {
-                let box_location =
-                    Affine::from_translation(Vector::new(-0.4, 0.1, -1.0)) * Affine::from_scale(0.4);
-                let large_box = scene.add_mesh(Path::new("assets/cube.obj"), &box_location, gold_metal)
-                    .inspect_err(|error| error!("failed to load cube from file: {}", error)); // TODO: handle file load failure
-                }
+                        {
+                            let box_location =Transformation::new(
+                                Affine::from_translation(Vector::new(-0.4, 0.1, -1.0)) * Affine::from_scale(0.4));
+                            scene.add_mesh(&meshes, cube_mesh, &box_location, gold_metal);
+                        }
 
-                {
-                let box_location =
-                    Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4);
-                let large_box = scene.add_mesh(Path::new("assets/cube.obj"), &box_location, purple_glass)
-                    .inspect_err(|error| error!("failed to load cube from file: {}", error)); // TODO: handle file load failure
+                        {
+                            let box_location = Transformation::new(
+                                Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4));
+                             scene.add_mesh(&meshes, cube_mesh, &box_location, purple_glass);
+                        }
+                    },
+                    Err(mesh_loading_error) => {
+                        warn!("failed to load cube mesh: {}", mesh_loading_error);
+                    },
                 }
 
                 match pollster::block_on(Engine::new(window.clone(), scene, camera)) {

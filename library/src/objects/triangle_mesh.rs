@@ -1,27 +1,16 @@
-use crate::geometry::alias::{Point, Vector};
-use crate::geometry::axis::Axis;
 use crate::geometry::fundamental_constants::{COMPONENTS_IN_NORMAL, COMPONENTS_IN_POSITION, VERTICES_IN_TRIANGLE};
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex, TriangleVertex};
-use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub(crate) struct VertexData {
-    pub(crate) position: [f64; COMPONENTS_IN_POSITION],
-    pub(crate) normal: [f64; COMPONENTS_IN_NORMAL],
-}
-impl VertexData {
-    #[must_use]
-    fn as_vertex(&self) -> Vertex {
-        Vertex::new(
-            Point::new(self.position[Axis::X as usize], self.position[Axis::Y as usize], self.position[Axis::Z as usize]),
-            Vector::new(self.normal[Axis::X as usize], self.normal[Axis::Y as usize], self.normal[Axis::Z as usize]),
-        )
-    }
+    pub(crate) position: [f32; COMPONENTS_IN_POSITION],
+    pub(crate) normal: [f32; COMPONENTS_IN_NORMAL],
 }
 
 pub(crate) struct TriangleMesh {
@@ -32,29 +21,30 @@ pub(crate) struct TriangleMesh {
 
 impl TriangleMesh {
     #[must_use]
-    pub(crate) fn new(vertices: &[VertexData], indices: &[u32], links: Linkage<MeshIndex>, triangles_base_index: TriangleIndex) -> Self {
+    pub(crate) fn new(vertices: &[Vertex], indices: &[u32], mesh_links: Linkage<MeshIndex>, triangles_base_index: TriangleIndex) -> Self {
         assert_eq!(indices.len() % VERTICES_IN_TRIANGLE, 0, "illegal indices count of {}", indices.len());
 
         let mut triangles: Vec<Triangle> = Vec::new();
         for triangle in indices.chunks(VERTICES_IN_TRIANGLE) {
-            let a = vertices[triangle[TriangleVertex::A as usize] as usize].as_vertex();
-            let b = vertices[triangle[TriangleVertex::B as usize] as usize].as_vertex();
-            let c = vertices[triangle[TriangleVertex::C as usize] as usize].as_vertex();
-            triangles.push(Triangle::new(a, b, c, triangles_base_index + triangles.len(), links.in_kind_index()));
+            let a = vertices[triangle[TriangleVertex::A as usize] as usize];
+            let b = vertices[triangle[TriangleVertex::B as usize] as usize];
+            let c = vertices[triangle[TriangleVertex::C as usize] as usize];
+            let triangle_index = triangles_base_index + triangles.len();
+            let mesh_index = mesh_links.in_kind_index();
+            triangles.push(Triangle::new(a, b, c, triangle_index, mesh_index));
         }
 
         TriangleMesh {
             triangles,
-            links,
+            links: mesh_links,
             triangles_base_index,
         }
     }
 
     const SERIALIZED_QUARTET_COUNT: usize = 1;
 
-    #[must_use]
-    pub(crate) fn triangles(&self) -> &Vec<Triangle> {
-        &self.triangles
+    pub(crate) fn put_triangles_into(&self, target: &mut Vec<Triangle>) {
+        target.extend(&self.triangles);
     }
 }
 
@@ -77,8 +67,8 @@ mod tests {
     use super::*;
     use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
     use crate::objects::material_index::MaterialIndex;
-
-    const THREE_VERTICES_DATA: [f64; 18] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0];
+    use cgmath::{EuclideanSpace, Zero};
+    use crate::geometry::alias::{Point, Vector};
 
     const DUMMY_LINKS: Linkage<MeshIndex> = Linkage::new(GlobalObjectIndex(0), MeshIndex(0), MaterialIndex(0));
 
@@ -86,16 +76,20 @@ mod tests {
     fn test_triangle_mesh_new() {
         let triangle_indices = vec![0, 1, 2];
         let expected_links = Linkage::new(GlobalObjectIndex(1), MeshIndex(2), MaterialIndex(3));
-        let triangles_base_index = TriangleIndex(4);
-        let vertices: &[VertexData] = bytemuck::cast_slice(&THREE_VERTICES_DATA);
-
-        let system_under_test = TriangleMesh::new(vertices, &triangle_indices, expected_links, triangles_base_index);
-
-        let expected_triangles = vec![Triangle::new(
+        let expected_triangles_base_index = TriangleIndex(4);
+        let expected_vertices = [
             Vertex::new(Point::new(1.0, 2.0, 3.0), Vector::new(4.0, 5.0, 6.0)),
             Vertex::new(Point::new(7.0, 8.0, 9.0), Vector::new(10.0, 11.0, 12.0)),
-            Vertex::new(Point::new(11.0, 12.0, 13.0), Vector::new(14.0, 15.0, 16.0)),
-            TriangleIndex(4),
+            Vertex::new(Point::new(13.0, 14.0, 15.0), Vector::new(16.0, 17.0, 18.0)),
+        ];
+
+        let system_under_test = TriangleMesh::new(&expected_vertices, &triangle_indices, expected_links, expected_triangles_base_index);
+
+        let expected_triangles = vec![Triangle::new(
+            expected_vertices[0],
+            expected_vertices[1],
+            expected_vertices[2],
+            expected_triangles_base_index,
             expected_links.in_kind_index(),
         )];
 
@@ -104,26 +98,24 @@ mod tests {
             assert_eq!(system_under_test.triangles[i], expected_triangles[i]);
         }
         assert_eq!(system_under_test.links, expected_links);
-        assert_eq!(system_under_test.triangles_base_index, triangles_base_index);
+        assert_eq!(system_under_test.triangles_base_index, expected_triangles_base_index);
     }
 
     #[test]
     #[should_panic(expected = "illegal indices count of 2")]
     fn test_triangle_mesh_new_illegal_indices_count() {
-        let vertices = [VertexData {
-            position: [1.0, 1.0, 1.0],
-            normal: [1.0, 1.0, 1.0],
-        }];
+        let vertices = [
+            Vertex::new(Point::origin(), Vector::zero()),
+        ];
         let indices = vec![0, 0];
         let _system_under_test = TriangleMesh::new(&vertices, &indices, DUMMY_LINKS, TriangleIndex(0));
     }
 
     #[test]
     fn test_serialize_into() {
-        let vertices = [VertexData {
-            position: [1.0, 1.0, 1.0],
-            normal: [1.0, 1.0, 1.0],
-        }];
+        let vertices = [
+            Vertex::new(Point::origin(), Vector::zero()),
+        ];
         let indices = vec![0, 0, 0];
         let triangles_start = TriangleIndex(3);
         let container_initial_filler = -7.0;

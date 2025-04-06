@@ -1,6 +1,6 @@
 ﻿#[cfg(test)]
 mod tests {
-    use crate::gpu::headless_device::create_headless_wgpu_device;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_device;
     use crate::gpu::render::CODE_FOR_GPU;
     use crate::gpu::resources::{Resources, ShaderCreationError};
     use std::rc::Rc;

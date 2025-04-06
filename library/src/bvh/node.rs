@@ -274,11 +274,10 @@ pub(crate) mod tests {
         let ware = BvhNode::make_for(&mut vec![]);
 
         let system_under_test = ware.borrow();
-        let epsilon = DEFAULT_EPSILON;
 
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::new(), epsilon = epsilon);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::new(), epsilon = DEFAULT_EPSILON);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());
@@ -292,11 +291,10 @@ pub(crate) mod tests {
         let ware = BvhNode::make_for(&mut vec![triangle]);
 
         let system_under_test = ware.borrow();
-        let epsilon = DEFAULT_EPSILON;
 
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
-        assert_abs_diff_eq!(system_under_test.bounding_box, triangle.bounding_box(), epsilon = epsilon);
+        assert_abs_diff_eq!(system_under_test.bounding_box, triangle.bounding_box(), epsilon = DEFAULT_EPSILON);
         assert_eq!(system_under_test.content.as_ref().unwrap().start_triangle_index(), 0);
         assert_eq!(system_under_test.content.as_ref().unwrap().triangles_count(), 1);
         assert!(system_under_test.hit_node.is_none());
@@ -319,9 +317,8 @@ pub(crate) mod tests {
         let ware = BvhNode::make_for(&mut vec![left, right]);
 
         let system_under_test = ware.borrow();
-        let epsilon = DEFAULT_EPSILON;
 
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::merge(left.bounding_box(), right.bounding_box()), epsilon = epsilon);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::merge(left.bounding_box(), right.bounding_box()), epsilon = DEFAULT_EPSILON);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());

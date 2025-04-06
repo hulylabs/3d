@@ -68,6 +68,16 @@ impl Triangle {
         result.pad()
     }
 
+    #[must_use]
+    pub fn in_kind_index(&self) -> TriangleIndex {
+        self.in_kind_index
+    }
+
+    #[must_use]
+    pub fn host_mesh_index(&self) -> MeshIndex {
+        self.host_mesh_index
+    }
+
     const SERIALIZED_QUARTET_COUNT: usize = 6;
 }
 
@@ -81,11 +91,11 @@ impl AbsDiffEq for Triangle {
 
     #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        Vertex::abs_diff_eq(&self.a, &other.a, epsilon)
-            && Vertex::abs_diff_eq(&self.b, &other.b, epsilon)
-            && Vertex::abs_diff_eq(&self.c, &other.c, epsilon)
-            && self.in_kind_index == other.in_kind_index
-            && self.host_mesh_index == other.host_mesh_index
+           Vertex::abs_diff_eq(&self.a, &other.a, epsilon)
+        && Vertex::abs_diff_eq(&self.b, &other.b, epsilon)
+        && Vertex::abs_diff_eq(&self.c, &other.c, epsilon)
+        && self.in_kind_index == other.in_kind_index
+        && self.host_mesh_index == other.host_mesh_index
     }
 }
 
