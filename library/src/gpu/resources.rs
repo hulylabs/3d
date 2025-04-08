@@ -73,7 +73,7 @@ impl Resources {
         let size_bytes = (width * height) as usize * FRAMEBUFFER_CHANNELS_COUNT * size_of::<f32>();
         self.context.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some("frame buffer"),
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            usage: BufferUsages::STORAGE,
             size: size_bytes as BufferAddress,
             mapped_at_creation: false,
         })
@@ -96,7 +96,7 @@ impl Resources {
                 entry_point: Some("vs"),
                 compilation_options: Default::default(), //TODO: what options are available?
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 2 * 4,
+                    array_stride: 2 * 4, // TODO: magic constants
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[
                         wgpu::VertexAttribute {

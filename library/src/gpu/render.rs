@@ -97,7 +97,6 @@ pub struct Renderer {
     bind_group_compute: BindGroup,
     bind_group_rasterization: BindGroup,
     shader_module: wgpu::ShaderModule,
-    camera: Camera,
     scene: Container,
 }
 
@@ -117,7 +116,7 @@ impl Renderer {
             out_frame_height,
             frame_number: 0,
             if_reset_framebuffer: false,
-            camera: camera.clone(),
+            camera,
         };
 
         let mut scene = scene_container;
@@ -138,20 +137,19 @@ impl Renderer {
             bind_group_compute: compute.1,
             bind_group_rasterization: rasterization.1,
             shader_module,
-            camera,
             scene,
         })
+    }
+
+    fn serialize_uniforms(target: &Uniforms) -> [f32; Uniforms::SERIALIZED_SIZE_FLOATS] {
+        let mut buffer = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
+        target.serialize_into(&mut buffer);
+        buffer
     }
 
     fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_width: u32, frame_buffer_height: u32) -> Buffers {
         assert!(frame_buffer_width > 0);
         assert!(frame_buffer_height > 0);
-
-        let uniform_values = {
-            let mut buffer = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
-            uniforms.serialize_into(&mut buffer);
-            buffer
-        };
 
         let empty_meshes_marker: Vec<f32> = vec![-1.0_f32; TriangleMesh::SERIALIZED_SIZE_FLOATS];
         let empty_triangles_marker: Vec<f32> = vec![-1.0_f32; Triangle::SERIALIZED_SIZE_FLOATS];
@@ -190,7 +188,7 @@ impl Renderer {
         let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
-            uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&uniform_values)),
+            uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&Self::serialize_uniforms(uniforms))),
             spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
             meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
             parallelograms: resources.create_storage_buffer_write_only("parallelograms", cast_slice(&parallelograms)),
@@ -297,20 +295,14 @@ impl Renderer {
         {
             self.uniforms.next_frame();
 
-            if self.camera.moving() || self.camera.key_press() {
+            if self.uniforms.camera.check_and_clear_updated_status() {
                 self.uniforms.reset_frame_accumulation();
                 self.uniforms.next_frame();
-                self.camera.set_key_press(false);
             }
-            self.uniforms.camera = self.camera.clone();
 
-            {
-                let mut uniform_array = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
-                self.uniforms.serialize_into(&mut uniform_array);
-
-                let bytes: &[u8] = cast_slice(&uniform_array);
-                self.context.queue().write_buffer(&self.buffers.uniforms, 0, bytes); // TODO: rewrite with 'write_buffer_with'. May be we need kind of ping-pong or circular buffer here
-            }
+            // TODO: rewrite with 'write_buffer_with'. May be we need kind of ping-pong or circular buffer here?
+            let uniform_values = Self::serialize_uniforms(&self.uniforms);
+            self.context.queue().write_buffer(&self.buffers.uniforms, 0, cast_slice(&uniform_values));
 
             self.uniforms.drop_reset_flag();
         }
@@ -331,7 +323,7 @@ impl Renderer {
             })],
             depth_stencil_attachment: None,
             occlusion_query_set: None,
-            timestamp_writes: None, // TODO: what is this?
+            timestamp_writes: None,
         };
 
         self.resources
@@ -340,6 +332,6 @@ impl Renderer {
 
     #[must_use]
     pub fn camera(&mut self) -> &mut Camera {
-        &mut self.camera
+        &mut self.uniforms.camera
     }
 }

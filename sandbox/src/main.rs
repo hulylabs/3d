@@ -3,8 +3,9 @@
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
+use cgmath::Deg;
 use winit::application::ApplicationHandler;
-use winit::event::{MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::Window;
 use winit::window::WindowId;
@@ -18,7 +19,7 @@ use library::Engine;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
-use library::scene::camera::Camera;
+use library::scene::camera::{Camera};
 use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
 
@@ -48,6 +49,9 @@ fn main() -> Result<(), String> {
 struct Application {
     window: Option<Arc<Window>>,
     engine: Option<Engine>,
+
+    left_mouse_down: bool,
+    last_cursor_position: Option<(f64, f64)>,
 }
 
 impl ApplicationHandler for Application {
@@ -64,8 +68,12 @@ impl ApplicationHandler for Application {
                 let window = Arc::new(ware);
                 self.window = Some(window.clone());
 
-                let mut camera = Camera::new();
-                camera.set(Some(Point::new(0.5, 0.0, 0.8)), Some(Point::new(0.5, 0.0, 0.0)), Some(Vector::new(0.0, 1.0, 0.0)));
+                let mut camera = Camera::new_perspective_camera(0.8, Point::new(0.0, 0.0, 0.0));
+                camera.move_horizontally(0.5);
+
+                camera.set_zoom_speed(-0.3);
+                camera.set_linear_speed(0.1);
+                camera.set_rotation_speed(Deg(-0.1));
 
                 let mut meshes = MeshWarehouse::new();
 
@@ -202,22 +210,42 @@ impl ApplicationHandler for Application {
                     window.request_redraw();
                 });
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Left {
+                    self.left_mouse_down = state == ElementState::Pressed;
+                    if !self.left_mouse_down {
+                        self.last_cursor_position = None;
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let (current_x, current_y) = (position.x, position.y);
+                if self.left_mouse_down {
+                    if let Some((last_x, _last_y)) = self.last_cursor_position {
+                        let delta_x = current_x - last_x;
+                        self.engine.as_mut().map(|x| {
+                            x.get_camera().rotate_horizontal(delta_x);
+                        });
+                    }
+                    self.last_cursor_position = Some((current_x, current_y));
+                }
+            }
             WindowEvent::MouseWheel { delta: MouseScrollDelta::LineDelta(_, y), .. } => {
                 self.engine.as_mut().map(|x| x.get_camera().zoom(y as f64));
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 match event.logical_key {
                     Key::Named(NamedKey::ArrowUp) => {
-                        self.engine.as_mut().map(|x| x.get_camera().move_up());
+                        self.engine.as_mut().map(|x| x.get_camera().move_vertically(1.0));
                     },
                     Key::Named(NamedKey::ArrowDown) => {
-                        self.engine.as_mut().map(|x| x.get_camera().move_down());
-                    },
-                    Key::Named(NamedKey::ArrowLeft) => {
-                        self.engine.as_mut().map(|x| x.get_camera().move_left());
+                        self.engine.as_mut().map(|x| x.get_camera().move_vertically(-1.0));
                     },
                     Key::Named(NamedKey::ArrowRight) => {
-                        self.engine.as_mut().map(|x| x.get_camera().move_right());
+                        self.engine.as_mut().map(|x| x.get_camera().move_horizontally(1.0));
+                    },
+                    Key::Named(NamedKey::ArrowLeft) => {
+                        self.engine.as_mut().map(|x| x.get_camera().move_horizontally(-1.0));
                     },
                     _ => (),
                 }
