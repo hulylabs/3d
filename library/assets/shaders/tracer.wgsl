@@ -45,6 +45,7 @@ struct Uniforms {
 	frameNum : f32,
 	resetBuffer : f32,
 	viewMatrix : mat4x4f,
+	viewRayOriginMatrix : mat4x4f,
 }
 
 struct Ray {
@@ -503,9 +504,12 @@ var<private> fovFactor : f32;
 var<private> cam_origin : vec3f;
 
 fn getCameraRay(s : f32, t : f32) -> Ray {
+	let eye_to_pixel_direction = (uniforms.viewMatrix * vec4f(vec3f(s, t, -fovFactor), 0)).xyz;
 
-	let dir = normalize(uniforms.viewMatrix * vec4f(vec3f(s, t, -fovFactor), 0)).xyz;
-	var ray = Ray(cam_origin, dir);
+	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0f);
+	let ray_origin_world_space = uniforms.viewRayOriginMatrix * pixel_world_space;
+
+	var ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
 
 	return ray;
 }

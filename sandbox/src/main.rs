@@ -19,7 +19,7 @@ use library::Engine;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
-use library::scene::camera::{Camera};
+use library::scene::camera::{Camera, PerspectiveCamera, OrthographicCamera};
 use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
 
@@ -54,6 +54,18 @@ struct Application {
     last_cursor_position: Option<(f64, f64)>,
 }
 
+#[must_use]
+fn make_default_camera() -> Camera {
+    let mut camera = Camera::new_perspective_camera(0.8, Point::new(0.0, 0.0, 0.0));
+    camera.move_horizontally(0.5);
+
+    camera.set_zoom_speed(-0.3);
+    camera.set_linear_speed(0.1);
+    camera.set_rotation_speed(Deg(-0.1));
+
+    camera
+}
+
 impl ApplicationHandler for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -68,12 +80,7 @@ impl ApplicationHandler for Application {
                 let window = Arc::new(ware);
                 self.window = Some(window.clone());
 
-                let mut camera = Camera::new_perspective_camera(0.8, Point::new(0.0, 0.0, 0.0));
-                camera.move_horizontally(0.5);
-
-                camera.set_zoom_speed(-0.3);
-                camera.set_linear_speed(0.1);
-                camera.set_rotation_speed(Deg(-0.1));
+                let camera = make_default_camera();
 
                 let mut meshes = MeshWarehouse::new();
 
@@ -233,6 +240,7 @@ impl ApplicationHandler for Application {
             WindowEvent::MouseWheel { delta: MouseScrollDelta::LineDelta(_, y), .. } => {
                 self.engine.as_mut().map(|x| x.get_camera().zoom(y as f64));
             }
+
             WindowEvent::KeyboardInput { event, .. } => {
                 match event.logical_key {
                     Key::Named(NamedKey::ArrowUp) => {
@@ -247,6 +255,15 @@ impl ApplicationHandler for Application {
                     Key::Named(NamedKey::ArrowLeft) => {
                         self.engine.as_mut().map(|x| x.get_camera().move_horizontally(-1.0));
                     },
+                    Key::Character(letter_key) => {
+                        if "p" == letter_key {
+                            self.engine.as_mut().map(|x| x.get_camera().set_kind(Box::new(PerspectiveCamera {})));
+                        } else if "o" == letter_key {
+                            self.engine.as_mut().map(|x| x.get_camera().set_kind(Box::new(OrthographicCamera {})));
+                        } else if "r" == letter_key {
+                            self.engine.as_mut().map(|x| x.get_camera().set_from(&make_default_camera()));
+                        }
+                    }
                     _ => (),
                 }
             }
