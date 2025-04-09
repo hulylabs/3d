@@ -2,7 +2,7 @@
 use std::rc::Rc;
 use thiserror::Error;
 use wgpu::util::DeviceExt;
-use wgpu::{BufferAddress, BufferUsages, TextureView};
+use wgpu::{BufferAddress, BufferUsages};
 
 // TODO: work in progress
 
@@ -125,10 +125,6 @@ impl Resources {
         })
     }
 
-    pub(super) fn extract_frame_buffer_view(&self, surface: wgpu::Surface<'static>) -> TextureView {
-        surface.get_current_texture().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
     pub(super) fn create_compute_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("ray tracing compute pipeline"),
@@ -138,44 +134,6 @@ impl Resources {
             entry_point: Some("computeFrameBuffer"),
             cache: None, // TODO: how can be used?
         })
-    }
-
-    pub(super) fn compute_pass(&self, compute_pipeline: &wgpu::ComputePipeline, bind_group_compute: &wgpu::BindGroup, work_groups_needed: u32) {
-        let mut encoder = self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("compute encoder") });
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
-            {
-                label: Some("ray tracing compute pass"),
-                timestamp_writes: None, // TODO: what can be used for?
-            });
-
-            pass.set_pipeline(compute_pipeline);
-            pass.set_bind_group(0, bind_group_compute, &[]);
-            pass.dispatch_workgroups(work_groups_needed, 1, 1);
-        }
-        let command_buffer = encoder.finish();
-        self.context.queue().submit(Some(command_buffer));
-    }
-
-    pub(super) fn render_pass(&self, render_pass_descriptor: &mut wgpu::RenderPassDescriptor, render_pipeline: &wgpu::RenderPipeline, bind_group: &wgpu::BindGroup, vertex_buffer: &wgpu::Buffer) {
-        let mut encoder = self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render encoder") });
-        {
-            let mut render_pass = encoder.begin_render_pass(render_pass_descriptor);
-            render_pass.set_pipeline(render_pipeline);
-            render_pass.set_bind_group(0, bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.draw(0..6, 0..1);
-        }
-        let render_command_buffer = encoder.finish();
-        self.context.queue().submit(Some(render_command_buffer));
-    }
-
-    pub(super) fn create_command_encoder(&self, label: &str) -> wgpu::CommandEncoder {
-        self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
-    }
-
-    pub(super) fn add_command_buffer_to_queue(&self, render_encoder: wgpu::CommandEncoder) {
-        self.context.queue().submit([render_encoder.finish()]);
     }
 }
 

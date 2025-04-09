@@ -15,77 +15,8 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sphere::Sphere;
 use crate::objects::triangle::Triangle;
 use crate::objects::triangle_mesh::TriangleMesh;
+
 // TODO: work in progress: the whole file will be rewritten
-
-pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
-
-struct Buffers {
-    uniforms: wgpu::Buffer,
-    spheres: wgpu::Buffer,
-    meshes: wgpu::Buffer,
-    parallelograms: wgpu::Buffer,
-    materials: wgpu::Buffer,
-    transforms: wgpu::Buffer,
-    bvh: wgpu::Buffer,
-    triangles: wgpu::Buffer,
-    frame_buffer: wgpu::Buffer,
-    vertex: wgpu::Buffer,
-}
-
-struct Uniforms {
-    out_frame_width: u32,
-    out_frame_height: u32,
-    frame_number: u32,
-    if_reset_framebuffer: bool,
-    camera: Camera,
-}
-
-impl Uniforms {
-    fn reset_frame_accumulation(&mut self) {
-        self.if_reset_framebuffer = true;
-        self.frame_number = 0;
-    }
-
-    fn drop_reset_flag(&mut self) {
-        self.if_reset_framebuffer = false;
-    }
-
-    fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
-        self.out_frame_width = new_size.width;
-        self.out_frame_height = new_size.height;
-        self.reset_frame_accumulation();
-    }
-
-    fn next_frame(&mut self) {
-        self.frame_number += 1;
-    }
-
-    #[must_use]
-    fn frame_size(&self) -> u32 {
-        self.out_frame_width * self.out_frame_height
-    }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
-}
-
-impl SerializableForGpu for Uniforms {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Uniforms::SERIALIZED_QUARTET_COUNT);
-
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Uniforms::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
-
-        let mut index = 0;
-        container.write_and_move_next(self.out_frame_width as f64, &mut index);
-        container.write_and_move_next(self.out_frame_height as f64, &mut index);
-        container.write_and_move_next(self.frame_number as f64, &mut index);
-        container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
-
-        self.camera.serialize_into(&mut container[index..]);
-        index += Camera::SERIALIZED_SIZE_FLOATS;
-
-        assert_eq!(index, Uniforms::SERIALIZED_SIZE_FLOATS);
-    }
-}
 
 pub struct Renderer {
     context: Rc<Context>,
@@ -205,7 +136,7 @@ impl Renderer {
         let compute_pipeline = resources.create_compute_pipeline(module);
 
         let bind_group_compute = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bindGroup for work buffer"),
+            label: Some("compute pipeline bind group"),
             layout: &compute_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -251,11 +182,11 @@ impl Renderer {
     }
 
     fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> (RenderPipeline, BindGroup) {
-        let render_pipeline = resources.create_rasterization_pipeline(module);
+        let rasterization_pipeline = resources.create_rasterization_pipeline(module);
 
         let bind_group = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("render pipeline bind group"),
-            layout: &render_pipeline.get_bind_group_layout(0),
+            label: Some("rasterization pipeline bind group"),
+            layout: &rasterization_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -268,7 +199,7 @@ impl Renderer {
             ],
         });
 
-        (render_pipeline, bind_group)
+        (rasterization_pipeline, bind_group)
     }
 
     pub(crate) fn set_output_size(&mut self, new_size: PhysicalSize<u32>) {
@@ -308,7 +239,7 @@ impl Renderer {
         }
 
         let work_groups_needed = (self.uniforms.out_frame_width * self.uniforms.out_frame_height) / 64; // TODO: 64?
-        self.resources.compute_pass(&self.pipeline_compute, &self.bind_group_compute, work_groups_needed);
+        self.compute_pass(&self.pipeline_compute, &self.bind_group_compute, work_groups_needed);
 
         let view = &surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass_descriptor = wgpu::RenderPassDescriptor {
@@ -326,12 +257,115 @@ impl Renderer {
             timestamp_writes: None,
         };
 
-        self.resources
-            .render_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.bind_group_rasterization, &self.buffers.vertex);
+        self.rasterization_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.bind_group_rasterization, &self.buffers.vertex);
+    }
+
+    fn compute_pass(&self, compute_pipeline: &wgpu::ComputePipeline, bind_group_compute: &BindGroup, work_groups_needed: u32) {
+        let mut encoder = self.create_command_encoder("compute pass encoder");
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
+            {
+                label: Some("ray tracing compute pass"),
+                timestamp_writes: None, // TODO: what can be used for?
+            });
+
+            pass.set_pipeline(compute_pipeline);
+            pass.set_bind_group(0, bind_group_compute, &[]);
+            pass.dispatch_workgroups(work_groups_needed, 1, 1);
+        }
+        let command_buffer = encoder.finish();
+        self.context.queue().submit(Some(command_buffer));
+    }
+
+    fn rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RenderPipeline, bind_group: &BindGroup, vertex_buffer: &wgpu::Buffer) {
+        let mut encoder = self.create_command_encoder("rasterization pass encoder");
+        {
+            let mut rasterization_pass = encoder.begin_render_pass(rasterization_pass_descriptor);
+            rasterization_pass.set_pipeline(rasterization_pipeline);
+            rasterization_pass.set_bind_group(0, bind_group, &[]);
+            rasterization_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            rasterization_pass.draw(0..6, 0..1);
+        }
+        let render_command_buffer = encoder.finish();
+        self.context.queue().submit(Some(render_command_buffer));
+    }
+
+    fn create_command_encoder(&self, label: &str) -> wgpu::CommandEncoder {
+        self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
     }
 
     #[must_use]
     pub fn camera(&mut self) -> &mut Camera {
         &mut self.uniforms.camera
+    }
+}
+
+pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
+
+struct Buffers {
+    uniforms: wgpu::Buffer,
+    spheres: wgpu::Buffer,
+    meshes: wgpu::Buffer,
+    parallelograms: wgpu::Buffer,
+    materials: wgpu::Buffer,
+    transforms: wgpu::Buffer,
+    bvh: wgpu::Buffer,
+    triangles: wgpu::Buffer,
+    frame_buffer: wgpu::Buffer,
+    vertex: wgpu::Buffer,
+}
+
+struct Uniforms {
+    out_frame_width: u32,
+    out_frame_height: u32,
+    frame_number: u32,
+    if_reset_framebuffer: bool,
+    camera: Camera,
+}
+
+impl Uniforms {
+    fn reset_frame_accumulation(&mut self) {
+        self.if_reset_framebuffer = true;
+        self.frame_number = 0;
+    }
+
+    fn drop_reset_flag(&mut self) {
+        self.if_reset_framebuffer = false;
+    }
+
+    fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
+        self.out_frame_width = new_size.width;
+        self.out_frame_height = new_size.height;
+        self.reset_frame_accumulation();
+    }
+
+    fn next_frame(&mut self) {
+        self.frame_number += 1;
+    }
+
+    #[must_use]
+    fn frame_size(&self) -> u32 {
+        self.out_frame_width * self.out_frame_height
+    }
+
+    const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
+}
+
+impl SerializableForGpu for Uniforms {
+    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Uniforms::SERIALIZED_QUARTET_COUNT);
+
+    fn serialize_into(&self, container: &mut [f32]) {
+        assert!(container.len() >= Uniforms::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+
+        let mut index = 0;
+        container.write_and_move_next(self.out_frame_width as f64, &mut index);
+        container.write_and_move_next(self.out_frame_height as f64, &mut index);
+        container.write_and_move_next(self.frame_number as f64, &mut index);
+        container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
+
+        self.camera.serialize_into(&mut container[index..]);
+        index += Camera::SERIALIZED_SIZE_FLOATS;
+
+        assert_eq!(index, Uniforms::SERIALIZED_SIZE_FLOATS);
     }
 }
