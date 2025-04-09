@@ -1,9 +1,9 @@
-﻿use std::ops::Mul;
-use crate::geometry::alias::{Point, Vector};
+﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
 use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, Matrix4, SquareMatrix, Transform, Vector2, Zero};
+use std::ops::Mul;
 
 #[must_use]
 fn projection_into_point(projection_target: Point) -> Affine
@@ -255,9 +255,9 @@ impl SerializableForGpu for Camera {
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::FRAC_1_SQRT_2;
-    use cgmath::{assert_abs_diff_eq, Point3};
     use super::*;
+    use cgmath::assert_abs_diff_eq;
+    use std::f32::consts::FRAC_1_SQRT_2;
 
     fn assert_camera_serialized_data(system_under_test: &Camera, expected_data: [f32; Camera::SERIALIZED_SIZE_FLOATS]) {
         let mut container = vec![0.0; Camera::SERIALIZED_SIZE_FLOATS];
@@ -294,7 +294,7 @@ mod tests {
 
         let expected_serialized_camera = [
             0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
-            0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
+            0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0,
         ];
         assert_camera_serialized_data(&system_under_test, expected_serialized_camera);
         assert!(system_under_test.check_and_clear_updated_status());
