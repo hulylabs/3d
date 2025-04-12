@@ -13,22 +13,24 @@ const MAX_BOUNCES = 100;
 const STRATIFY = false;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
+const MAX_SDF_RAY_MARCH_STEPS = 20;
 
-@group(0) @binding(0) var<uniform> uniforms : Uniforms;
-@group(0) @binding(1) var<storage, read> sphere_objs: array<Sphere>;
-@group(0) @binding(2) var<storage, read> quad_objs: array<Quad>;
-@group(0) @binding(3) var<storage, read_write> framebuffer: array<vec4f>;
-@group(0) @binding(5) var<storage, read> triangles: array<Triangle>;
-@group(0) @binding(6) var<storage, read> meshes: array<Mesh>;
-@group(0) @binding(7) var<storage, read> transforms : array<modelTransform>;
-@group(0) @binding(8) var<storage, read> materials: array<Material>;
-@group(0) @binding(9) var<storage, read> bvh: array<AABB>;
+@group(0) @binding( 0) var<uniform> uniforms : Uniforms;
+@group(0) @binding( 1) var<storage, read> sphere_objs: array<Sphere>;
+@group(0) @binding( 2) var<storage, read> quad_objs: array<Quad>;
+@group(0) @binding( 3) var<storage, read_write> framebuffer: array<vec4f>;
+@group(0) @binding( 4) var<storage, read> sdf: array<SdfBox>;
+@group(0) @binding( 5) var<storage, read> triangles: array<Triangle>;
+@group(0) @binding( 6) var<storage, read> meshes: array<Mesh>;
+@group(0) @binding( 7) var<storage, read> materials: array<Material>;
+@group(0) @binding( 8) var<storage, read> bvh: array<AABB>;
 
 var<private> NUM_SPHERES : i32;
 var<private> NUM_QUADS : i32;
 var<private> NUM_MESHES : i32;
 var<private> NUM_TRIANGLES : i32;
 var<private> NUM_AABB : i32;
+var<private> NUM_SDF : i32;
 
 var<private> randState : u32 = 0u;
 var<private> pixelCoords : vec3f;
@@ -119,6 +121,14 @@ struct AABB {
 	axis : f32,
 }
 
+struct SdfBox {
+    location : mat4x4f,
+    inverse_location : mat4x4f,
+    half_size : vec3f,
+    corners_radius : f32,
+    material_id : f32,
+}
+
 struct HitRecord {
 	p : vec3f,
 	t : f32,
@@ -161,6 +171,46 @@ fn random_double(min : f32, max : f32) -> f32 {
 
 fn near_zero(v : vec3f) -> bool {
 	return (abs(v[0]) < 0 && abs(v[1]) < 0 && abs(v[2]) < 0);
+}
+
+fn signed_distance_to_box(point: vec3f, box: SdfBox) -> f32 {
+    let d = abs(point) - box.half_size + box.corners_radius;
+    return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, vec3f(0.0))) - box.corners_radius;
+}
+
+fn signed_distance_normal(point: vec3f, box: SdfBox) -> vec3f {
+    let e = vec2f(1.0,-1.0)*0.5773*0.0005;
+    return normalize( e.xyy * signed_distance_to_box( point + e.xyy, box ) +
+					  e.yyx * signed_distance_to_box( point + e.yyx, box ) +
+					  e.yxy * signed_distance_to_box( point + e.yxy, box ) +
+					  e.xxx * signed_distance_to_box( point + e.xxx, box ) );
+}
+
+fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
+    var t = tmin;
+    var i: i32 = 0;
+    let local_ray = Ray( (sdf.inverse_location * vec4f(ray.origin, 1.0f)).xyz , (sdf.inverse_location * vec4f(ray.dir, 0.0f)).xyz );
+    loop {
+        if (i >= MAX_SDF_RAY_MARCH_STEPS) {
+            break;
+        }
+        if (t>tmax) {
+            break;
+        }
+        let candidate = at(local_ray, t);
+        let signed_distance = signed_distance_to_box(candidate, sdf);
+        if(abs(signed_distance)<0.0001*t) {
+            hitRec.t = t;
+            hitRec.p = at(ray, t);
+            hitRec.normal = (vec4f(signed_distance_normal(candidate, sdf), 0.0f) * sdf.location).xyz; // assume transform is orthogonal
+            hitRec.front_face = true;
+            hitRec.material = materials[i32(sdf.material_id)];
+            return true;
+        }
+        t += signed_distance;
+        i = i + 1;
+    }
+    return false;
 }
 
 fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
@@ -317,10 +367,8 @@ fn hit_quad(quad : Quad, tmin : f32, tmax : f32, ray : Ray) -> bool {
 fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bool {
 
 	let mesh = meshes[i32(tri.mesh_id)];
-	let invModelMatrix = transforms[i32(mesh.global_id)].invModelMatrix;
-	let modelMatrix = transforms[i32(mesh.global_id)].modelMatrix;
 
-	let ray = Ray((invModelMatrix * vec4f(incidentRay.origin, 1)).xyz, (invModelMatrix * vec4f(incidentRay.dir, 0.0)).xyz);
+	let ray = Ray(incidentRay.origin, incidentRay.dir);
 
 	let AB = tri.B - tri.A;
 	let AC = tri.C - tri.A;
@@ -351,7 +399,7 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 	hitRec.p = at(incidentRay, dst);
 
 	hitRec.normal = tri.normalA * w + tri.normalB * u + tri.normalC * v;
-	hitRec.normal = normalize((transpose(invModelMatrix) * vec4f(hitRec.normal, 0)).xyz);
+	hitRec.normal = normalize(hitRec.normal);
 
 	hitRec.front_face = dot(incidentRay.dir, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
@@ -414,6 +462,11 @@ fn aces_approx(v : vec3f) -> vec3f
 
 	fovFactor = 1 / tan(60 * (PI / 180) / 2);
 	cam_origin = (uniforms.viewMatrix * vec4f(0, 0, 0, 1)).xyz;
+
+    NUM_SDF = i32(arrayLength(&sdf));
+    if (sdf[0].material_id < 0.0) {
+        NUM_SDF = 0;
+    }
 
 	NUM_SPHERES = i32(arrayLength(&sphere_objs));
 	if (sphere_objs[0].r < 0.0) { // in WGPU there is no way to bind an ampty buffer, so we use a marker objects to indicate the situation
@@ -618,6 +671,15 @@ fn hitScene(ray : Ray) -> bool
 			break;
 		}
 	}
+
+	for(var i = 0; i < NUM_SDF; i++)
+    {
+        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray))
+        {
+            hit_anything = true;
+            closest_so_far = hitRec.t;
+        }
+    }
 
 	return hit_anything;
 }

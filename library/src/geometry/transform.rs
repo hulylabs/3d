@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Transform};
 

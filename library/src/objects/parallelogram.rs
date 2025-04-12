@@ -3,7 +3,7 @@ use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
 use alias::Vector;
@@ -78,7 +78,7 @@ impl SerializableForGpu for Parallelogram {
         container.write_and_move_next(w.z, &mut index);
         container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
 
-        assert_eq!(index, Parallelogram::SERIALIZED_SIZE_FLOATS);
+        debug_assert_eq!(index, Parallelogram::SERIALIZED_SIZE_FLOATS);
     }
 }
 
@@ -119,18 +119,18 @@ mod tests {
         let mut container = vec![buffer_initial_filler; Parallelogram::SERIALIZED_SIZE_FLOATS + 1];
         system_under_test.serialize_into(&mut container);
 
-        assert_eq!(container[0], origin.x as f32);
-        assert_eq!(container[1], origin.y as f32);
-        assert_eq!(container[2], origin.z as f32);
-        assert_eq!(container[3], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+        assert_eq!(container[0 ], origin.x as f32);
+        assert_eq!(container[1 ], origin.y as f32);
+        assert_eq!(container[2 ], origin.z as f32);
+        assert_eq!(container[3 ], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
 
-        assert_eq!(container[4], local_x.x as f32);
-        assert_eq!(container[5], local_x.y as f32);
-        assert_eq!(container[6], local_x.z as f32);
-        assert_eq!(container[7], expected_local_index.0 as f32);
+        assert_eq!(container[4 ], local_x.x as f32);
+        assert_eq!(container[5 ], local_x.y as f32);
+        assert_eq!(container[6 ], local_x.z as f32);
+        assert_eq!(container[7 ], expected_local_index.0 as f32);
 
-        assert_eq!(container[8],  local_y.x as f32);
-        assert_eq!(container[9],  local_y.y as f32);
+        assert_eq!(container[8 ], local_y.x as f32);
+        assert_eq!(container[9 ], local_y.y as f32);
         assert_eq!(container[10], local_y.z as f32);
         assert_eq!(container[11], expected_global_index.0 as f32);
 

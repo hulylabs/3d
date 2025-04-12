@@ -1,13 +1,13 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::floats_count;
+use crate::serialization::helpers::serialize_matrix;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
-use cgmath::{Deg, EuclideanSpace, InnerSpace, Matrix4, SquareMatrix, Transform, Vector2, Zero};
+use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector2, Zero};
 use std::ops::Mul;
 
 #[must_use]
-fn projection_into_point(projection_target: Point) -> Affine
-{
+fn projection_into_point(projection_target: Point) -> Affine {
     Affine::new(
         0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0,
@@ -212,28 +212,6 @@ impl Camera {
     }
 
     pub(crate) const SERIALIZED_QUARTET_COUNT: usize = 8;
-
-    fn serialize_matrix(container: &mut [f32], matrix: Matrix4<f64>, mut index: &mut usize) {
-        container.write_and_move_next(matrix.x.x, &mut index);
-        container.write_and_move_next(matrix.x.y, &mut index);
-        container.write_and_move_next(matrix.x.z, &mut index);
-        container.write_and_move_next(matrix.x.w, &mut index);
-
-        container.write_and_move_next(matrix.y.x, &mut index);
-        container.write_and_move_next(matrix.y.y, &mut index);
-        container.write_and_move_next(matrix.y.z, &mut index);
-        container.write_and_move_next(matrix.y.w, &mut index);
-
-        container.write_and_move_next(matrix.z.x, &mut index);
-        container.write_and_move_next(matrix.z.y, &mut index);
-        container.write_and_move_next(matrix.z.z, &mut index);
-        container.write_and_move_next(matrix.z.w, &mut index);
-
-        container.write_and_move_next(matrix.w.x, &mut index);
-        container.write_and_move_next(matrix.w.y, &mut index);
-        container.write_and_move_next(matrix.w.z, &mut index);
-        container.write_and_move_next(matrix.w.w, &mut index);
-    }
 }
 
 impl SerializableForGpu for Camera {
@@ -246,8 +224,8 @@ impl SerializableForGpu for Camera {
         let view_ray_origin = self.view_ray_origin;
 
         let mut index = 0;
-        Self::serialize_matrix(container, camera_space_to_world, &mut index);
-        Self::serialize_matrix(container, view_ray_origin, &mut index);
+        serialize_matrix(container, &camera_space_to_world, &mut index);
+        serialize_matrix(container, &view_ray_origin, &mut index);
 
         assert_eq!(index, Camera::SERIALIZED_SIZE_FLOATS);
     }

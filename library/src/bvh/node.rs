@@ -1,7 +1,7 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
 use crate::objects::triangle::Triangle;
-use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use std::cell::RefCell;
 use std::cmp::Ordering;

@@ -2,7 +2,7 @@ use crate::geometry::fundamental_constants::{COMPONENTS_IN_NORMAL, COMPONENTS_IN
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex, TriangleVertex};
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::{Pod, Zeroable};
 
@@ -53,12 +53,14 @@ impl SerializableForGpu for TriangleMesh {
 
     fn serialize_into(&self, container: &mut [f32]) {
         assert!(container.len() >= TriangleMesh::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+
         let mut index = 0;
         container.write_and_move_next(self.triangles.len() as f64, &mut index);
         container.write_and_move_next(self.triangles_base_index.as_f64(), &mut index);
         container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
         container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
-        assert_eq!(index, TriangleMesh::SERIALIZED_SIZE_FLOATS);
+
+        debug_assert_eq!(index, TriangleMesh::SERIALIZED_SIZE_FLOATS);
     }
 }
 

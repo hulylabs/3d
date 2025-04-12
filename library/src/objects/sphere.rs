@@ -1,7 +1,7 @@
 ﻿use crate::geometry::alias;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
 
@@ -52,7 +52,7 @@ impl SerializableForGpu for Sphere {
         container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
         container.pad_to_align(&mut index);
 
-        assert_eq!(index, Sphere::SERIALIZED_SIZE_FLOATS);
+        debug_assert_eq!(index, Sphere::SERIALIZED_SIZE_FLOATS);
     }
 }
 

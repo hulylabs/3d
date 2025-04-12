@@ -79,10 +79,6 @@ impl Resources {
         })
     }
 
-    pub(super) fn create_storage_buffer_read_write(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
-        self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST, buffer_data)
-    }
-
     pub(super) fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
         self.create_buffer(label, BufferUsages::VERTEX | BufferUsages::COPY_DST, buffer_data)
     }
@@ -251,16 +247,6 @@ mod tests {
             concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
 
         assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_DST);
-    }
-
-    #[test]
-    fn test_create_storage_buffer_read_write() {
-        let system_under_test = make_system_under_test();
-
-        let buffer = system_under_test.create_storage_buffer_read_write(
-            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
-
-        assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST);
     }
 
     #[test]

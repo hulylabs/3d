@@ -1,4 +1,4 @@
-﻿use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+﻿use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use palette::Srgb;
 use strum_macros::{EnumCount, EnumIter};
@@ -133,7 +133,7 @@ impl SerializableForGpu for Material {
         container.write_and_move_next(self.class.as_f64(), &mut index);
         container.pad_to_align(&mut index);
 
-        assert_eq!(index, Material::SERIALIZED_SIZE_FLOATS);
+        debug_assert_eq!(index, Material::SERIALIZED_SIZE_FLOATS);
     }
 }
 

@@ -105,6 +105,11 @@ impl ApplicationHandler for Application {
                     .with_albedo(1.0, 0.5, 0.9)
                     .with_refractive_index_eta(1.4));
 
+                let red_glass = scene.add_material(&Material::new()
+                    .with_class(MaterialClass::Glass)
+                    .with_albedo(1.0, 0.2, 0.0)
+                    .with_refractive_index_eta(1.4));
+
                 let green_mirror = scene.add_material(&Material::new()
                     .with_class(MaterialClass::Mirror)
                     .with_albedo(0.64, 0.77, 0.22)
@@ -131,11 +136,36 @@ impl ApplicationHandler for Application {
                     .with_specular_strength(0.05)
                     .with_roughness(0.95));
 
+                let bright_red_material = scene.add_material(&Material::new()
+                    .with_albedo(1.0, 0.0, 0.0)
+                    .with_specular(1.0, 1.0, 1.0)
+                    .with_specular_strength(0.05)
+                    .with_roughness(0.95));
+
+                let silver_material = scene.add_material(&Material::new()
+                    .with_class(MaterialClass::Mirror)
+                    .with_albedo(0.75, 0.75, 0.75)
+                    .with_specular(0.75, 0.75, 0.75)
+                    .with_specular_strength(0.55)
+                    .with_roughness(0.0));
+
                 let green_material = scene.add_material(&Material::new()
                     .with_albedo(0.05, 0.55, 0.05)
                     .with_specular(0.05, 0.55, 0.05)
                     .with_specular_strength(0.05)
                     .with_roughness(0.95));
+
+                scene.add_sdf_box(
+                    &Affine::from_translation(Vector::new(0.7, 0.0, -0.7)),
+                    Vector::new(0.24, 0.1, 0.02),
+                    0.03,
+                    silver_material);
+
+                scene.add_sdf_box(
+                    &Affine::from_translation(Vector::new(1.5, -0.4, -0.9)),
+                    Vector::new(0.24, 0.1, 0.02),
+                    0.03,
+                    bright_red_material);
 
                 scene.add_sphere(Point::new(1.5, 0.6, -1.0), 0.25, gold_metal);
                 scene.add_sphere(Point::new(0.5, 0.0, -1.0), 0.25, blue_glass);
@@ -169,9 +199,15 @@ impl ApplicationHandler for Application {
                                 Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4));
                              scene.add_mesh(&meshes, cube_mesh, &box_location, purple_glass);
                         }
+
+                        {
+                            let box_location = Transformation::new(
+                                Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));
+                            scene.add_mesh(&meshes, cube_mesh, &box_location, red_glass);
+                        }
                     },
                     Err(mesh_loading_error) => {
-                        warn!("failed to load cube mesh: {}", mesh_loading_error);
+                        error!("failed to load cube mesh: {}", mesh_loading_error);
                     },
                 }
 

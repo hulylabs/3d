@@ -1,7 +1,7 @@
 use crate::geometry::aabb::Aabb;
 use crate::geometry::epsilon::DEFAULT_EPSILON;
 use crate::geometry::vertex::Vertex;
-use crate::serialization::helpers::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::AbsDiffEq;
 use std::ops::Add;
@@ -68,16 +68,6 @@ impl Triangle {
         result.pad()
     }
 
-    #[must_use]
-    pub fn in_kind_index(&self) -> TriangleIndex {
-        self.in_kind_index
-    }
-
-    #[must_use]
-    pub fn host_mesh_index(&self) -> MeshIndex {
-        self.host_mesh_index
-    }
-
     const SERIALIZED_QUARTET_COUNT: usize = 6;
 }
 
@@ -137,7 +127,7 @@ impl SerializableForGpu for Triangle {
         container.write_and_move_next(self.c.normal().z, &mut index);
         container.write_and_move_next(self.host_mesh_index.as_f64(), &mut index);
 
-        assert_eq!(index, Triangle::SERIALIZED_SIZE_FLOATS);
+        debug_assert_eq!(index, Triangle::SERIALIZED_SIZE_FLOATS);
     }
 }
 

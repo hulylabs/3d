@@ -1,20 +1,20 @@
 ﻿use super::resources::Resources;
-use crate::geometry::transform::Transformation;
+use crate::bvh::node::BvhNode;
 use crate::gpu::context::Context;
+use crate::objects::material::Material;
+use crate::objects::parallelogram::Parallelogram;
+use crate::objects::sdf::SdfBox;
+use crate::objects::sphere::Sphere;
+use crate::objects::triangle::Triangle;
+use crate::objects::triangle_mesh::TriangleMesh;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
-use crate::serialization::helpers::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
 use wgpu::{BindGroup, RenderPipeline, StoreOp};
 use winit::dpi::PhysicalSize;
-use crate::bvh::node::BvhNode;
-use crate::objects::material::Material;
-use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sphere::Sphere;
-use crate::objects::triangle::Triangle;
-use crate::objects::triangle_mesh::TriangleMesh;
 
 // TODO: work in progress: the whole file will be rewritten
 
@@ -95,25 +95,16 @@ impl Renderer {
         { &empty_bvh_marker } else { serialized_triangles.bvh() };
 
         let materials = if scene.materials_count() > 0
-            { scene.evaluate_serialized_materials() } else { vec![0.0; Material::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_materials() } else { vec![0.0_f32; Material::SERIALIZED_SIZE_FLOATS] };
 
         let spheres = if scene.spheres_count() > 0
-            { scene.evaluate_serialized_spheres() } else { vec![-1.0; Sphere::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_spheres() } else { vec![-1.0_f32; Sphere::SERIALIZED_SIZE_FLOATS] };
 
         let parallelograms = if scene.parallelograms_count() > 0
-            { scene.evaluate_serialized_parallelograms() } else { vec![-1.0; Parallelogram::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_parallelograms() } else { vec![-1.0_f32; Parallelogram::SERIALIZED_SIZE_FLOATS] };
 
-        // TODO: delete model transformations: looks like we can work in global coordinates
-        let total_objects_count = scene.get_total_object_count();
-        let mut transformations: Vec<f32> = vec![0.0_f32; total_objects_count * Transformation::SERIALIZED_SIZE_FLOATS];
-        if total_objects_count <= 0 {
-            transformations = vec![0.0_f32; Transformation::SERIALIZED_SIZE_FLOATS]
-        } else {
-            let identity = Transformation::identity();
-            for i in 0..total_objects_count {
-                identity.serialize_into(&mut transformations[(i * Transformation::SERIALIZED_SIZE_FLOATS)..])
-            }
-        }
+        let sdf = if scene.sdf_objects_count() > 0
+            { scene.evaluate_serialized_sdf() } else { vec![-1.0_f32; SdfBox::SERIALIZED_SIZE_FLOATS] };
 
         // TODO: we can use inline defined shader data, rather than this complication
         let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
@@ -124,9 +115,9 @@ impl Renderer {
             meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
             parallelograms: resources.create_storage_buffer_write_only("parallelograms", cast_slice(&parallelograms)),
             materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
-            transforms: resources.create_storage_buffer_write_only("transformations", cast_slice(&transformations)),
             bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(bvh)),
             triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(triangles)),
+            sdf: resources.create_storage_buffer_write_only("sdf", cast_slice(&sdf)),
             frame_buffer: resources.create_frame_buffer(frame_buffer_width, frame_buffer_height),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
@@ -156,6 +147,10 @@ impl Renderer {
                     resource: buffers.frame_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: buffers.sdf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
                     binding: 5,
                     resource: buffers.triangles.as_entire_binding(),
                 },
@@ -165,14 +160,10 @@ impl Renderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 7,
-                    resource: buffers.transforms.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
                     resource: buffers.materials.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 9,
+                    binding: 8,
                     resource: buffers.bvh.as_entire_binding(),
                 },
             ],
@@ -308,9 +299,9 @@ struct Buffers {
     meshes: wgpu::Buffer,
     parallelograms: wgpu::Buffer,
     materials: wgpu::Buffer,
-    transforms: wgpu::Buffer,
     bvh: wgpu::Buffer,
     triangles: wgpu::Buffer,
+    sdf: wgpu::Buffer,
     frame_buffer: wgpu::Buffer,
     vertex: wgpu::Buffer,
 }

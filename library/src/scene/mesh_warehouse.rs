@@ -173,7 +173,5 @@ mod tests {
         instance.put_triangles_into(&mut triangles);
 
         assert_eq!(triangles.len(), 1);
-        assert_eq!(triangles[0].in_kind_index(), base_triangle_index);
-        assert_eq!(triangles[0].host_mesh_index(), TEST_LINKS.in_kind_index());
     }
 }

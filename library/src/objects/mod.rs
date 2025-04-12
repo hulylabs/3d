@@ -5,3 +5,4 @@ pub(crate) mod parallelogram;
 pub(crate) mod sphere;
 pub(crate) mod triangle;
 pub(crate) mod triangle_mesh;
+pub(crate) mod sdf;

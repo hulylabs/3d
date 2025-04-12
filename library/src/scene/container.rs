@@ -1,10 +1,11 @@
 ﻿use crate::bvh::builder::build_serialized_bvh;
 use crate::geometry::alias::{Point, Vector};
-use crate::geometry::transform::Transformation;
+use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
 use crate::objects::material::Material;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::{Parallelogram, ParallelogramIndex};
+use crate::objects::sdf::{SdfBox, SdfBoxIndex};
 use crate::objects::sphere::{Sphere, SphereIndex};
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex};
 use crate::objects::triangle_mesh::TriangleMesh;
@@ -46,6 +47,7 @@ pub struct Container {
     triangles: Vec<Triangle>,
     parallelograms: Vec<Parallelogram>,
     meshes: Vec<TriangleMesh>,
+    sdf: Vec<SdfBox>,
     materials: Vec<Material>,
     data_version: u64, // TODO: make per object kind granularity
 }
@@ -60,11 +62,6 @@ impl Container {
     }
 
     #[must_use]
-    pub(crate) fn get_total_object_count(&self) -> usize {
-        self.spheres.len() + self.parallelograms.len() + self.meshes.len()
-    }
-
-    #[must_use]
     pub(crate) fn spheres_count(&self) -> usize {
         self.spheres.len()
     }
@@ -72,6 +69,11 @@ impl Container {
     #[must_use]
     pub(crate) fn parallelograms_count(&self) -> usize {
         self.parallelograms.len()
+    }
+
+    #[must_use]
+    pub(crate) fn sdf_objects_count(&self) -> usize {
+        self.sdf.len()
     }
 
     #[must_use]
@@ -108,6 +110,14 @@ impl Container {
         added.put_triangles_into(&mut self.triangles);
 
         index
+    }
+
+    pub fn add_sdf_box(&mut self, location: &Affine, half_size: Vector, corners_radius: f64, material: MaterialIndex) -> SdfBoxIndex {
+        assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0);
+        assert!(corners_radius >= 0.0);
+        Container::add_object(&mut self.sdf, &mut self.data_version, |_index| {
+            SdfBox::new(*location, half_size, corners_radius, material)
+        })
     }
 
     #[must_use]
@@ -153,6 +163,11 @@ impl Container {
     }
 
     #[must_use]
+    pub(crate) fn evaluate_serialized_sdf(&self) -> Vec<f32> {
+        Container::serialize(&self.sdf)
+    }
+
+    #[must_use]
     fn serialize<T: SerializableForGpu>(items: &Vec<T>) -> Vec<f32> {
         // TODO: we can reuse the buffer in case object count is the same
         let mut buffer: Vec<f32> = vec![0.0; T::SERIALIZED_SIZE_FLOATS * items.len()];
@@ -177,12 +192,6 @@ mod tests {
     use crate::objects::sphere::{Sphere, SphereIndex};
     use crate::scene::container::Container;
     use crate::serialization::serializable_for_gpu::SerializableForGpu;
-
-    #[test]
-    fn test_container_initialization() {
-        let system_under_test = Container::new();
-        assert_eq!(system_under_test.get_total_object_count(), 0);
-    }
 
     #[test]
     fn test_add_sphere() {
@@ -212,7 +221,6 @@ mod tests {
         }
         let serialized = system_under_test.evaluate_serialized_spheres();
 
-        assert_eq!(system_under_test.get_total_object_count(), SPHERES_TO_ADD);
         assert_eq!(serialized, expected_serialized_spheres);
     }
 }
