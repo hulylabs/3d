@@ -190,6 +190,7 @@ fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
     var t = tmin;
     var i: i32 = 0;
     let local_ray = Ray( (sdf.inverse_location * vec4f(ray.origin, 1.0f)).xyz , (sdf.inverse_location * vec4f(ray.dir, 0.0f)).xyz );
+    let outside = signed_distance_to_box(local_ray.origin, sdf) >= 0;
     loop {
         if (i >= MAX_SDF_RAY_MARCH_STEPS) {
             break;
@@ -199,15 +200,17 @@ fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
         }
         let candidate = at(local_ray, t);
         let signed_distance = signed_distance_to_box(candidate, sdf);
-        if(abs(signed_distance)<0.0001*t) {
+        let t_scaled = 0.0001 * t;
+        if(abs(signed_distance)<t_scaled) {
             hitRec.t = t;
             hitRec.p = at(ray, t);
-            hitRec.normal = (vec4f(signed_distance_normal(candidate, sdf), 0.0f) * sdf.location).xyz; // assume transform is orthogonal
-            hitRec.front_face = true;
+            hitRec.normal = (sdf.location * vec4f(signed_distance_normal(candidate, sdf), 0.0f)).xyz; // assume transform is orthogonal
+            hitRec.front_face = outside;
             hitRec.material = materials[i32(sdf.material_id)];
             return true;
         }
-        t += signed_distance;
+        let step_size = max(abs(signed_distance), t_scaled);
+        t += step_size;
         i = i + 1;
     }
     return false;
