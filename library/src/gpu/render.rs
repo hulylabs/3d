@@ -13,14 +13,14 @@ use crate::objects::triangle::Triangle;
 use crate::objects::triangle_mesh::TriangleMesh;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
-use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-// TODO: work in progress: the whole file will be rewritten
+// TODO: work in progress
 
 pub(crate) struct Renderer {
     context: Rc<Context>,
@@ -29,8 +29,6 @@ pub(crate) struct Renderer {
     uniforms: Uniforms,
     pipeline_compute: ComputePipeline,
     pipeline_rasterization: RasterizationPipeline,
-    shader_module: wgpu::ShaderModule,
-    scene: Container,
 }
 
 impl Renderer {
@@ -64,21 +62,16 @@ impl Renderer {
             uniforms,
             pipeline_compute: compute,
             pipeline_rasterization: rasterization,
-            shader_module,
-            scene,
         })
     }
 
-    fn serialize_uniforms(target: &Uniforms) -> [f32; Uniforms::SERIALIZED_SIZE_FLOATS] {
-        let mut buffer = [0.0_f32; Uniforms::SERIALIZED_SIZE_FLOATS];
-        target.serialize_into(&mut buffer);
-        buffer
-    }
-
     fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
-        let empty_meshes_marker: Vec<f32> = vec![-1.0_f32; TriangleMesh::SERIALIZED_SIZE_FLOATS];
-        let empty_triangles_marker: Vec<f32> = vec![-1.0_f32; Triangle::SERIALIZED_SIZE_FLOATS];
-        let empty_bvh_marker: Vec<f32> = vec![-1.0_f32; BvhNode::SERIALIZED_SIZE_FLOATS];
+        let empty_meshes_marker
+            = GpuReadySerializationBuffer::make_filled(1, TriangleMesh::SERIALIZED_QUARTET_COUNT, -1.0_f32);
+        let empty_triangles_marker
+            = GpuReadySerializationBuffer::make_filled(1, Triangle::SERIALIZED_QUARTET_COUNT, -1.0_f32);
+        let empty_bvh_marker
+            = GpuReadySerializationBuffer::make_filled(1, BvhNode::SERIALIZED_QUARTET_COUNT, -1.0_f32);
 
         let serialized_triangles = scene.evaluate_serialized_triangles();
         let meshes = if serialized_triangles.empty()
@@ -89,34 +82,33 @@ impl Renderer {
         { &empty_bvh_marker } else { serialized_triangles.bvh() };
 
         let materials = if scene.materials_count() > 0
-            { scene.evaluate_serialized_materials() } else { vec![0.0_f32; Material::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_materials() } else { GpuReadySerializationBuffer::make_filled(1, Material::SERIALIZED_QUARTET_COUNT, 0.0_f32) };
 
         let spheres = if scene.spheres_count() > 0
-            { scene.evaluate_serialized_spheres() } else { vec![-1.0_f32; Sphere::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_spheres() } else { GpuReadySerializationBuffer::make_filled(1, Sphere::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
 
         let parallelograms = if scene.parallelograms_count() > 0
-            { scene.evaluate_serialized_parallelograms() } else { vec![-1.0_f32; Parallelogram::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_parallelograms() } else { GpuReadySerializationBuffer::make_filled(1, Parallelogram::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
 
         let sdf = if scene.sdf_objects_count() > 0
-            { scene.evaluate_serialized_sdf() } else { vec![-1.0_f32; SdfBox::SERIALIZED_SIZE_FLOATS] };
+            { scene.evaluate_serialized_sdf() } else { GpuReadySerializationBuffer::make_filled(1, SdfBox::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
 
         // TODO: we can use inline defined shader data, rather than this complication
         let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
 
         Buffers {
-            uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&Self::serialize_uniforms(uniforms))),
+            uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
             pixel_color_buffer: resources.create_pixel_color_buffer(frame_buffer_size),
             object_id_buffer: resources.create_object_id_buffer(frame_buffer_size),
 
-            spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
-            parallelograms: resources.create_storage_buffer_write_only("parallelograms", cast_slice(&parallelograms)),
-            sdf: resources.create_storage_buffer_write_only("sdf", cast_slice(&sdf)),
-
-            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(triangles)),
-            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
-            materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
-            bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(bvh)),
+            spheres: resources.create_storage_buffer_write_only("spheres", spheres.backend()),
+            parallelograms: resources.create_storage_buffer_write_only("parallelograms", parallelograms.backend()),
+            sdf: resources.create_storage_buffer_write_only("sdf", sdf.backend()),
+            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", triangles.backend()),
+            meshes: resources.create_storage_buffer_write_only("meshes meta data", meshes.backend()),
+            materials: resources.create_storage_buffer_write_only("materials", materials.backend()),
+            bvh: resources.create_storage_buffer_write_only("bvh", bvh.backend()),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
     }
@@ -220,8 +212,8 @@ impl Renderer {
             }
 
             // TODO: rewrite with 'write_buffer_with'. May be we need kind of ping-pong or circular buffer here?
-            let uniform_values = Self::serialize_uniforms(&self.uniforms);
-            self.context.queue().write_buffer(&self.buffers.uniforms, 0, cast_slice(&uniform_values));
+            let uniform_values = self.uniforms.serialize();
+            self.context.queue().write_buffer(&self.buffers.uniforms, 0, uniform_values.backend());
 
             self.uniforms.drop_reset_flag();
         }
@@ -336,23 +328,127 @@ impl Uniforms {
     }
 
     const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
+
+    #[must_use]
+    fn serialize(&self) -> GpuReadySerializationBuffer {
+        let mut result = GpuReadySerializationBuffer::new(1, Self::SERIALIZED_QUARTET_COUNT);
+
+        result.write_quartet_f32(
+            self.frame_buffer_size.width() as f32,
+            self.frame_buffer_size.height() as f32,
+            self.frame_number as f32,
+            if self.if_reset_framebuffer { 1.0 } else { 0.0 },
+        );
+        self.camera.serialize_into(&mut result);
+        debug_assert!(result.object_fully_written());
+
+        result
+    }
 }
 
-impl SerializableForGpu for Uniforms {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Uniforms::SERIALIZED_QUARTET_COUNT);
+#[cfg(test)]
+mod tests {
+    use cgmath::EuclideanSpace;
+    use crate::geometry::alias::Point;
+    use super::*;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Uniforms::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    const DEFAULT_FRAME_WIDTH: u32 = 800;
+    const DEFAULT_FRAME_HEIGHT: u32 = 600;
 
-        let mut index = 0;
-        container.write_and_move_next(self.frame_buffer_size.width() as f64, &mut index);
-        container.write_and_move_next(self.frame_buffer_size.height() as f64, &mut index);
-        container.write_and_move_next(self.frame_number as f64, &mut index);
-        container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
+    #[must_use]
+    fn make_system_under_test() -> Uniforms {
+        let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
+        let camera = Camera::new_perspective_camera(1.0, Point::origin());
 
-        self.camera.serialize_into(&mut container[index..]);
-        index += Camera::SERIALIZED_SIZE_FLOATS;
+        Uniforms {
+            frame_buffer_size,
+            frame_number: 0,
+            if_reset_framebuffer: false,
+            camera,
+        }
+    }
 
-        assert_eq!(index, Uniforms::SERIALIZED_SIZE_FLOATS);
+    const SLOT_FRAME_WIDTH: usize = 0;
+    const SLOT_FRAME_HEIGHT: usize = 1;
+    const SLOT_FRAME_NUMBER: usize = 2;
+    const SLOT_RESET_FRAME_BUFFER: usize = 3;
+
+    #[test]
+    fn test_reset_frame_accumulation() {
+        let mut system_under_test = make_system_under_test();
+
+        system_under_test.next_frame();
+        system_under_test.reset_frame_accumulation();
+
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+
+        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
+        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 1.0);
+    }
+
+    #[test]
+    fn test_drop_reset_flag() {
+        let mut system_under_test = make_system_under_test();
+
+        system_under_test.reset_frame_accumulation();
+        system_under_test.drop_reset_flag();
+
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+
+        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
+    }
+
+    #[test]
+    fn test_set_frame_size() {
+        let expected_width = 1024;
+        let expected_height = 768;
+        let new_size = PhysicalSize::new(expected_width, expected_height);
+        let mut system_under_test = make_system_under_test();
+
+        system_under_test.set_frame_size(new_size);
+
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+
+        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], expected_width as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], expected_height as f32);
+    }
+
+    #[test]
+    fn test_next_frame() {
+        let mut system_under_test = make_system_under_test();
+
+        system_under_test.next_frame();
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 1.0);
+
+        system_under_test.next_frame();
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 2.0);
+    }
+
+    #[test]
+    fn test_frame_buffer_area() {
+        let system_under_test = make_system_under_test();
+
+        let expected_area = DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT;
+        assert_eq!(system_under_test.frame_buffer_area(), expected_area);
+    }
+
+    #[test]
+    fn test_serialize() {
+        let system_under_test = make_system_under_test();
+
+        let actual_state = system_under_test.serialize();
+        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
+
+        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], 800.0);
+        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], 600.0);
+        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
+        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
     }
 }

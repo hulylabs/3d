@@ -1,7 +1,7 @@
 use crate::geometry::aabb::Aabb;
 use crate::geometry::epsilon::DEFAULT_EPSILON;
 use crate::geometry::vertex::Vertex;
-use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::AbsDiffEq;
 use std::ops::Add;
@@ -67,8 +67,6 @@ impl Triangle {
         let result = Aabb::from_triangle(self.a.position(), self.b.position(), self.c.position());
         result.pad()
     }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 6;
 }
 
 impl AbsDiffEq for Triangle {
@@ -90,44 +88,20 @@ impl AbsDiffEq for Triangle {
 }
 
 impl SerializableForGpu for Triangle {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Triangle::SERIALIZED_QUARTET_COUNT);
+    const SERIALIZED_QUARTET_COUNT: usize = 6;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Triangle::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        let mut index = 0;
+        container.write_padded_quartet_f64(self.a.position().x, self.a.position().y, self.a.position().z);
+        container.write_padded_quartet_f64(self.b.position().x, self.b.position().y, self.b.position().z);
+        container.write_padded_quartet_f64(self.c.position().x, self.c.position().y, self.c.position().z);
 
-        container.write_and_move_next(self.a.position().x, &mut index);
-        container.write_and_move_next(self.a.position().y, &mut index);
-        container.write_and_move_next(self.a.position().z, &mut index);
-        container.pad_to_align(&mut index);
+        container.write_padded_quartet_f64(self.a.normal().x, self.a.normal().y, self.a.normal().z);
+        container.write_quartet_f64       (self.b.normal().x, self.b.normal().y, self.b.normal().z, self.in_kind_index.as_f64());
+        container.write_quartet_f64       (self.c.normal().x, self.c.normal().y, self.c.normal().z, self.host_mesh_index.as_f64());
 
-        container.write_and_move_next(self.b.position().x, &mut index);
-        container.write_and_move_next(self.b.position().y, &mut index);
-        container.write_and_move_next(self.b.position().z, &mut index);
-        container.pad_to_align(&mut index);
-
-        container.write_and_move_next(self.c.position().x, &mut index);
-        container.write_and_move_next(self.c.position().y, &mut index);
-        container.write_and_move_next(self.c.position().z, &mut index);
-        container.pad_to_align(&mut index);
-
-        container.write_and_move_next(self.a.normal().x, &mut index);
-        container.write_and_move_next(self.a.normal().y, &mut index);
-        container.write_and_move_next(self.a.normal().z, &mut index);
-        container.pad_to_align(&mut index);
-
-        container.write_and_move_next(self.b.normal().x, &mut index);
-        container.write_and_move_next(self.b.normal().y, &mut index);
-        container.write_and_move_next(self.b.normal().z, &mut index);
-        container.write_and_move_next(self.in_kind_index.as_f64(), &mut index);
-
-        container.write_and_move_next(self.c.normal().x, &mut index);
-        container.write_and_move_next(self.c.normal().y, &mut index);
-        container.write_and_move_next(self.c.normal().z, &mut index);
-        container.write_and_move_next(self.host_mesh_index.as_f64(), &mut index);
-
-        debug_assert_eq!(index, Triangle::SERIALIZED_SIZE_FLOATS);
+        debug_assert!(container.object_fully_written());
     }
 }
 
@@ -135,6 +109,8 @@ impl SerializableForGpu for Triangle {
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
+    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
+    use bytemuck::cast_slice;
 
     #[test]
     fn test_triangle_creation() {
@@ -175,29 +151,28 @@ mod tests {
         let c = Vertex::new(Point::new(7.0, 8.0, 9.0), Vector::new(16.0, 17.0, 18.0));
         let expected_in_kind_index = TriangleIndex(19);
         let expected_host_mesh_index = MeshIndex(20);
-        let container_initial_filler = -7.0;
         let system_under_test = Triangle::new(a, b, c, expected_in_kind_index, expected_host_mesh_index);
 
-        let mut container = vec![container_initial_filler; Triangle::SERIALIZED_SIZE_FLOATS + 1];
-        system_under_test.serialize_into(&mut container);
+        let mut actual_state = GpuReadySerializationBuffer::new(1, Triangle::SERIALIZED_QUARTET_COUNT);
+        system_under_test.serialize_into(&mut actual_state);
 
         let expected: Vec<f32> = vec![
             a.position().x as f32,
             a.position().y as f32,
             a.position().z as f32,
-            <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
+            DEFAULT_PAD_VALUE,
             b.position().x as f32,
             b.position().y as f32,
             b.position().z as f32,
-            <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
+            DEFAULT_PAD_VALUE,
             c.position().x as f32,
             c.position().y as f32,
             c.position().z as f32,
-            <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
+            DEFAULT_PAD_VALUE,
             a.normal().x as f32,
             a.normal().y as f32,
             a.normal().z as f32,
-            <[f32] as GpuFloatBufferFiller>::PAD_VALUE,
+            DEFAULT_PAD_VALUE,
             b.normal().x as f32,
             b.normal().y as f32,
             b.normal().z as f32,
@@ -206,9 +181,8 @@ mod tests {
             c.normal().y as f32,
             c.normal().z as f32,
             expected_host_mesh_index.as_f64() as f32,
-            container_initial_filler,
         ];
 
-        assert_eq!(container, expected);
+        assert_eq!(actual_state.backend(), cast_slice(&expected));
     }
 }

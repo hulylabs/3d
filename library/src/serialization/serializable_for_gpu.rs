@@ -1,5 +1,7 @@
-﻿pub(crate) trait SerializableForGpu {
-    const SERIALIZED_SIZE_FLOATS: usize;
+﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-    fn serialize_into(&self, buffer: &mut [f32]);
+pub(crate) trait SerializableForGpu {
+    const SERIALIZED_QUARTET_COUNT: usize;
+
+    fn serialize_into(&self, buffer: &mut GpuReadySerializationBuffer);
 }

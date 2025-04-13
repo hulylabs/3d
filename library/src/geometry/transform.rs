@@ -1,6 +1,4 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Transform};
 
 pub type Affine = Matrix4<f64>;
@@ -36,32 +34,6 @@ impl Transformation {
     pub(crate) fn of_surface_vector(&self, target: Vector) -> Vector {
         self.inverse.transpose().transform_vector(target).normalize()
     }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 8;
-}
-
-impl SerializableForGpu for Transformation {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Transformation::SERIALIZED_QUARTET_COUNT);
-
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Transformation::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
-
-        let mut index = 0;
-
-        for column in 0..4 {
-            for row in 0..4 {
-                container.write_and_move_next(self.forward[column][row], &mut index);
-            }
-        }
-
-        for column in 0..4 {
-            for row in 0..4 {
-                container.write_and_move_next(self.inverse[column][row], &mut index);
-            }
-        }
-
-        assert_eq!(index, Transformation::SERIALIZED_SIZE_FLOATS);
-    }
 }
 
 pub(crate) trait TransformableCoordinate {
@@ -96,9 +68,9 @@ impl TransformableCoordinate for Vector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry::epsilon::DEFAULT_EPSILON;
     use cgmath::{assert_abs_diff_eq, InnerSpace, Rad};
     use std::f64::consts::PI;
-    use crate::geometry::epsilon::DEFAULT_EPSILON;
 
     #[test]
     fn test_of_point() {
@@ -128,30 +100,6 @@ mod tests {
         let actual_vector = system_under_test.of_surface_vector(victim_vector);
 
         assert_abs_diff_eq!(actual_vector, expected_vector, epsilon = DEFAULT_EPSILON);
-    }
-
-    #[test]
-    fn test_serializable_for_gpu() {
-        let source = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
-        let system_under_test = Transformation::new(source);
-        let container_initial_filler = -7.0;
-        let serialized_size = Transformation::SERIALIZED_SIZE_FLOATS + 1;
-        let mut container = vec![container_initial_filler; serialized_size];
-
-        system_under_test.serialize_into(&mut container);
-
-        let mut expected_container = vec![0.0; serialized_size];
-        expected_container[ 0] = 1.0;
-        expected_container[ 5] = 2.0;
-        expected_container[10] = 3.0;
-        expected_container[15] = 1.0;
-        expected_container[16] = 1.0;
-        expected_container[21] = 1.0 / 2.0;
-        expected_container[26] = 1.0 / 3.0;
-        expected_container[31] = 1.0;
-        expected_container[32] = container_initial_filler;
-
-        assert_eq!(container, expected_container);
     }
 
     #[test]

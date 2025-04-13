@@ -1,14 +1,13 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
 use crate::objects::triangle::Triangle;
-use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use strum::EnumCount;
 use crate::geometry::utils::MaxAxis;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 struct BvhNodeContent {
     start_triangle_index: usize,
@@ -206,45 +205,54 @@ impl BvhNode {
     ];
 
     pub(crate) const SERIALIZED_QUARTET_COUNT: usize = 3;
-}
 
-impl SerializableForGpu for BvhNode {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(BvhNode::SERIALIZED_QUARTET_COUNT);
+    pub(super) fn serialize_by_index_into(&self, container: &mut GpuReadySerializationBuffer) {
+        assert!(self.serial_index.is_some(), "index was not set");
+        debug_assert!(container.fully_written(), "buffer underflow");
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= BvhNode::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+        let index = self.serial_index().unwrap();
 
-        let mut index = 0;
-
-        container.write_and_move_next(self.bounding_box.min().x, &mut index);
-        container.write_and_move_next(self.bounding_box.min().y, &mut index);
-        container.write_and_move_next(self.bounding_box.min().z, &mut index);
-        container.write_and_move_next(self.right_offset_index_or_null(), &mut index);
-
-        container.write_and_move_next(self.bounding_box.max().x, &mut index);
-        container.write_and_move_next(self.bounding_box.max().y, &mut index);
-        container.write_and_move_next(self.bounding_box.max().z, &mut index);
-
+        let primitive_kind: f64;
+        let primitive_id: f64;
+        let primitive_count: f64;
         match self.content.as_ref()
         {
             Some(content) =>
             {
-                container.write_and_move_next(2.0, &mut index); // TODO: refactor this - 2 is a type for triangle
-                container.write_and_move_next(content.start_triangle_index() as f64, &mut index);
-                container.write_and_move_next(content.triangles_count() as f64, &mut index);
+                primitive_kind = 2.0; // TODO: refactor this - 2 is a type for triangle
+                primitive_id = content.start_triangle_index() as f64;
+                primitive_count = content.triangles_count() as f64;
             }
             None =>
             {
-                container.write_and_move_next(Self::GPU_NULL_REFERENCE_MARKER, &mut index);
-                container.write_and_move_next(Self::GPU_NULL_REFERENCE_MARKER, &mut index);
-                container.write_and_move_next(Self::GPU_NULL_REFERENCE_MARKER, &mut index);
+                primitive_kind = Self::GPU_NULL_REFERENCE_MARKER;
+                primitive_id = Self::GPU_NULL_REFERENCE_MARKER;
+                primitive_count = Self::GPU_NULL_REFERENCE_MARKER;
             },
         }
 
-        container.write_and_move_next(self.miss_node_index_or_null(), &mut index);
-        container.write_and_move_next(self.axis as usize as f64, &mut index);
+        container.write_object(index, |writer|{
+            writer.write_quartet_f64(
+                self.bounding_box.min().x,
+                self.bounding_box.min().y,
+                self.bounding_box.min().z,
+                self.right_offset_index_or_null(),
+            );
 
-        assert_eq!(index, BvhNode::SERIALIZED_SIZE_FLOATS);
+            writer.write_quartet_f64(
+                self.bounding_box.max().x,
+                self.bounding_box.max().y,
+                self.bounding_box.max().z,
+                primitive_kind,
+            );
+
+            writer.write_quartet_f64(
+                primitive_id,
+                primitive_count,
+                self.miss_node_index_or_null(),
+                self.axis as usize as f64,
+            );
+        });
     }
 }
 

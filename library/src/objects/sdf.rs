@@ -1,11 +1,11 @@
-﻿use cgmath::num_traits::abs;
-use cgmath::SquareMatrix;
-use crate::geometry::alias::Vector;
+﻿use crate::geometry::alias::Vector;
 use crate::geometry::transform::Affine;
 use crate::objects::material_index::MaterialIndex;
-use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::helpers::serialize_matrix;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use cgmath::num_traits::abs;
+use cgmath::SquareMatrix;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct SdfBoxIndex(pub(crate) usize);
@@ -30,36 +30,46 @@ impl SdfBox {
         assert!(abs(location.determinant()) > 0.0);
         Self { location, half_size, corners_radius, material_index }
     }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 10;
 }
 
 impl SerializableForGpu for SdfBox {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(SdfBox::SERIALIZED_QUARTET_COUNT);
+    const SERIALIZED_QUARTET_COUNT: usize = 10;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= SdfBox::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        let mut index = 0;
-        serialize_matrix(container, &self.location, &mut index);
-        serialize_matrix(container, &self.location.invert().unwrap(), &mut index);
+        serialize_matrix(container, &self.location);
+        serialize_matrix(container, &self.location.invert().unwrap());
 
-        container.write_and_move_next(self.half_size.x, &mut index);
-        container.write_and_move_next(self.half_size.y, &mut index);
-        container.write_and_move_next(self.half_size.z, &mut index);
-        container.write_and_move_next(self.corners_radius, &mut index);
+        container.write_quartet_f64(
+            self.half_size.x,
+            self.half_size.y,
+            self.half_size.z,
+            self.corners_radius,
+        );
 
-        container.write_and_move_next(self.material_index.as_f64(), &mut index);
-        container.pad_to_align(&mut index);
+        container.write(|writer| {
+            writer.write_float(self.material_index.as_f64() as f32);
+        });
 
-        debug_assert_eq!(index, SdfBox::SERIALIZED_SIZE_FLOATS);
+        debug_assert!(container.object_fully_written());
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
     use crate::serialization::helpers::MATRIX_FLOATS_COUNT;
+    use bytemuck::cast_slice;
+
+    #[must_use]
+    fn matrix_at(index: usize, matrix: &Affine) -> f32 {
+        let matrix_side_size = 4;
+        let column = index / matrix_side_size;
+        let row = index % matrix_side_size;
+        matrix[column][row] as f32
+    }
 
     #[test]
     fn test_sdf_box_serialize_into() {
@@ -70,39 +80,51 @@ mod tests {
 
         let system_under_test = SdfBox::new(expected_location, expected_half_size, expected_corners_radius, expected_material_index);
 
-        let mut container = vec![0.0; SdfBox::SERIALIZED_SIZE_FLOATS];
+        let mut container = GpuReadySerializationBuffer::new(1, SdfBox::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
         let location_serialized = {
             let mut location_serialized = vec![0.0_f32; MATRIX_FLOATS_COUNT * 2];
             let mut counter = 0;
-            serialize_matrix(&mut location_serialized, &expected_location, &mut counter);
-            serialize_matrix(&mut location_serialized, &expected_location.invert().unwrap(), &mut counter);
+            for i in 0..MATRIX_FLOATS_COUNT {
+                location_serialized[counter] = matrix_at(i, &expected_location);
+                counter += 1;
+            }
+            let inverted_location = expected_location.invert().unwrap();
+            for i in 0..MATRIX_FLOATS_COUNT {
+                location_serialized[counter] = matrix_at(i, &inverted_location);
+                counter += 1;
+            }
+
             location_serialized
         };
 
+        let serialized: &[f32] = cast_slice(&container.backend());
+
         let mut values_checked = 0;
-        assert_eq!(&container[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized);
+        assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[0..MATRIX_FLOATS_COUNT]);
+        values_checked += MATRIX_FLOATS_COUNT;
+        assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[MATRIX_FLOATS_COUNT..MATRIX_FLOATS_COUNT * 2]);
         values_checked += MATRIX_FLOATS_COUNT;
 
-        assert_eq!(container[values_checked], expected_half_size.x as f32);
+        assert_eq!(serialized[values_checked], expected_half_size.x as f32);
         values_checked += 1;
-        assert_eq!(container[values_checked], expected_half_size.y as f32);
+        assert_eq!(serialized[values_checked], expected_half_size.y as f32);
         values_checked += 1;
-        assert_eq!(container[values_checked], expected_half_size.z as f32);
+        assert_eq!(serialized[values_checked], expected_half_size.z as f32);
         values_checked += 1;
-        assert_eq!(container[values_checked], expected_corners_radius as f32);
-        values_checked += 1;
-
-        assert_eq!(container[values_checked], expected_material_index.as_f64() as f32);
-        values_checked += 1;
-        assert_eq!(container[values_checked], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
-        values_checked += 1;
-        assert_eq!(container[values_checked], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
-        values_checked += 1;
-        assert_eq!(container[values_checked], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+        assert_eq!(serialized[values_checked], expected_corners_radius as f32);
         values_checked += 1;
 
-        assert_eq!(values_checked, SdfBox::SERIALIZED_SIZE_FLOATS);
+        assert_eq!(serialized[values_checked], expected_material_index.as_f64() as f32);
+        values_checked += 1;
+        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
+        values_checked += 1;
+        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
+        values_checked += 1;
+        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
+        values_checked += 1;
+
+        assert_eq!(values_checked, SdfBox::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);
     }
 }

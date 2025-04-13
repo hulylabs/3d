@@ -8,13 +8,13 @@ mod serialization;
 mod bvh;
 
 use std::cmp::max;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use winit::window::Window;
 use log::info;
 use thiserror::Error;
+use wgpu::Trace;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::Renderer;
@@ -46,9 +46,10 @@ pub enum EngineInstantiationError {
     SurfaceCreationError {
         what: String,
     },
-    #[error("failed to request adapter")]
-    AdapterRequisitionError
-    ,
+    #[error("failed to request adapter: {what:?}")]
+    AdapterRequisitionError{
+        what: String,
+    },
     #[error("failed to select device: {what:?}")]
     DeviceSelectionError {
         what: String,
@@ -80,7 +81,7 @@ impl Engine {
                 ..Default::default()
             })
             .await
-            .ok_or(EngineInstantiationError::AdapterRequisitionError)?;
+            .map_err(|error| EngineInstantiationError::AdapterRequisitionError{what: error.to_string()})?;
 
         let (graphics_device, commands_queue) = graphics_adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -88,7 +89,8 @@ impl Engine {
                 required_features: wgpu::Features::default(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::default(),
-            }, Some(Path::new("./")))
+                trace: Trace::Off,
+            })
             .await
             .map_err(|e| EngineInstantiationError::DeviceSelectionError {what: e.to_string()})?;
 

@@ -1,10 +1,9 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
-use crate::serialization::filler::floats_count;
 use crate::serialization::helpers::serialize_matrix;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector2, Zero};
 use std::ops::Mul;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 #[must_use]
 fn projection_into_point(projection_target: Point) -> Affine {
@@ -213,22 +212,15 @@ impl Camera {
     }
 
     pub(crate) const SERIALIZED_QUARTET_COUNT: usize = 8;
-}
 
-impl SerializableForGpu for Camera {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Camera::SERIALIZED_QUARTET_COUNT);
-
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Camera::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    pub(crate) fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        assert!(container.free_quartets_of_current_object() >= Camera::SERIALIZED_QUARTET_COUNT, "buffer size is too small");
 
         let camera_space_to_world = self.world_to_camera_space.invert().unwrap();
         let view_ray_origin = self.view_ray_origin;
 
-        let mut index = 0;
-        serialize_matrix(container, &camera_space_to_world, &mut index);
-        serialize_matrix(container, &view_ray_origin, &mut index);
-
-        assert_eq!(index, Camera::SERIALIZED_SIZE_FLOATS);
+        serialize_matrix(container, &camera_space_to_world);
+        serialize_matrix(container, &view_ray_origin);
     }
 }
 
@@ -237,11 +229,13 @@ mod tests {
     use super::*;
     use cgmath::assert_abs_diff_eq;
     use std::f32::consts::FRAC_1_SQRT_2;
+    use bytemuck::cast_slice;
+    use crate::serialization::gpu_ready_serialization_buffer::ELEMENTS_IN_QUARTET;
 
-    fn assert_camera_serialized_data(system_under_test: &Camera, expected_data: [f32; Camera::SERIALIZED_SIZE_FLOATS]) {
-        let mut container = vec![0.0; Camera::SERIALIZED_SIZE_FLOATS];
+    fn assert_camera_serialized_data(system_under_test: &Camera, expected_data: [f32; Camera::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET]) {
+        let mut container = GpuReadySerializationBuffer::new(1, Camera::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
-        assert_abs_diff_eq!(&container[..], &expected_data[..]);
+        assert_abs_diff_eq!(cast_slice(container.backend()), &expected_data[..]);
     }
 
     #[test]
@@ -339,7 +333,7 @@ mod tests {
         system_under_test.set_rotation_speed(Deg(-45.0));
         system_under_test.rotate_vertical(1.0);
 
-        let expected_serialized_camera: [f32; Camera::SERIALIZED_SIZE_FLOATS] =
+        let expected_serialized_camera: [f32; Camera::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET] =
         [
             1.0, 0.0, 0.0, 0.0,
             0.0, FRAC_1_SQRT_2, -FRAC_1_SQRT_2, 0.0,

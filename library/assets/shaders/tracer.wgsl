@@ -120,9 +120,10 @@ struct Mesh {
 struct AABB {
 	min : vec3f,
 	right_offset : f32,
-	max : vec3f,
 
+	max : vec3f,
 	prim_type : f32,
+
 	prim_id : f32,
 	prim_count : f32,
 	skip_link : f32,

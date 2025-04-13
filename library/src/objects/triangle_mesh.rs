@@ -2,7 +2,7 @@ use crate::geometry::fundamental_constants::{COMPONENTS_IN_NORMAL, COMPONENTS_IN
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex, TriangleVertex};
-use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::{Pod, Zeroable};
 
@@ -41,36 +41,36 @@ impl TriangleMesh {
         }
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 1;
-
     pub(crate) fn put_triangles_into(&self, target: &mut Vec<Triangle>) {
         target.extend(&self.triangles);
     }
 }
 
 impl SerializableForGpu for TriangleMesh {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(TriangleMesh::SERIALIZED_QUARTET_COUNT);
+    const SERIALIZED_QUARTET_COUNT: usize = 1;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= TriangleMesh::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        let mut index = 0;
-        container.write_and_move_next(self.triangles.len() as f64, &mut index);
-        container.write_and_move_next(self.triangles_base_index.as_f64(), &mut index);
-        container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
-        container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
+        container.write_quartet_f64(
+            self.triangles.len() as f64,
+            self.triangles_base_index.as_f64(),
+            self.links.global_index().as_f64(),
+            self.links.material_index().as_f64(),
+        );
 
-        debug_assert_eq!(index, TriangleMesh::SERIALIZED_SIZE_FLOATS);
+        debug_assert!(container.object_fully_written());
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geometry::alias::{Point, Vector};
     use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
     use crate::objects::material_index::MaterialIndex;
+    use bytemuck::cast_slice;
     use cgmath::{EuclideanSpace, Zero};
-    use crate::geometry::alias::{Point, Vector};
 
     const DUMMY_LINKS: Linkage<MeshIndex> = Linkage::new(GlobalObjectIndex(0), MeshIndex(0), MaterialIndex(0));
 
@@ -120,11 +120,10 @@ mod tests {
         ];
         let indices = vec![0, 0, 0];
         let triangles_start = TriangleIndex(3);
-        let container_initial_filler = -7.0;
         let expected_links = Linkage::new(GlobalObjectIndex(1), MeshIndex(2), MaterialIndex(3));
         let system_under_test = TriangleMesh::new(&vertices, &indices, expected_links, triangles_start);
 
-        let mut container = vec![container_initial_filler; TriangleMesh::SERIALIZED_SIZE_FLOATS + 1];
+        let mut container = GpuReadySerializationBuffer::new(1, TriangleMesh::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
         let expected = vec![
@@ -132,9 +131,8 @@ mod tests {
             triangles_start.as_f64() as f32,
             expected_links.global_index().as_f64() as f32,
             expected_links.material_index().as_f64() as f32,
-            container_initial_filler,
         ];
 
-        assert_eq!(container, expected);
+        assert_eq!(container.backend(), cast_slice(&expected));
     }
 }

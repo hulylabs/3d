@@ -1,9 +1,9 @@
 ﻿use crate::geometry::alias;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::filler::{GpuFloatBufferFiller, floats_count};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SphereIndex(pub(crate) usize);
@@ -31,37 +31,34 @@ impl Sphere {
         assert!(radius > 0.0, "radius must be positive");
         Sphere { center, radius, links }
     }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 2;
 }
 
 impl SerializableForGpu for Sphere {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Sphere::SERIALIZED_QUARTET_COUNT);
+    const SERIALIZED_QUARTET_COUNT: usize = 2;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Sphere::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        let mut index = 0;
-        container.write_and_move_next(self.center.x, &mut index);
-        container.write_and_move_next(self.center.y, &mut index);
-        container.write_and_move_next(self.center.z, &mut index);
-        container.write_and_move_next(self.radius, &mut index);
+        container.write_quartet_f64(self.center.x, self.center.y, self.center.z, self.radius);
+        container.write(|writer| {
+            writer
+                .write_float(self.links.global_index().as_f64() as f32)
+                .write_float(self.links.in_kind_index().as_f64() as f32)
+                .write_float(self.links.material_index().as_f64() as f32);
+        });
 
-        container.write_and_move_next(self.links.global_index().as_f64(), &mut index);
-        container.write_and_move_next(self.links.in_kind_index().as_f64(), &mut index);
-        container.write_and_move_next(self.links.material_index().as_f64(), &mut index);
-        container.pad_to_align(&mut index);
-
-        debug_assert_eq!(index, Sphere::SERIALIZED_SIZE_FLOATS);
+        debug_assert!(container.object_fully_written());
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use bytemuck::cast_slice;
     use super::*;
     use crate::objects::common_properties::GlobalObjectIndex;
     use crate::objects::material_index::MaterialIndex;
     use cgmath::EuclideanSpace;
+    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
     #[test]
     fn test_origin() {
@@ -100,29 +97,28 @@ mod tests {
         let expected_local_index = SphereIndex(5);
         let expected_material_index = MaterialIndex(6);
         let system_under_test = Sphere::new(center, radius, Linkage::new(expected_global_index, expected_local_index, expected_material_index));
-        let container_initial_filler = -7.0;
 
-        let mut container = vec![container_initial_filler; Sphere::SERIALIZED_SIZE_FLOATS + 1];
-        system_under_test.serialize_into(&mut container);
+        let mut actual_state = GpuReadySerializationBuffer::new(1, Sphere::SERIALIZED_QUARTET_COUNT);
+        system_under_test.serialize_into(&mut actual_state);
+        let serialized: &[f32] = cast_slice(&actual_state.backend());
 
-        assert_eq!(container[0], center.x as f32);
-        assert_eq!(container[1], center.y as f32);
-        assert_eq!(container[2], center.z as f32);
-        assert_eq!(container[3], radius as f32);
-        assert_eq!(container[4], expected_global_index.0 as f32);
-        assert_eq!(container[5], expected_local_index.0 as f32);
-        assert_eq!(container[6], expected_material_index.0 as f32);
-        assert_eq!(container[7], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
-
-        assert_eq!(container[8], container_initial_filler);
+        assert_eq!(serialized[0], center.x as f32);
+        assert_eq!(serialized[1], center.y as f32);
+        assert_eq!(serialized[2], center.z as f32);
+        assert_eq!(serialized[3], radius as f32);
+        assert_eq!(serialized[4], expected_global_index.0 as f32);
+        assert_eq!(serialized[5], expected_local_index.0 as f32);
+        assert_eq!(serialized[6], expected_material_index.0 as f32);
+        assert_eq!(serialized[7], DEFAULT_PAD_VALUE);
     }
 
     #[test]
-    #[should_panic(expected = "buffer size is too small")]
+    #[should_panic(expected = "buffer overflow")]
     fn test_serialize_into_with_small_buffer() {
         let system_under_test = Sphere::new(Point::origin(), 1.0, DUMMY_LINKS);
 
-        let mut container = vec![0.0; Sphere::SERIALIZED_SIZE_FLOATS - 1];
+        let mut container = GpuReadySerializationBuffer::new(1, Sphere::SERIALIZED_QUARTET_COUNT);
+        system_under_test.serialize_into(&mut container);
         system_under_test.serialize_into(&mut container);
     }
 }

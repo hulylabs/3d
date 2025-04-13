@@ -1,3 +1,3 @@
 ﻿pub(crate) mod serializable_for_gpu;
-pub(crate) mod filler;
 pub(crate) mod helpers;
+pub(crate) mod gpu_ready_serialization_buffer;

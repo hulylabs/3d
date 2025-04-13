@@ -21,7 +21,6 @@ use library::Engine;
 use log::error;
 use log::info;
 use log::trace;
-use log::warn;
 use winit::keyboard::{Key, NamedKey};
 
 const WINDOW_TITLE: &str = "Rust Tracer Sandbox";

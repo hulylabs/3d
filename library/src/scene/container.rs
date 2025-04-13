@@ -10,25 +10,26 @@ use crate::objects::sphere::{Sphere, SphereIndex};
 use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex};
 use crate::objects::triangle_mesh::TriangleMesh;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 
 pub(crate) struct GpuReadyTriangles {
-    meshes: Vec<f32>,
-    triangles: Vec<f32>,
-    bvh: Vec<f32>,
+    meshes: GpuReadySerializationBuffer,
+    triangles: GpuReadySerializationBuffer,
+    bvh: GpuReadySerializationBuffer,
 }
 
 impl GpuReadyTriangles {
     #[must_use]
-    pub(crate) fn meshes(&self) -> &Vec<f32> {
+    pub(crate) fn meshes(&self) -> &GpuReadySerializationBuffer {
         &self.meshes
     }
     #[must_use]
-    pub(crate) fn geometry(&self) -> &Vec<f32> {
+    pub(crate) fn geometry(&self) -> &GpuReadySerializationBuffer {
         &self.triangles
     }
     #[must_use]
-    pub(crate) fn bvh(&self) -> &Vec<f32> {
+    pub(crate) fn bvh(&self) -> &GpuReadySerializationBuffer {
         &self.bvh
     }
     #[must_use]
@@ -36,7 +37,7 @@ impl GpuReadyTriangles {
         self.meshes.is_empty()
     }
 
-    pub fn new(meshes: Vec<f32>, triangles: Vec<f32>, bvh: Vec<f32>) -> Self {
+    pub fn new(meshes: GpuReadySerializationBuffer, triangles: GpuReadySerializationBuffer, bvh: GpuReadySerializationBuffer) -> Self {
         Self { meshes, triangles, bvh }
     }
 }
@@ -148,34 +149,32 @@ impl Container {
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_materials(&self) -> Vec<f32> {
+    pub(crate) fn evaluate_serialized_materials(&self) -> GpuReadySerializationBuffer {
         Container::serialize(&self.materials)
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_spheres(&self) -> Vec<f32> {
+    pub(crate) fn evaluate_serialized_spheres(&self) -> GpuReadySerializationBuffer {
         Container::serialize(&self.spheres)
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_parallelograms(&self) -> Vec<f32> {
+    pub(crate) fn evaluate_serialized_parallelograms(&self) -> GpuReadySerializationBuffer {
         Container::serialize(&self.parallelograms)
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_sdf(&self) -> Vec<f32> {
+    pub(crate) fn evaluate_serialized_sdf(&self) -> GpuReadySerializationBuffer {
         Container::serialize(&self.sdf)
     }
 
     #[must_use]
-    fn serialize<T: SerializableForGpu>(items: &Vec<T>) -> Vec<f32> {
+    fn serialize<T: SerializableForGpu>(items: &Vec<T>) -> GpuReadySerializationBuffer {
         // TODO: we can reuse the buffer in case object count is the same
-        let mut buffer: Vec<f32> = vec![0.0; T::SERIALIZED_SIZE_FLOATS * items.len()];
-        let mut index = 0;
+        let mut buffer = GpuReadySerializationBuffer::new(items.len(), T::SERIALIZED_QUARTET_COUNT);
 
         for item in items {
-            item.serialize_into(&mut buffer[index..(index + T::SERIALIZED_SIZE_FLOATS)]);
-            index += T::SERIALIZED_SIZE_FLOATS;
+            item.serialize_into(&mut buffer);
         }
 
         buffer
@@ -191,6 +190,7 @@ mod tests {
     use crate::objects::material::Material;
     use crate::objects::sphere::{Sphere, SphereIndex};
     use crate::scene::container::Container;
+    use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::SerializableForGpu;
 
     #[test]
@@ -206,11 +206,11 @@ mod tests {
         let expected_sphere_radius = 1.5;
 
         const SPHERES_TO_ADD: usize = 3;
-        let mut expected_serialized_spheres = vec![0.0; Sphere::SERIALIZED_SIZE_FLOATS * SPHERES_TO_ADD];
+        let mut expected_serialized_spheres = GpuReadySerializationBuffer::new(SPHERES_TO_ADD, crate::objects::sphere::Sphere::SERIALIZED_QUARTET_COUNT);
         for i in 0..SPHERES_TO_ADD {
             let linkage = Linkage::new(GlobalObjectIndex(0), SphereIndex(i), sphere_material);
             let expected_sphere = Sphere::new(expected_sphere_center, expected_sphere_radius, linkage);
-            expected_sphere.serialize_into(&mut expected_serialized_spheres[i*Sphere::SERIALIZED_SIZE_FLOATS..]);
+            expected_sphere.serialize_into(&mut expected_serialized_spheres);
         }
 
         for _ in 0..SPHERES_TO_ADD {
@@ -221,6 +221,6 @@ mod tests {
         }
         let serialized = system_under_test.evaluate_serialized_spheres();
 
-        assert_eq!(serialized, expected_serialized_spheres);
+        assert_eq!(serialized.backend(), expected_serialized_spheres.backend());
     }
 }

@@ -1,4 +1,4 @@
-﻿use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
+﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use palette::Srgb;
 use strum_macros::{EnumCount, EnumIter};
@@ -37,8 +37,6 @@ pub struct Material {
 }
 
 impl Material {
-    const SERIALIZED_QUARTET_COUNT: usize = 4;
-
     const ZERO_COLOR: Srgb = Srgb::new(0.0, 0.0, 0.0);
 
     #[must_use]
@@ -107,40 +105,43 @@ impl Default for Material {
 }
 
 impl SerializableForGpu for Material {
-    const SERIALIZED_SIZE_FLOATS: usize = floats_count(Material::SERIALIZED_QUARTET_COUNT);
+    const SERIALIZED_QUARTET_COUNT: usize = 4;
 
-    fn serialize_into(&self, container: &mut [f32]) {
-        assert!(container.len() >= Material::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
+    fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
+        debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        let mut index = 0;
-        container.write_and_move_next(self.albedo.red as f64, &mut index);
-        container.write_and_move_next(self.albedo.green as f64, &mut index);
-        container.write_and_move_next(self.albedo.blue as f64, &mut index);
-        container.pad_to_align(&mut index);
+        container.write_padded_quartet_f32(
+            self.albedo.red,
+            self.albedo.green,
+            self.albedo.blue,
+        );
+        container.write_padded_quartet_f32(
+            self.specular.red,
+            self.specular.green,
+            self.specular.blue,
+        );
+        container.write_quartet_f32(
+            self.emission.red,
+            self.emission.green,
+            self.emission.blue,
+            self.specular_strength as f32,
+        );
+        container.write_padded_quartet_f64(
+            self.roughness,
+            self.refractive_index_eta,
+            self.class.as_f64(),
+        );
 
-        container.write_and_move_next(self.specular.red as f64, &mut index);
-        container.write_and_move_next(self.specular.green as f64, &mut index);
-        container.write_and_move_next(self.specular.blue as f64, &mut index);
-        container.pad_to_align(&mut index);
-
-        container.write_and_move_next(self.emission.red as f64, &mut index);
-        container.write_and_move_next(self.emission.green as f64, &mut index);
-        container.write_and_move_next(self.emission.blue as f64, &mut index);
-        container.write_and_move_next(self.specular_strength, &mut index);
-
-        container.write_and_move_next(self.roughness, &mut index);
-        container.write_and_move_next(self.refractive_index_eta, &mut index);
-        container.write_and_move_next(self.class.as_f64(), &mut index);
-        container.pad_to_align(&mut index);
-
-        debug_assert_eq!(index, Material::SERIALIZED_SIZE_FLOATS);
+        debug_assert!(container.object_fully_written());
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytemuck::cast_slice;
     use strum::IntoEnumIterator;
+    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
     #[test]
     fn test_serialize_into() {
@@ -161,30 +162,30 @@ mod tests {
             .with_refractive_index_eta(expected_refractive_index)
             .with_class(expected_class);
 
-        let buffer_initial_filler = -1.0;
-
-        let mut container = vec![buffer_initial_filler; Material::SERIALIZED_SIZE_FLOATS + 1];
+        let mut container = GpuReadySerializationBuffer::new(1, Material::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
-        assert_eq!(container[0], expected_albedo.red);
-        assert_eq!(container[1], expected_albedo.green);
-        assert_eq!(container[2], expected_albedo.blue);
-        assert_eq!(container[3], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+        let serialized: &[f32] = cast_slice(&container.backend());
 
-        assert_eq!(container[4], expected_specular.red);
-        assert_eq!(container[5], expected_specular.green);
-        assert_eq!(container[6], expected_specular.blue);
-        assert_eq!(container[7], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+        assert_eq!(serialized[ 0], expected_albedo.red);
+        assert_eq!(serialized[ 1], expected_albedo.green);
+        assert_eq!(serialized[ 2], expected_albedo.blue);
+        assert_eq!(serialized[ 3], DEFAULT_PAD_VALUE);
 
-        assert_eq!(container[8],  expected_emission.red);
-        assert_eq!(container[9],  expected_emission.green);
-        assert_eq!(container[10], expected_emission.blue);
-        assert_eq!(container[11], expected_specular_strength as f32);
+        assert_eq!(serialized[ 4], expected_specular.red);
+        assert_eq!(serialized[ 5], expected_specular.green);
+        assert_eq!(serialized[ 6], expected_specular.blue);
+        assert_eq!(serialized[ 7], DEFAULT_PAD_VALUE);
 
-        assert_eq!(container[12], expected_roughness as f32);
-        assert_eq!(container[13], expected_refractive_index as f32);
-        assert_eq!(container[14], expected_class.as_f64() as f32);
-        assert_eq!(container[15], <[f32] as GpuFloatBufferFiller>::PAD_VALUE);
+        assert_eq!(serialized[ 8],  expected_emission.red);
+        assert_eq!(serialized[ 9],  expected_emission.green);
+        assert_eq!(serialized[10], expected_emission.blue);
+        assert_eq!(serialized[11], expected_specular_strength as f32);
+
+        assert_eq!(serialized[12], expected_roughness as f32);
+        assert_eq!(serialized[13], expected_refractive_index as f32);
+        assert_eq!(serialized[14], expected_class.as_f64() as f32);
+        assert_eq!(serialized[15], DEFAULT_PAD_VALUE);
     }
 
     #[test]
