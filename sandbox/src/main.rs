@@ -1,27 +1,28 @@
 //#![deny(warnings)] TODO: switch on, when ready
 
+use cgmath::Deg;
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
-use cgmath::Deg;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event_loop::ControlFlow;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::Window;
 use winit::window::WindowId;
-use winit::event_loop::ControlFlow;
 
-use log::{trace, warn};
-use log::info;
-use log::error;
-use winit::keyboard::{Key, NamedKey};
-use library::Engine;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
-use library::scene::camera::{Camera, PerspectiveCamera, OrthographicCamera};
+use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
 use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
+use library::Engine;
+use log::error;
+use log::info;
+use log::trace;
+use log::warn;
+use winit::keyboard::{Key, NamedKey};
 
 const WINDOW_TITLE: &str = "Rust Tracer Sandbox";
 

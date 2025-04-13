@@ -16,14 +16,17 @@ const STACK_SIZE = 20;
 const MAX_SDF_RAY_MARCH_STEPS = 20;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
-@group(0) @binding( 1) var<storage, read> sphere_objs: array<Sphere>;
-@group(0) @binding( 2) var<storage, read> quad_objs: array<Quad>;
-@group(0) @binding( 3) var<storage, read_write> framebuffer: array<vec4f>;
-@group(0) @binding( 4) var<storage, read> sdf: array<SdfBox>;
-@group(0) @binding( 5) var<storage, read> triangles: array<Triangle>;
-@group(0) @binding( 6) var<storage, read> meshes: array<Mesh>;
-@group(0) @binding( 7) var<storage, read> materials: array<Material>;
-@group(0) @binding( 8) var<storage, read> bvh: array<AABB>;
+
+@group(1) @binding( 0) var<storage, read_write> pixel_color_buffer: array<vec4f>;
+@group(1) @binding( 1) var<storage, read_write> object_id_buffer: array<u32>;
+
+@group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
+@group(2) @binding( 1) var<storage, read> quad_objs: array<Quad>;
+@group(2) @binding( 2) var<storage, read> sdf: array<SdfBox>;
+@group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
+@group(2) @binding( 4) var<storage, read> meshes: array<Mesh>;
+@group(2) @binding( 5) var<storage, read> materials: array<Material>;
+@group(2) @binding( 6) var<storage, read> bvh: array<AABB>;
 
 var<private> NUM_SPHERES : i32;
 var<private> NUM_QUADS : i32;
@@ -41,6 +44,11 @@ var<private> lights : Quad;
 var<private> ray_tmin : f32 = 0.000001;
 var<private> ray_tmax : f32 = MAX_FLOAT;
 var<private> stack : array<i32, STACK_SIZE>;
+
+struct TracedPath {
+    color: vec3f,
+    object_id: u32,
+}
 
 struct Uniforms {
 	screenDims : vec2f,
@@ -75,7 +83,7 @@ struct Sphere {
 	r : f32,
 	global_id : f32,
 	local_id : f32,
-	material_id : f32
+	material_id : f32,
 }
 
 struct Quad {
@@ -493,15 +501,15 @@ fn aces_approx(v : vec3f) -> vec3f
 	randState = pixelIndex + u32(uniforms.frameNum) * 719393;
 
 	get_lights();
-	var pathTracedColor = pathTrace();
-	var fragColor = pathTracedColor.xyz;
 
-	if(uniforms.resetBuffer == 0)
-	{
-		fragColor = framebuffer[pixelIndex].xyz + pathTracedColor;
+	var traced_path = pathTrace();
+
+	if(uniforms.resetBuffer == 0) {
+		pixel_color_buffer[pixelIndex] = vec4f(pixel_color_buffer[pixelIndex].xyz + traced_path.color, 1.0);
+	} else {
+	    pixel_color_buffer[pixelIndex] = vec4f(traced_path.color, 1.0);
+	    object_id_buffer[pixelIndex] = traced_path.object_id;
 	}
-
-	framebuffer[pixelIndex] = vec4f(fragColor.xyz, 1.0);
 }
 
 /// shootRay
@@ -510,7 +518,7 @@ fn aces_approx(v : vec3f) -> vec3f
 //		x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
 //		y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
 
-fn pathTrace() -> vec3f {
+fn pathTrace() -> TracedPath {
 
 	var pixColor = vec3f(0, 0, 0);
 
@@ -553,7 +561,7 @@ fn pathTrace() -> vec3f {
 		pixColor /= NUM_SAMPLES;
 	}
 
-	return pixColor;
+	return TracedPath(pixColor, 0);
 }
 
 var<private> fovFactor : f32;
@@ -1111,14 +1119,14 @@ fn get2Dfrom1D(pos: vec2f) -> u32 {
 
 @fragment fn fs(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
     let i = get2Dfrom1D(fragCoord.xy);
-    var color = framebuffer[i].xyz / uniforms.frameNum;
+    var color = pixel_color_buffer[i].xyz / uniforms.frameNum;
 
     color = aces_approx(color.xyz);
     color = pow(color.xyz, vec3f(1/2.2));
 
     if(uniforms.resetBuffer == 1)
     {
-        framebuffer[i] = vec4f(0);
+        pixel_color_buffer[i] = vec4f(0);
     }
 
     return vec4f(color, 1);

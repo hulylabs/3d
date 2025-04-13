@@ -3,6 +3,7 @@ use std::rc::Rc;
 use thiserror::Error;
 use wgpu::util::DeviceExt;
 use wgpu::{BufferAddress, BufferUsages};
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 
 // TODO: work in progress
 
@@ -69,10 +70,18 @@ impl Resources {
         self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_DST, buffer_data)
     }
 
-    pub(super) fn create_frame_buffer(&self, width: u32, height: u32) -> wgpu::Buffer {
-        let size_bytes = (width * height) as usize * FRAMEBUFFER_CHANNELS_COUNT * size_of::<f32>();
+    pub(super) fn create_object_id_buffer(&self, frame_buffer_size: FrameBufferSize) -> wgpu::Buffer {
+        self.create_g_buffer_layer(Some("object id buffer"), frame_buffer_size, size_of::<u32>())
+    }
+
+    pub(super) fn create_pixel_color_buffer(&self, frame_buffer_size: FrameBufferSize) -> wgpu::Buffer {
+        self.create_g_buffer_layer(Some("pixel colors buffer"), frame_buffer_size, size_of::<f32>())
+    }
+
+    fn create_g_buffer_layer(&self, label: Option<&str>, frame_buffer_size: FrameBufferSize, pixel_size_bytes: usize) -> wgpu::Buffer {
+        let size_bytes = frame_buffer_size.area() as usize * FRAMEBUFFER_CHANNELS_COUNT * pixel_size_bytes;
         self.context.device().create_buffer(&wgpu::BufferDescriptor {
-            label: Some("frame buffer"),
+            label,
             usage: BufferUsages::STORAGE,
             size: size_bytes as BufferAddress,
             mapped_at_creation: false,

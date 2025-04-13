@@ -1,6 +1,10 @@
 ﻿use super::resources::Resources;
 use crate::bvh::node::BvhNode;
+use crate::gpu::bind_group_builder::BindGroupBuilder;
+use crate::gpu::compute_pipeline::ComputePipeline;
 use crate::gpu::context::Context;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::rasterization_pipeline::RasterizationPipeline;
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfBox;
@@ -13,38 +17,33 @@ use crate::serialization::filler::{floats_count, GpuFloatBufferFiller};
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
-use wgpu::{BindGroup, RenderPipeline, StoreOp};
+use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
 
 // TODO: work in progress: the whole file will be rewritten
 
-pub struct Renderer {
+pub(crate) struct Renderer {
     context: Rc<Context>,
     resources: Resources,
     buffers: Buffers,
     uniforms: Uniforms,
-    pipeline_compute: wgpu::ComputePipeline,
-    pipeline_rasterization: RenderPipeline,
-    bind_group_compute: BindGroup,
-    bind_group_rasterization: BindGroup,
+    pipeline_compute: ComputePipeline,
+    pipeline_rasterization: RasterizationPipeline,
     shader_module: wgpu::ShaderModule,
     scene: Container,
 }
 
 impl Renderer {
-    pub fn new(
+    pub(crate) fn new(
         context: Rc<Context>,
         scene_container: Container,
         camera: Camera,
         presentation_format: wgpu::TextureFormat,
-        out_frame_width: u32,
-        out_frame_height: u32)
+        frame_buffer_size: FrameBufferSize,
+    )
     -> anyhow::Result<Self> {
-        assert!(out_frame_width > 0);
-        assert!(out_frame_height > 0);
         let uniforms = Uniforms {
-            out_frame_width,
-            out_frame_height,
+            frame_buffer_size,
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
@@ -54,7 +53,7 @@ impl Renderer {
 
         let resources = Resources::new(context.clone(), presentation_format);
         let shader_module = resources.create_shader_module("tracer shader", CODE_FOR_GPU)?;
-        let buffers = Self::init_buffers(&mut scene, &uniforms, &resources, out_frame_width, out_frame_height);
+        let buffers = Self::init_buffers(&mut scene, &uniforms, &resources, uniforms.frame_buffer_size);
         let compute = Self::create_compute_pipeline(&context, &resources, &buffers, &shader_module);
         let rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
 
@@ -63,10 +62,8 @@ impl Renderer {
             resources,
             buffers,
             uniforms,
-            pipeline_compute: compute.0,
-            pipeline_rasterization: rasterization.0,
-            bind_group_compute: compute.1,
-            bind_group_rasterization: rasterization.1,
+            pipeline_compute: compute,
+            pipeline_rasterization: rasterization,
             shader_module,
             scene,
         })
@@ -78,10 +75,7 @@ impl Renderer {
         buffer
     }
 
-    fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_width: u32, frame_buffer_height: u32) -> Buffers {
-        assert!(frame_buffer_width > 0);
-        assert!(frame_buffer_height > 0);
-
+    fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
         let empty_meshes_marker: Vec<f32> = vec![-1.0_f32; TriangleMesh::SERIALIZED_SIZE_FLOATS];
         let empty_triangles_marker: Vec<f32> = vec![-1.0_f32; Triangle::SERIALIZED_SIZE_FLOATS];
         let empty_bvh_marker: Vec<f32> = vec![-1.0_f32; BvhNode::SERIALIZED_SIZE_FLOATS];
@@ -111,109 +105,112 @@ impl Renderer {
 
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", cast_slice(&Self::serialize_uniforms(uniforms))),
+
+            pixel_color_buffer: resources.create_pixel_color_buffer(frame_buffer_size),
+            object_id_buffer: resources.create_object_id_buffer(frame_buffer_size),
+
             spheres: resources.create_storage_buffer_write_only("spheres", cast_slice(&spheres)),
-            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
             parallelograms: resources.create_storage_buffer_write_only("parallelograms", cast_slice(&parallelograms)),
+            sdf: resources.create_storage_buffer_write_only("sdf", cast_slice(&sdf)),
+
+            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(triangles)),
+            meshes: resources.create_storage_buffer_write_only("meshes meta data", cast_slice(meshes)),
             materials: resources.create_storage_buffer_write_only("materials", cast_slice(&materials)),
             bvh: resources.create_storage_buffer_write_only("bvh", cast_slice(bvh)),
-            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", cast_slice(triangles)),
-            sdf: resources.create_storage_buffer_write_only("sdf", cast_slice(&sdf)),
-            frame_buffer: resources.create_frame_buffer(frame_buffer_width, frame_buffer_height),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
     }
 
-    fn create_compute_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> (wgpu::ComputePipeline, BindGroup) {
-        let compute_pipeline = resources.create_compute_pipeline(module);
+    const FRAME_BUFFERS_GROUP_INDEX: u32 = 1;
 
-        let bind_group_compute = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("compute pipeline bind group"),
-            layout: &compute_pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.uniforms.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.spheres.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: buffers.parallelograms.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: buffers.frame_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: buffers.sdf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: buffers.triangles.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: buffers.meshes.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: buffers.materials.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
-                    resource: buffers.bvh.as_entire_binding(),
-                },
-            ],
-        });
+    fn create_compute_pipeline<'a>(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
+        let mut compute_pipeline = ComputePipeline::new(resources.create_compute_pipeline(module));
 
-        (compute_pipeline, bind_group_compute)
+        let uniforms_group_index =  0;
+        let bind_group_layout = compute_pipeline.bind_group_layout(uniforms_group_index);
+        let mut bind_group_builder = BindGroupBuilder::new(uniforms_group_index, Some("compute pipeline uniform group"), bind_group_layout);
+            bind_group_builder
+                .add_entry(0, &buffers.uniforms)
+            ;
+        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+
+        Self::create_frame_buffers_bindings_for_compute(context, buffers, &mut compute_pipeline);
+
+        let scene_group_index =  2;
+        let bind_group_layout = compute_pipeline.bind_group_layout(scene_group_index);
+        let mut bind_group_builder = BindGroupBuilder::new(scene_group_index, Some("compute pipeline scene group"), bind_group_layout);
+            bind_group_builder
+                .add_entry(0, &buffers.spheres)
+                .add_entry(1, &buffers.parallelograms)
+                .add_entry(2, &buffers.sdf)
+                .add_entry(3, &buffers.triangles)
+                .add_entry(4, &buffers.meshes)
+                .add_entry(5, &buffers.materials)
+                .add_entry(6, &buffers.bvh)
+            ;
+        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+
+        compute_pipeline
     }
 
-    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> (RenderPipeline, BindGroup) {
-        let rasterization_pipeline = resources.create_rasterization_pipeline(module);
+    fn create_frame_buffers_bindings_for_compute(context: &Context, buffers: &Buffers, compute_pipeline: &mut ComputePipeline) {
+        let label = Some("compute pipeline frame buffers group");
 
-        let bind_group = context.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("rasterization pipeline bind group"),
-            layout: &rasterization_pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.uniforms.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: buffers.frame_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let bind_group_layout = compute_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
+        let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
 
-        (rasterization_pipeline, bind_group)
+        bind_group_builder
+            .add_entry(0, &buffers.pixel_color_buffer)
+            .add_entry(1, &buffers.object_id_buffer)
+        ;
+
+        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+    }
+
+    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> RasterizationPipeline {
+        let mut rasterization_pipeline = RasterizationPipeline::new(resources.create_rasterization_pipeline(module));
+
+        let uniforms_binding_index=  0;
+        let bind_group_layout = rasterization_pipeline.bind_group_layout(uniforms_binding_index);
+        let mut bind_group_builder = BindGroupBuilder::new(uniforms_binding_index, Some("rasterization pipeline uniform group"), bind_group_layout);
+        bind_group_builder
+            .add_entry(0, &buffers.uniforms)
+        ;
+        rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
+
+        Self::create_frame_buffers_bindings_for_rasterization(context, buffers, &mut rasterization_pipeline);
+
+        rasterization_pipeline
+    }
+
+    fn create_frame_buffers_bindings_for_rasterization(context: &Context, buffers: &Buffers, rasterization_pipeline: &mut RasterizationPipeline) {
+        let label = Some("rasterization pipeline frame buffers group");
+
+        let bind_group_layout = rasterization_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
+
+        let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
+        bind_group_builder
+            .add_entry(0, &buffers.pixel_color_buffer)
+        ;
+
+        rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
     }
 
     pub(crate) fn set_output_size(&mut self, new_size: PhysicalSize<u32>) {
-        let previous_frame_size = self.uniforms.frame_size();
+        let previous_frame_size = self.uniforms.frame_buffer_area();
         self.uniforms.set_frame_size(new_size);
-        let new_frame_size = self.uniforms.frame_size();
+        let new_frame_size = self.uniforms.frame_buffer_area();
 
         if previous_frame_size < new_frame_size {
-            let frame_buffer = self.resources.create_frame_buffer(self.uniforms.out_frame_width, self.uniforms.out_frame_height);
+            self.buffers.pixel_color_buffer = self.resources.create_pixel_color_buffer(self.uniforms.frame_buffer_size);
+            self.buffers.object_id_buffer = self.resources.create_object_id_buffer(self.uniforms.frame_buffer_size);
 
-            self.buffers.frame_buffer = frame_buffer;
-
-            let compute = Self::create_compute_pipeline(&self.context, &self.resources, &self.buffers, &self.shader_module);
-            let rasterization = Self::create_rasterization_pipeline(&self.context, &self.resources, &self.buffers, &self.shader_module);
-
-            self.pipeline_compute = compute.0;
-            self.pipeline_rasterization = rasterization.0;
-            self.bind_group_compute = compute.1;
-            self.bind_group_rasterization = rasterization.1;
+            Self::create_frame_buffers_bindings_for_compute(&self.context, &self.buffers, &mut self.pipeline_compute);
+            Self::create_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_rasterization);
         }
     }
 
-    pub fn execute(&mut self, surface_texture: &wgpu::SurfaceTexture)  {
+    pub(crate) fn execute(&mut self, surface_texture: &wgpu::SurfaceTexture)  {
         {
             self.uniforms.next_frame();
 
@@ -229,8 +226,8 @@ impl Renderer {
             self.uniforms.drop_reset_flag();
         }
 
-        let work_groups_needed = (self.uniforms.out_frame_width * self.uniforms.out_frame_height) / 64; // TODO: 64?
-        self.compute_pass(&self.pipeline_compute, &self.bind_group_compute, work_groups_needed);
+        let work_groups_needed = self.uniforms.frame_buffer_size.area() / 64; // TODO: 64?
+        self.compute_pass(&self.pipeline_compute, work_groups_needed);
 
         let view = &surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass_descriptor = wgpu::RenderPassDescriptor {
@@ -248,10 +245,10 @@ impl Renderer {
             timestamp_writes: None,
         };
 
-        self.rasterization_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.bind_group_rasterization, &self.buffers.vertex);
+        self.rasterization_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.buffers.vertex);
     }
 
-    fn compute_pass(&self, compute_pipeline: &wgpu::ComputePipeline, bind_group_compute: &BindGroup, work_groups_needed: u32) {
+    fn compute_pass(&self, compute_pipeline: &ComputePipeline, work_groups_needed: u32) {
         let mut encoder = self.create_command_encoder("compute pass encoder");
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
@@ -260,20 +257,18 @@ impl Renderer {
                 timestamp_writes: None, // TODO: what can be used for?
             });
 
-            pass.set_pipeline(compute_pipeline);
-            pass.set_bind_group(0, bind_group_compute, &[]);
+            compute_pipeline.set_into_pass(&mut pass);
             pass.dispatch_workgroups(work_groups_needed, 1, 1);
         }
         let command_buffer = encoder.finish();
         self.context.queue().submit(Some(command_buffer));
     }
 
-    fn rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RenderPipeline, bind_group: &BindGroup, vertex_buffer: &wgpu::Buffer) {
+    fn rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline, vertex_buffer: &wgpu::Buffer) {
         let mut encoder = self.create_command_encoder("rasterization pass encoder");
         {
             let mut rasterization_pass = encoder.begin_render_pass(rasterization_pass_descriptor);
-            rasterization_pass.set_pipeline(rasterization_pipeline);
-            rasterization_pass.set_bind_group(0, bind_group, &[]);
+            rasterization_pipeline.set_into_pass(&mut rasterization_pass);
             rasterization_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             rasterization_pass.draw(0..6, 0..1);
         }
@@ -295,20 +290,22 @@ pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.
 
 struct Buffers {
     uniforms: wgpu::Buffer,
+
+    pixel_color_buffer: wgpu::Buffer,
+    object_id_buffer: wgpu::Buffer,
+
     spheres: wgpu::Buffer,
-    meshes: wgpu::Buffer,
     parallelograms: wgpu::Buffer,
+    sdf: wgpu::Buffer,
+    triangles: wgpu::Buffer,
+    meshes: wgpu::Buffer,
     materials: wgpu::Buffer,
     bvh: wgpu::Buffer,
-    triangles: wgpu::Buffer,
-    sdf: wgpu::Buffer,
-    frame_buffer: wgpu::Buffer,
     vertex: wgpu::Buffer,
 }
 
 struct Uniforms {
-    out_frame_width: u32,
-    out_frame_height: u32,
+    frame_buffer_size: FrameBufferSize,
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
@@ -325,8 +322,7 @@ impl Uniforms {
     }
 
     fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
-        self.out_frame_width = new_size.width;
-        self.out_frame_height = new_size.height;
+        self.frame_buffer_size = FrameBufferSize::new(new_size.width, new_size.height);
         self.reset_frame_accumulation();
     }
 
@@ -335,8 +331,8 @@ impl Uniforms {
     }
 
     #[must_use]
-    fn frame_size(&self) -> u32 {
-        self.out_frame_width * self.out_frame_height
+    fn frame_buffer_area(&self) -> u32 {
+        self.frame_buffer_size.area()
     }
 
     const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
@@ -349,8 +345,8 @@ impl SerializableForGpu for Uniforms {
         assert!(container.len() >= Uniforms::SERIALIZED_SIZE_FLOATS, "buffer size is too small");
 
         let mut index = 0;
-        container.write_and_move_next(self.out_frame_width as f64, &mut index);
-        container.write_and_move_next(self.out_frame_height as f64, &mut index);
+        container.write_and_move_next(self.frame_buffer_size.width() as f64, &mut index);
+        container.write_and_move_next(self.frame_buffer_size.height() as f64, &mut index);
         container.write_and_move_next(self.frame_number as f64, &mut index);
         container.write_and_move_next(if self.if_reset_framebuffer { 1.0 } else { 0.0 }, &mut index);
 

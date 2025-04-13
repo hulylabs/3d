@@ -7,6 +7,7 @@ pub mod scene;
 mod serialization;
 mod bvh;
 
+use std::cmp::max;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use winit::window::Window;
 use log::info;
 use thiserror::Error;
 use crate::gpu::context::Context;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::Renderer;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
@@ -109,7 +111,8 @@ impl Engine {
         let context = Rc::new(Context::new(graphics_device, commands_queue));
         let output_surface_format = surface_capabilities.formats[0];
 
-        let renderer = Renderer::new(context.clone(), scene, camera, output_surface_format, window_pixels_size.width, window_pixels_size.height)
+        let frame_buffer_size = FrameBufferSize::new(max(1, window_pixels_size.width), max(1, window_pixels_size.height));
+        let renderer = Renderer::new(context.clone(), scene, camera, output_surface_format, frame_buffer_size)
             .map_err(|e| EngineInstantiationError::InternalError {what: e.to_string()})?;
 
         let ware = Engine {

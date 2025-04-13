@@ -146,8 +146,9 @@ impl Camera {
         let horizontal_rotation = Affine::from_angle_y(self.horizontal_rotation);
         let vertical_rotation = Affine::from_angle_x(self.vertical_rotation);
 
-        let eye = Point::new(self.xy_plane_eye_offset.x, self.xy_plane_eye_offset.y, self.eye_rod_length);
+        let eye = Point::new(0.0, 0.0, self.eye_rod_length);
         let eye = (horizontal_rotation * vertical_rotation).transform_point(eye);
+        let eye = eye + Vector::new(self.xy_plane_eye_offset.x, self.xy_plane_eye_offset.y, 0.0);
 
         let up = Vector::new(0.0, 1.0, 0.0);
         let up = vertical_rotation.transform_vector(up);
