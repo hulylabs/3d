@@ -27,8 +27,8 @@ pub(crate) struct Renderer {
     resources: Resources,
     buffers: Buffers,
     uniforms: Uniforms,
-    pipeline_compute: ComputePipeline,
-    pipeline_rasterization: RasterizationPipeline,
+    pipeline_ray_tracing: ComputePipeline,
+    pipeline_final_image_rasterization: RasterizationPipeline,
 }
 
 impl Renderer {
@@ -52,16 +52,16 @@ impl Renderer {
         let resources = Resources::new(context.clone(), presentation_format);
         let shader_module = resources.create_shader_module("tracer shader", CODE_FOR_GPU)?;
         let buffers = Self::init_buffers(&mut scene, &uniforms, &resources, uniforms.frame_buffer_size);
-        let compute = Self::create_compute_pipeline(&context, &resources, &buffers, &shader_module);
-        let rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
+        let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module);
+        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
 
         Ok(Self {
             context,
             resources,
             buffers,
             uniforms,
-            pipeline_compute: compute,
-            pipeline_rasterization: rasterization,
+            pipeline_ray_tracing: ray_tracing,
+            pipeline_final_image_rasterization: final_image_rasterization,
         })
     }
 
@@ -113,50 +113,48 @@ impl Renderer {
         }
     }
 
+    const UNIFORMS_GROUP_INDEX: u32 = 0;
     const FRAME_BUFFERS_GROUP_INDEX: u32 = 1;
+    const SCENE_GROUP_INDEX: u32 = 2;
 
-    fn create_compute_pipeline<'a>(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
-        let mut compute_pipeline = ComputePipeline::new(resources.create_compute_pipeline(module));
+    fn create_ray_tracing_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
+        let mut ray_tracing_pipeline = ComputePipeline::new(resources.create_ray_tracing_pipeline(module));
 
-        let uniforms_group_index =  0;
-        let bind_group_layout = compute_pipeline.bind_group_layout(uniforms_group_index);
-        let mut bind_group_builder = BindGroupBuilder::new(uniforms_group_index, Some("compute pipeline uniform group"), bind_group_layout);
-            bind_group_builder
-                .add_entry(0, &buffers.uniforms)
+        ray_tracing_pipeline.setup_bind_group(Self::UNIFORMS_GROUP_INDEX, Some("compute pipeline uniform group"), context.device(), |bind_group|
+        {
+            bind_group
+                .add_entry(0, buffers.uniforms.clone())
             ;
-        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+        });
 
-        Self::create_frame_buffers_bindings_for_compute(context, buffers, &mut compute_pipeline);
+        Self::create_frame_buffers_bindings_for_compute(context, buffers, &mut ray_tracing_pipeline);
 
-        let scene_group_index =  2;
-        let bind_group_layout = compute_pipeline.bind_group_layout(scene_group_index);
-        let mut bind_group_builder = BindGroupBuilder::new(scene_group_index, Some("compute pipeline scene group"), bind_group_layout);
-            bind_group_builder
-                .add_entry(0, &buffers.spheres)
-                .add_entry(1, &buffers.parallelograms)
-                .add_entry(2, &buffers.sdf)
-                .add_entry(3, &buffers.triangles)
-                .add_entry(4, &buffers.meshes)
-                .add_entry(5, &buffers.materials)
-                .add_entry(6, &buffers.bvh)
+        ray_tracing_pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), context.device(), |bind_group|
+        {
+            bind_group
+                .add_entry(0, buffers.spheres.clone())
+                .add_entry(1, buffers.parallelograms.clone())
+                .add_entry(2, buffers.sdf.clone())
+                .add_entry(3, buffers.triangles.clone())
+                .add_entry(4, buffers.meshes.clone())
+                .add_entry(5, buffers.materials.clone())
+                .add_entry(6, buffers.bvh.clone())
             ;
-        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+        });
 
-        compute_pipeline
+        ray_tracing_pipeline
     }
 
     fn create_frame_buffers_bindings_for_compute(context: &Context, buffers: &Buffers, compute_pipeline: &mut ComputePipeline) {
         let label = Some("compute pipeline frame buffers group");
 
-        let bind_group_layout = compute_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
-        let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
-
-        bind_group_builder
-            .add_entry(0, &buffers.pixel_color_buffer)
-            .add_entry(1, &buffers.object_id_buffer)
-        ;
-
-        compute_pipeline.commit_bind_group(context.device(), bind_group_builder);
+        compute_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, context.device(), |bind_group_builder|
+        {
+            bind_group_builder
+                .add_entry(0, buffers.pixel_color_buffer.clone())
+                //.add_entry(1, buffers.object_id_buffer.clone())
+            ;
+        });
     }
 
     fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> RasterizationPipeline {
@@ -166,7 +164,7 @@ impl Renderer {
         let bind_group_layout = rasterization_pipeline.bind_group_layout(uniforms_binding_index);
         let mut bind_group_builder = BindGroupBuilder::new(uniforms_binding_index, Some("rasterization pipeline uniform group"), bind_group_layout);
         bind_group_builder
-            .add_entry(0, &buffers.uniforms)
+            .add_entry(0, buffers.uniforms.clone())
         ;
         rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
 
@@ -182,7 +180,7 @@ impl Renderer {
 
         let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
         bind_group_builder
-            .add_entry(0, &buffers.pixel_color_buffer)
+            .add_entry(0, buffers.pixel_color_buffer.clone())
         ;
 
         rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
@@ -197,8 +195,8 @@ impl Renderer {
             self.buffers.pixel_color_buffer = self.resources.create_pixel_color_buffer(self.uniforms.frame_buffer_size);
             self.buffers.object_id_buffer = self.resources.create_object_id_buffer(self.uniforms.frame_buffer_size);
 
-            Self::create_frame_buffers_bindings_for_compute(&self.context, &self.buffers, &mut self.pipeline_compute);
-            Self::create_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_rasterization);
+            Self::create_frame_buffers_bindings_for_compute(&self.context, &self.buffers, &mut self.pipeline_ray_tracing);
+            Self::create_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
         }
     }
 
@@ -219,7 +217,7 @@ impl Renderer {
         }
 
         let work_groups_needed = self.uniforms.frame_buffer_size.area() / 64; // TODO: 64?
-        self.compute_pass(&self.pipeline_compute, work_groups_needed);
+        self.ray_tracing_pass(&self.pipeline_ray_tracing, work_groups_needed);
 
         let view = &surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut render_pass_descriptor = wgpu::RenderPassDescriptor {
@@ -228,7 +226,7 @@ impl Renderer {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load, // no need to clear as we will fill entire buffer during render
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0, }),
                     store: StoreOp::Store,
                 },
             })],
@@ -237,10 +235,10 @@ impl Renderer {
             timestamp_writes: None,
         };
 
-        self.rasterization_pass(&mut render_pass_descriptor, &self.pipeline_rasterization, &self.buffers.vertex);
+        self.final_iamge_rasterization_pass(&mut render_pass_descriptor, &self.pipeline_final_image_rasterization, &self.buffers.vertex);
     }
 
-    fn compute_pass(&self, compute_pipeline: &ComputePipeline, work_groups_needed: u32) {
+    fn ray_tracing_pass(&self, compute_pipeline: &ComputePipeline, work_groups_needed: u32) {
         let mut encoder = self.create_command_encoder("compute pass encoder");
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor
@@ -256,7 +254,7 @@ impl Renderer {
         self.context.queue().submit(Some(command_buffer));
     }
 
-    fn rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline, vertex_buffer: &wgpu::Buffer) {
+    fn final_iamge_rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline, vertex_buffer: &wgpu::Buffer) {
         let mut encoder = self.create_command_encoder("rasterization pass encoder");
         {
             let mut rasterization_pass = encoder.begin_render_pass(rasterization_pass_descriptor);
@@ -281,19 +279,19 @@ impl Renderer {
 pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
 
 struct Buffers {
-    uniforms: wgpu::Buffer,
+    uniforms: Rc<wgpu::Buffer>,
 
-    pixel_color_buffer: wgpu::Buffer,
-    object_id_buffer: wgpu::Buffer,
+    pixel_color_buffer: Rc<wgpu::Buffer>,
+    object_id_buffer: Rc<wgpu::Buffer>,
 
-    spheres: wgpu::Buffer,
-    parallelograms: wgpu::Buffer,
-    sdf: wgpu::Buffer,
-    triangles: wgpu::Buffer,
-    meshes: wgpu::Buffer,
-    materials: wgpu::Buffer,
-    bvh: wgpu::Buffer,
-    vertex: wgpu::Buffer,
+    spheres: Rc<wgpu::Buffer>,
+    parallelograms: Rc<wgpu::Buffer>,
+    sdf: Rc<wgpu::Buffer>,
+    triangles: Rc<wgpu::Buffer>,
+    meshes: Rc<wgpu::Buffer>,
+    materials: Rc<wgpu::Buffer>,
+    bvh: Rc<wgpu::Buffer>,
+    vertex: Rc<wgpu::Buffer>,
 }
 
 struct Uniforms {

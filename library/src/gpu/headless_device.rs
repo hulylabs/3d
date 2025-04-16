@@ -1,5 +1,6 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
+    use wgpu::Trace;
     use crate::gpu::context::Context;
 
     const HEADLESS_DEVICE_LABEL: &str = "Rust Tracer Library Headless Device";
@@ -27,8 +28,8 @@ pub(crate) mod tests {
                     required_features: wgpu::Features::default(),
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::default(),
+                    trace: Trace::Off,
                 },
-                None,
             )
             .await
             .expect("failed to create device");

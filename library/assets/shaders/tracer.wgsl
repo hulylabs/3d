@@ -9,8 +9,8 @@ const GLASS = 2.0;
 const ISOTROPIC = 3.0;
 const ANISOTROPIC = 4.0;
 const NUM_SAMPLES = 1.0;
-const MAX_BOUNCES = 100;
-const STRATIFY = false;
+const MAX_BOUNCES = 30;
+const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
 const MAX_SDF_RAY_MARCH_STEPS = 20;
@@ -45,11 +45,6 @@ var<private> ray_tmin : f32 = 0.000001;
 var<private> ray_tmax : f32 = MAX_FLOAT;
 var<private> stack : array<i32, STACK_SIZE>;
 
-struct TracedPath {
-    color: vec3f,
-    object_id: u32,
-}
-
 struct Uniforms {
 	screenDims : vec2f,
 	frameNum : f32,
@@ -71,11 +66,6 @@ struct Material {
 	roughness : f32,		// diffuse strength
 	eta : f32,				// refractive index
 	material_type : f32,
-}
-
-struct modelTransform {
-	modelMatrix : mat4x4f,
-	invModelMatrix : mat4x4f
 }
 
 struct Sphere {
@@ -466,50 +456,90 @@ fn aces_approx(v : vec3f) -> vec3f
 
 /// main
 
-@compute @workgroup_size(64, 1, 1) fn computeFrameBuffer(@builtin(workgroup_id) workgroup_id : vec3<u32>, @builtin(local_invocation_id) local_invocation_id : vec3<u32>, @builtin(local_invocation_index) local_invocation_index: u32, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
-
-	let workgroup_index = workgroup_id.x + workgroup_id.y * num_workgroups.x + workgroup_id.z * num_workgroups.x * num_workgroups.y;
-	let pixelIndex = workgroup_index * 64 + local_invocation_index;		// global invocation index
-	pixelCoords = vec3f(f32(pixelIndex) % uniforms.screenDims.x, f32(pixelIndex) / uniforms.screenDims.x, 1);
-
-	fovFactor = 1 / tan(60 * (PI / 180) / 2);
-	cam_origin = (uniforms.viewMatrix * vec4f(0, 0, 0, 1)).xyz;
-
+fn setup_buffers_length() {
     NUM_SDF = i32(arrayLength(&sdf));
     if (sdf[0].material_id < 0.0) {
         NUM_SDF = 0;
     }
 
-	NUM_SPHERES = i32(arrayLength(&sphere_objs));
-	if (sphere_objs[0].r < 0.0) { // in WGPU there is no way to bind an ampty buffer, so we use a marker objects to indicate the situation
-	    NUM_SPHERES = 0;
-	}
+    NUM_SPHERES = i32(arrayLength(&sphere_objs));
+    if (sphere_objs[0].r < 0.0) { // in WGPU there is no way to bind an ampty buffer, so we use a marker objects to indicate the situation
+        NUM_SPHERES = 0;
+    }
 
-	NUM_QUADS = i32(arrayLength(&quad_objs));
-	if (quad_objs[0].material_id < 0.0) {
-	    NUM_QUADS = 0;
-	}
+    NUM_QUADS = i32(arrayLength(&quad_objs));
+    if (quad_objs[0].material_id < 0.0) {
+        NUM_QUADS = 0;
+    }
 
-	NUM_MESHES = i32(arrayLength(&meshes));
-	NUM_TRIANGLES = i32(arrayLength(&triangles));
-	NUM_AABB = i32(arrayLength(&bvh));
+    NUM_MESHES = i32(arrayLength(&meshes));
+    NUM_TRIANGLES = i32(arrayLength(&triangles));
+    NUM_AABB = i32(arrayLength(&bvh));
     if (meshes[0].num_triangles < 0.0) {
         NUM_MESHES = 0;
         NUM_TRIANGLES = 0;
         NUM_AABB = 0;
     }
+}
+
+fn evaluate_pixel_index(
+    workgroup_id : vec3<u32>,
+    local_invocation_id : vec3<u32>,
+    local_invocation_index: u32,
+    num_workgroups: vec3<u32>) -> u32 {
+    let workgroup_index = workgroup_id.x + workgroup_id.y * num_workgroups.x + workgroup_id.z * num_workgroups.x * num_workgroups.y;
+	let pixelIndex = workgroup_index * 64 + local_invocation_index;
+    return pixelIndex;
+}
+
+fn setup_pixel_coordinates(pixel_index: u32) {
+    pixelCoords = vec3f(f32(pixel_index) % uniforms.screenDims.x, f32(pixel_index) / uniforms.screenDims.x, 1);
+}
+
+fn setup_camera() {
+    fovFactor = 1 / tan(60 * (PI / 180) / 2);
+	cam_origin = (uniforms.viewMatrix * vec4f(0, 0, 0, 1)).xyz;
+}
+
+@compute @workgroup_size(64, 1, 1) fn compute_object_id_buffer(
+    @builtin(workgroup_id) workgroup_id : vec3<u32>,
+    @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+    @builtin(local_invocation_index) local_invocation_index: u32,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+
+	let pixelIndex = evaluate_pixel_index(workgroup_id, local_invocation_id, local_invocation_index, num_workgroups);
+
+	setup_pixel_coordinates(pixelIndex);
+	setup_camera();
+    setup_buffers_length();
+
+    let ray = ray_to_pixel(0.0, 0.0);
+	let intersection_uid = trace_first_intersection(ray);
+    object_id_buffer[pixelIndex] = intersection_uid;
+}
+
+@compute @workgroup_size(64, 1, 1) fn compute_color_buffer(
+    @builtin(workgroup_id) workgroup_id : vec3<u32>,
+    @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
+    @builtin(local_invocation_index) local_invocation_index: u32,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+
+	let pixelIndex = evaluate_pixel_index(workgroup_id, local_invocation_id, local_invocation_index, num_workgroups);
+
+	setup_pixel_coordinates(pixelIndex);
+	setup_camera();
+    setup_buffers_length();
 
 	randState = pixelIndex + u32(uniforms.frameNum) * 719393;
 
 	get_lights();
 
-	var traced_path = pathTrace();
+	let traced_color = pathTrace();
 
 	if(uniforms.resetBuffer == 0) {
-		pixel_color_buffer[pixelIndex] = vec4f(pixel_color_buffer[pixelIndex].xyz + traced_path.color, 1.0);
+		pixel_color_buffer[pixelIndex] = vec4f(pixel_color_buffer[pixelIndex].xyz + traced_color, 1.0);
 	} else {
-	    pixel_color_buffer[pixelIndex] = vec4f(traced_path.color, 1.0);
-	    object_id_buffer[pixelIndex] = traced_path.object_id;
+	    pixel_color_buffer[pixelIndex] = vec4f(traced_color, 1.0);
 	}
 }
 
@@ -519,7 +549,14 @@ fn aces_approx(v : vec3f) -> vec3f
 //		x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
 //		y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
 
-fn pathTrace() -> TracedPath {
+fn ray_to_pixel(subPixelX: f32, subPixelY: f32) -> Ray {
+    return getCameraRay(
+        (uniforms.screenDims.x / uniforms.screenDims.y) * (2 * ((pixelCoords.x - 0.5 + subPixelX) / uniforms.screenDims.x) - 1),
+        -1 * (2 * ((pixelCoords.y - 0.5 + subPixelY) / uniforms.screenDims.y) - 1)
+        );
+}
+
+fn pathTrace() -> vec3f {
 
 	var pixColor = vec3f(0, 0, 0);
 
@@ -533,36 +570,101 @@ fn pathTrace() -> TracedPath {
 		{
 			for(var j = 0.0; j < sqrt_spp; j += 1.0)
 			{
-				let ray = getCameraRay(
-					(uniforms.screenDims.x / uniforms.screenDims.y) * (2 * ((pixelCoords.x - 0.5 + (recip_sqrt_spp * (i + rand2D()))) / uniforms.screenDims.x) - 1),
-					-1 * (2 * ((pixelCoords.y - 0.5 + (recip_sqrt_spp * (j + rand2D()))) / uniforms.screenDims.y) - 1)
-				);
-
+                let ray = ray_to_pixel(recip_sqrt_spp * (i + rand2D()), recip_sqrt_spp * (j + rand2D()));
 				pixColor += ray_color(ray);
-
 				numSamples += 1;
 			}
 		}
-
 		pixColor /= numSamples;
 	}
-
 	else
 	{
 		for(var i = 0; i < i32(NUM_SAMPLES); i += 1)
 		{
-			let ray = getCameraRay(
-				(uniforms.screenDims.x / uniforms.screenDims.y) * (2 * ((pixelCoords.x  - 0.5 + rand2D()) / uniforms.screenDims.x) - 1),
-				-1 * (2 * ((pixelCoords.y  - 0.5 + rand2D()) / uniforms.screenDims.y) - 1)
-			);
-
+		    let ray = ray_to_pixel(rand2D(), rand2D());
 			pixColor += ray_color(ray);
 		}
-
 		pixColor /= NUM_SAMPLES;
 	}
 
-	return TracedPath(pixColor, 0);
+	return pixColor;
+}
+
+fn trace_first_intersection(ray : Ray) -> u32 {
+    var closest_so_far = MAX_FLOAT;
+    var hit_id: u32 = 0;
+
+    for(var i = 0; i < NUM_SPHERES; i++){
+        if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray)){
+            hit_id = 1;
+            closest_so_far = hitRec.t;
+        }
+    }
+
+    for(var i = 0; i < NUM_QUADS; i++){
+        if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray)) {
+            hit_id = 2;
+            closest_so_far = hitRec.t;
+        }
+    }
+
+    for(var i = 0; i < NUM_SDF; i++){
+        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)){
+            hit_id = 3;
+            closest_so_far = hitRec.t;
+        }
+    }
+
+    const leafNode = 2;		// fix this hardcoding later
+    var invDir = 1 / ray.dir;
+    var toVisitOffset = 0;
+    var curNodeIdx = 0;
+    var node = bvh[curNodeIdx];
+
+    while(true) {
+        node = bvh[curNodeIdx];
+
+        if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir)) {
+            if(i32(node.prim_type) == leafNode) {
+                let startPrim = i32(node.prim_id);
+                let countPrim = i32(node.prim_count);
+                for(var j = 0; j < countPrim; j++) {
+                    if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray)) {
+                        hit_id = 4;
+                        closest_so_far = hitRec.t;
+                    }
+                }
+
+                if(toVisitOffset == 0){
+                    break;
+                }
+                toVisitOffset--;
+                curNodeIdx = stack[toVisitOffset];
+            } else {
+                if(ray.dir[i32(node.axis)] < 0) {
+                    stack[toVisitOffset] = curNodeIdx + 1;
+                    toVisitOffset++;
+                    curNodeIdx = i32(node.right_offset);
+                } else {
+                    stack[toVisitOffset] = i32(node.right_offset);
+                    toVisitOffset++;
+                    curNodeIdx++;
+                }
+            }
+        } else {
+            if(toVisitOffset == 0) {
+                break;
+            }
+
+            toVisitOffset--;
+            curNodeIdx = stack[toVisitOffset];
+        }
+
+        if(toVisitOffset >= STACK_SIZE) {
+            break;
+        }
+    }
+    return hit_id;
 }
 
 var<private> fovFactor : f32;
@@ -574,7 +676,7 @@ fn getCameraRay(s : f32, t : f32) -> Ray {
 	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0f);
 	let ray_origin_world_space = uniforms.viewRayOriginMatrix * pixel_world_space;
 
-	var ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
+	let ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
 
 	return ray;
 }

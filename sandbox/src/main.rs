@@ -156,7 +156,7 @@ impl ApplicationHandler for Application {
                     .with_roughness(0.95));
 
                 scene.add_sdf_box(
-                    &Affine::from_translation(Vector::new(0.7, 0.0, -0.7)),
+                    &Affine::from_translation(Vector::new(0.7, 0.2, -0.7)),
                     Vector::new(0.24, 0.1, 0.02),
                     0.03,
                     silver_material);

@@ -7,7 +7,7 @@ use crate::gpu::frame_buffer_size::FrameBufferSize;
 
 // TODO: work in progress
 
-const FRAMEBUFFER_CHANNELS_COUNT: usize = 4;
+const PIXELS_BUFFER_CHANNELS_COUNT: usize = 4;
 
 #[derive(Error, Debug)]
 pub(super) enum ShaderCreationError {
@@ -28,8 +28,15 @@ pub(super) struct Resources {
     presentation_format: wgpu::TextureFormat,
 }
 
-impl Resources {
+struct FrameBufferParameters<'a> {
+    label: Option<&'a str>,
+    frame_buffer_size: FrameBufferSize,
+    channel_size_bytes: usize,
+    channels_count: usize,
+}
 
+impl Resources {
+    #[must_use]
     pub fn new(context: Rc<Context>, presentation_format: wgpu::TextureFormat) -> Self {
         Self { context, presentation_format }
     }
@@ -51,7 +58,8 @@ impl Resources {
         }))
     }
 
-    fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> wgpu::Buffer {
+    #[must_use]
+    fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         let buffer = self.context.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
             contents: buffer_data,
@@ -59,39 +67,61 @@ impl Resources {
         });
         self.context.queue().write_buffer(&buffer, 0, buffer_data);
 
-        buffer
+        Rc::new(buffer)
     }
 
-    pub(super) fn create_uniform_buffer(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+    #[must_use]
+    pub(super) fn create_uniform_buffer(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         self.create_buffer(label, BufferUsages::UNIFORM | BufferUsages::COPY_DST, buffer_data)
     }
 
-    pub(super) fn create_storage_buffer_write_only(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+    #[must_use]
+    pub(super) fn create_storage_buffer_write_only(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_DST, buffer_data)
     }
 
-    pub(super) fn create_object_id_buffer(&self, frame_buffer_size: FrameBufferSize) -> wgpu::Buffer {
-        self.create_g_buffer_layer(Some("object id buffer"), frame_buffer_size, size_of::<u32>())
+    #[must_use]
+    pub(super) fn create_object_id_buffer(&self, frame_buffer_size: FrameBufferSize) -> Rc<wgpu::Buffer> {
+         let parameters = FrameBufferParameters {
+            label: Some("object id buffer"),
+            frame_buffer_size,
+            channel_size_bytes: size_of::<u32>(),
+            channels_count: 1,
+        };
+        self.create_g_buffer_layer(parameters)
     }
 
-    pub(super) fn create_pixel_color_buffer(&self, frame_buffer_size: FrameBufferSize) -> wgpu::Buffer {
-        self.create_g_buffer_layer(Some("pixel colors buffer"), frame_buffer_size, size_of::<f32>())
+    #[must_use]
+    pub(super) fn create_pixel_color_buffer(&self, frame_buffer_size: FrameBufferSize) -> Rc<wgpu::Buffer> {
+        let parameters = FrameBufferParameters {
+            label: Some("pixel color buffer"),
+            frame_buffer_size,
+            channel_size_bytes: size_of::<u32>(),
+            channels_count: PIXELS_BUFFER_CHANNELS_COUNT,
+        };
+        self.create_g_buffer_layer(parameters)
     }
 
-    fn create_g_buffer_layer(&self, label: Option<&str>, frame_buffer_size: FrameBufferSize, pixel_size_bytes: usize) -> wgpu::Buffer {
-        let size_bytes = frame_buffer_size.area() as usize * FRAMEBUFFER_CHANNELS_COUNT * pixel_size_bytes;
-        self.context.device().create_buffer(&wgpu::BufferDescriptor {
-            label,
+    #[must_use]
+    fn create_g_buffer_layer(&self, parameters: FrameBufferParameters, ) -> Rc<wgpu::Buffer> {
+        let size_bytes = parameters.frame_buffer_size.area() as usize * parameters.channels_count * parameters.channel_size_bytes;
+
+        let result = self.context.device().create_buffer(&wgpu::BufferDescriptor {
+            label: parameters.label,
             usage: BufferUsages::STORAGE,
             size: size_bytes as BufferAddress,
             mapped_at_creation: false,
-        })
+        });
+
+        Rc::new(result)
     }
 
-    pub(super) fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> wgpu::Buffer {
+    #[must_use]
+    pub(super) fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         self.create_buffer(label, BufferUsages::VERTEX | BufferUsages::COPY_DST, buffer_data)
     }
 
+    #[must_use]
     pub(super) fn create_rasterization_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
         self.context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("rasterization pipeline"),
@@ -130,13 +160,17 @@ impl Resources {
         })
     }
 
-    pub(super) fn create_compute_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
+    const SHADER_RAY_TRACING_ENTRY_POINT : &'static str = "compute_color_buffer";
+    const SHADER_OBJECT_ID_ENTRY_POINT : &'static str = "compute_object_id_buffer";
+
+    #[must_use]
+    pub(super) fn create_ray_tracing_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("ray tracing compute pipeline"),
             compilation_options: Default::default(), //TODO: what options are available?
             layout: None,
             module,
-            entry_point: Some("computeFrameBuffer"),
+            entry_point: Some(Self::SHADER_RAY_TRACING_ENTRY_POINT),
             cache: None, // TODO: how can be used?
         })
     }
