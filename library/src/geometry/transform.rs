@@ -66,12 +66,17 @@ impl TransformableCoordinate for Vector {
 }
 
 #[cfg(test)]
+pub(crate) mod constants {
+    pub const MATRIX_FLOATS_COUNT: usize = 16;
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::geometry::epsilon::DEFAULT_EPSILON;
     use cgmath::{assert_abs_diff_eq, InnerSpace, Rad};
     use std::f64::consts::PI;
-
+    
     #[test]
     fn test_of_point() {
         let affine =

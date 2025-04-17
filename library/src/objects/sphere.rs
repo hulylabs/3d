@@ -5,29 +5,15 @@ use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use alias::Point;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct SphereIndex(pub(crate) usize);
-impl SphereIndex {
-    #[must_use]
-    pub(crate) const fn as_f64(self) -> f64 {
-        self.0 as f64
-    }
-}
-impl From<usize> for SphereIndex {
-    fn from(value: usize) -> Self {
-        SphereIndex(value)
-    }
-}
-
 pub(crate) struct Sphere {
     center: Point,
     radius: f64,
-    links: Linkage<SphereIndex>,
+    links: Linkage,
 }
 
 impl Sphere {
     #[must_use]
-    pub(crate) fn new(center: Point, radius: f64, links: Linkage<SphereIndex>) -> Self {
+    pub(crate) fn new(center: Point, radius: f64, links: Linkage) -> Self {
         assert!(radius > 0.0, "radius must be positive");
         Sphere { center, radius, links }
     }
@@ -42,8 +28,7 @@ impl SerializableForGpu for Sphere {
         container.write_quartet_f64(self.center.x, self.center.y, self.center.z, self.radius);
         container.write(|writer| {
             writer
-                .write_float(self.links.global_index().as_f64() as f32)
-                .write_float(self.links.in_kind_index().as_f64() as f32)
+                .write_integer(self.links.uid().0)
                 .write_float(self.links.material_index().as_f64() as f32);
         });
 
@@ -55,7 +40,7 @@ impl SerializableForGpu for Sphere {
 mod tests {
     use bytemuck::cast_slice;
     use super::*;
-    use crate::objects::common_properties::GlobalObjectIndex;
+    use crate::objects::common_properties::ObjectUid;
     use crate::objects::material_index::MaterialIndex;
     use cgmath::EuclideanSpace;
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
@@ -68,7 +53,7 @@ mod tests {
         assert_eq!(origin.z, 0.0);
     }
 
-    const DUMMY_LINKS: Linkage<SphereIndex> = Linkage::new(GlobalObjectIndex(1), SphereIndex(1), MaterialIndex(1));
+    const DUMMY_LINKS: Linkage = Linkage::new(ObjectUid(1), MaterialIndex(1));
 
     #[test]
     #[should_panic(expected = "radius must be positive")]
@@ -80,7 +65,7 @@ mod tests {
     fn test_new_with_valid_radius() {
         let expected_center = Point::new(3.0, 4.0, 5.0);
         let expected_radius = 6.0;
-        let expected_links = Linkage::new(GlobalObjectIndex(7), SphereIndex(9), MaterialIndex(8));
+        let expected_links = Linkage::new(ObjectUid(7), MaterialIndex(8));
 
         let system_under_test = Sphere::new(expected_center, expected_radius, expected_links);
 
@@ -93,10 +78,9 @@ mod tests {
     fn test_serialize_into() {
         let center = Point::new(1.0, 2.0, 3.0);
         let radius = 4.0;
-        let expected_global_index = GlobalObjectIndex(4);
-        let expected_local_index = SphereIndex(5);
+        let expected_uid = ObjectUid(4);
         let expected_material_index = MaterialIndex(6);
-        let system_under_test = Sphere::new(center, radius, Linkage::new(expected_global_index, expected_local_index, expected_material_index));
+        let system_under_test = Sphere::new(center, radius, Linkage::new(expected_uid, expected_material_index));
 
         let mut actual_state = GpuReadySerializationBuffer::new(1, Sphere::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut actual_state);
@@ -106,9 +90,9 @@ mod tests {
         assert_eq!(serialized[1], center.y as f32);
         assert_eq!(serialized[2], center.z as f32);
         assert_eq!(serialized[3], radius as f32);
-        assert_eq!(serialized[4], expected_global_index.0 as f32);
-        assert_eq!(serialized[5], expected_local_index.0 as f32);
-        assert_eq!(serialized[6], expected_material_index.0 as f32);
+        assert_eq!(serialized[4].to_bits(), expected_uid.0);
+        assert_eq!(serialized[5], expected_material_index.0 as f32);
+        assert_eq!(serialized[6], DEFAULT_PAD_VALUE);
         assert_eq!(serialized[7], DEFAULT_PAD_VALUE);
     }
 

@@ -1,7 +1,7 @@
 use crate::geometry::fundamental_constants::{COMPONENTS_IN_NORMAL, COMPONENTS_IN_POSITION, VERTICES_IN_TRIANGLE};
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
-use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex, TriangleVertex};
+use crate::objects::triangle::{Triangle, TriangleIndex, TriangleVertex};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::{Pod, Zeroable};
@@ -15,13 +15,13 @@ pub(crate) struct VertexData {
 
 pub(crate) struct TriangleMesh {
     triangles: Vec<Triangle>,
-    links: Linkage<MeshIndex>,
+    links: Linkage,
     triangles_base_index: TriangleIndex,
 }
 
 impl TriangleMesh {
     #[must_use]
-    pub(crate) fn new(vertices: &[Vertex], indices: &[u32], mesh_links: Linkage<MeshIndex>, triangles_base_index: TriangleIndex) -> Self {
+    pub(crate) fn new(vertices: &[Vertex], indices: &[u32], mesh_links: Linkage, triangles_base_index: TriangleIndex) -> Self {
         assert_eq!(indices.len() % VERTICES_IN_TRIANGLE, 0, "illegal indices count of {}", indices.len());
 
         let mut triangles: Vec<Triangle> = Vec::new();
@@ -29,9 +29,7 @@ impl TriangleMesh {
             let a = vertices[triangle[TriangleVertex::A as usize] as usize];
             let b = vertices[triangle[TriangleVertex::B as usize] as usize];
             let c = vertices[triangle[TriangleVertex::C as usize] as usize];
-            let triangle_index = triangles_base_index + triangles.len();
-            let mesh_index = mesh_links.in_kind_index();
-            triangles.push(Triangle::new(a, b, c, triangle_index, mesh_index));
+            triangles.push(Triangle::new(a, b, c, mesh_links));
         }
 
         TriangleMesh {
@@ -55,7 +53,7 @@ impl SerializableForGpu for TriangleMesh {
         container.write_quartet_f64(
             self.triangles.len() as f64,
             self.triangles_base_index.as_f64(),
-            self.links.global_index().as_f64(),
+            self.links.uid().0 as f64,
             self.links.material_index().as_f64(),
         );
 
@@ -67,17 +65,17 @@ impl SerializableForGpu for TriangleMesh {
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
-    use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
+    use crate::objects::common_properties::{ObjectUid, Linkage};
     use crate::objects::material_index::MaterialIndex;
     use bytemuck::cast_slice;
     use cgmath::{EuclideanSpace, Zero};
 
-    const DUMMY_LINKS: Linkage<MeshIndex> = Linkage::new(GlobalObjectIndex(0), MeshIndex(0), MaterialIndex(0));
+    const DUMMY_LINKS: Linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
 
     #[test]
     fn test_triangle_mesh_new() {
         let triangle_indices = vec![0, 1, 2];
-        let expected_links = Linkage::new(GlobalObjectIndex(1), MeshIndex(2), MaterialIndex(3));
+        let expected_links = Linkage::new(ObjectUid(1), MaterialIndex(3));
         let expected_triangles_base_index = TriangleIndex(4);
         let expected_vertices = [
             Vertex::new(Point::new(1.0, 2.0, 3.0), Vector::new(4.0, 5.0, 6.0)),
@@ -91,8 +89,7 @@ mod tests {
             expected_vertices[0],
             expected_vertices[1],
             expected_vertices[2],
-            expected_triangles_base_index,
-            expected_links.in_kind_index(),
+            expected_links,
         )];
 
         assert_eq!(system_under_test.triangles.len(), expected_triangles.len());
@@ -120,7 +117,7 @@ mod tests {
         ];
         let indices = vec![0, 0, 0];
         let triangles_start = TriangleIndex(3);
-        let expected_links = Linkage::new(GlobalObjectIndex(1), MeshIndex(2), MaterialIndex(3));
+        let expected_links = Linkage::new(ObjectUid(1), MaterialIndex(3));
         let system_under_test = TriangleMesh::new(&vertices, &indices, expected_links, triangles_start);
 
         let mut container = GpuReadySerializationBuffer::new(1, TriangleMesh::SERIALIZED_QUARTET_COUNT);
@@ -129,7 +126,7 @@ mod tests {
         let expected = vec![
             (indices.len() / VERTICES_IN_TRIANGLE) as f32,
             triangles_start.as_f64() as f32,
-            expected_links.global_index().as_f64() as f32,
+            expected_links.uid().0 as f64 as f32,
             expected_links.material_index().as_f64() as f32,
         ];
 

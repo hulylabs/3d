@@ -10,15 +10,14 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfBox;
 use crate::objects::sphere::Sphere;
 use crate::objects::triangle::Triangle;
-use crate::objects::triangle_mesh::TriangleMesh;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 // TODO: work in progress
 
@@ -66,16 +65,13 @@ impl Renderer {
     }
 
     fn init_buffers(scene: &mut Container, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
-        let empty_meshes_marker
-            = GpuReadySerializationBuffer::make_filled(1, TriangleMesh::SERIALIZED_QUARTET_COUNT, -1.0_f32);
         let empty_triangles_marker
             = GpuReadySerializationBuffer::make_filled(1, Triangle::SERIALIZED_QUARTET_COUNT, -1.0_f32);
         let empty_bvh_marker
             = GpuReadySerializationBuffer::make_filled(1, BvhNode::SERIALIZED_QUARTET_COUNT, -1.0_f32);
 
         let serialized_triangles = scene.evaluate_serialized_triangles();
-        let meshes = if serialized_triangles.empty()
-        { &empty_meshes_marker } else { serialized_triangles.meshes() };
+        
         let triangles = if serialized_triangles.empty()
         { &empty_triangles_marker } else { serialized_triangles.geometry() };
         let bvh = if serialized_triangles.empty()
@@ -106,7 +102,6 @@ impl Renderer {
             parallelograms: resources.create_storage_buffer_write_only("parallelograms", parallelograms.backend()),
             sdf: resources.create_storage_buffer_write_only("sdf", sdf.backend()),
             triangles: resources.create_storage_buffer_write_only("triangles from all meshes", triangles.backend()),
-            meshes: resources.create_storage_buffer_write_only("meshes meta data", meshes.backend()),
             materials: resources.create_storage_buffer_write_only("materials", materials.backend()),
             bvh: resources.create_storage_buffer_write_only("bvh", bvh.backend()),
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
@@ -136,9 +131,8 @@ impl Renderer {
                 .add_entry(1, buffers.parallelograms.clone())
                 .add_entry(2, buffers.sdf.clone())
                 .add_entry(3, buffers.triangles.clone())
-                .add_entry(4, buffers.meshes.clone())
-                .add_entry(5, buffers.materials.clone())
-                .add_entry(6, buffers.bvh.clone())
+                .add_entry(4, buffers.materials.clone())
+                .add_entry(5, buffers.bvh.clone())
             ;
         });
 
@@ -288,7 +282,6 @@ struct Buffers {
     parallelograms: Rc<wgpu::Buffer>,
     sdf: Rc<wgpu::Buffer>,
     triangles: Rc<wgpu::Buffer>,
-    meshes: Rc<wgpu::Buffer>,
     materials: Rc<wgpu::Buffer>,
     bvh: Rc<wgpu::Buffer>,
     vertex: Rc<wgpu::Buffer>,
@@ -346,9 +339,9 @@ impl Uniforms {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::EuclideanSpace;
-    use crate::geometry::alias::Point;
     use super::*;
+    use crate::geometry::alias::Point;
+    use cgmath::EuclideanSpace;
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;

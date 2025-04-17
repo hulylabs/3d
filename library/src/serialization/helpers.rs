@@ -1,8 +1,6 @@
 ﻿use crate::geometry::transform::Affine;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-pub(crate) const MATRIX_FLOATS_COUNT: usize = 16;
-
 pub(crate) fn serialize_matrix(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {
     assert!(container.free_quartets_of_current_object() >= 4);
 
@@ -39,6 +37,7 @@ pub(crate) fn serialize_matrix(container: &mut GpuReadySerializationBuffer, matr
 mod tests {
     use super::*;
     use bytemuck::cast_slice;
+    use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
 
     #[test]
     fn test_serialize_matrix() {

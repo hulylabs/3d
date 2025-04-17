@@ -1,29 +1,23 @@
 ﻿use crate::bvh::builder::build_serialized_bvh;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
-use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
+use crate::objects::common_properties::{Linkage, ObjectUid};
 use crate::objects::material::Material;
 use crate::objects::material_index::MaterialIndex;
-use crate::objects::parallelogram::{Parallelogram, ParallelogramIndex};
+use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::{SdfBox, SdfBoxIndex};
-use crate::objects::sphere::{Sphere, SphereIndex};
-use crate::objects::triangle::{MeshIndex, Triangle, TriangleIndex};
-use crate::objects::triangle_mesh::TriangleMesh;
+use crate::objects::sphere::Sphere;
+use crate::objects::triangle::{Triangle, TriangleIndex};
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 
 pub(crate) struct GpuReadyTriangles {
-    meshes: GpuReadySerializationBuffer,
     triangles: GpuReadySerializationBuffer,
     bvh: GpuReadySerializationBuffer,
 }
 
 impl GpuReadyTriangles {
-    #[must_use]
-    pub(crate) fn meshes(&self) -> &GpuReadySerializationBuffer {
-        &self.meshes
-    }
     #[must_use]
     pub(crate) fn geometry(&self) -> &GpuReadySerializationBuffer {
         &self.triangles
@@ -34,11 +28,11 @@ impl GpuReadyTriangles {
     }
     #[must_use]
     pub(crate) fn empty(&self) -> bool {
-        self.meshes.is_empty()
+        self.triangles.is_empty()
     }
 
-    pub fn new(meshes: GpuReadySerializationBuffer, triangles: GpuReadySerializationBuffer, bvh: GpuReadySerializationBuffer) -> Self {
-        Self { meshes, triangles, bvh }
+    pub fn new(triangles: GpuReadySerializationBuffer, bvh: GpuReadySerializationBuffer) -> Self {
+        Self { triangles, bvh }
     }
 }
 
@@ -47,7 +41,6 @@ pub struct Container {
     spheres: Vec<Sphere>,
     triangles: Vec<Triangle>,
     parallelograms: Vec<Parallelogram>,
-    meshes: Vec<TriangleMesh>,
     sdf: Vec<SdfBox>,
     materials: Vec<Material>,
     data_version: u64, // TODO: make per object kind granularity
@@ -87,30 +80,26 @@ impl Container {
         Container::add_object(&mut self.materials, &mut self.data_version, |_| *target)
     }
 
-    pub fn add_sphere(&mut self, center: Point, radius: f64, material: MaterialIndex) -> SphereIndex {
+    pub fn add_sphere(&mut self, center: Point, radius: f64, material: MaterialIndex) -> ObjectUid {
         assert!(radius > 0.0, "radius must be positive");
-        Container::add_object(&mut self.spheres, &mut self.data_version, |index| {
-            Sphere::new(center, radius, Linkage::new(GlobalObjectIndex(0), index, material)) // TODO: refactor: get rid of global indices
+        Container::add_object(&mut self.spheres, &mut self.data_version, |_index| {
+            Sphere::new(center, radius, Linkage::new(ObjectUid(0), material)) // TODO: refactor: get rid of global indices
         })
     }
 
-    pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ParallelogramIndex {
-        Container::add_object(&mut self.parallelograms, &mut self.data_version, |index| {
-            Parallelogram::new(origin, local_x, local_y, Linkage::new(GlobalObjectIndex(0), index, material))
+    pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
+        Container::add_object(&mut self.parallelograms, &mut self.data_version, |_index| {
+            Parallelogram::new(origin, local_x, local_y, Linkage::new(ObjectUid(0), material))
         })
     }
 
-    pub fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> MeshIndex {
-        let index = Container::add_object(&mut self.meshes, &mut self.data_version, |index| {
-            let links = Linkage::new(GlobalObjectIndex(0), index, material);
-            let base_triangle_index = TriangleIndex(self.triangles.len());
-            source.instantiate(slot, transformation, links, base_triangle_index)
-        });
+    pub fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> ObjectUid {
+        let links = Linkage::new(ObjectUid(0), material);
+        let base_triangle_index = TriangleIndex(self.triangles.len());
+        let instance = source.instantiate(slot, transformation, links, base_triangle_index);
+        instance.put_triangles_into(&mut self.triangles);
 
-        let added = &self.meshes[index.0];
-        added.put_triangles_into(&mut self.triangles);
-
-        index
+        links.uid()
     }
 
     pub fn add_sdf_box(&mut self, location: &Affine, half_size: Vector, corners_radius: f64, material: MaterialIndex) -> SdfBoxIndex {
@@ -142,10 +131,9 @@ impl Container {
 
     #[must_use]
     pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
-        let meshes = Container::serialize(&self.meshes);
         let bvh = build_serialized_bvh(&mut self.triangles);
         let triangles = Container::serialize(&self.triangles);
-        GpuReadyTriangles::new(meshes, triangles, bvh)
+        GpuReadyTriangles::new(triangles, bvh)
     }
 
     #[must_use]
@@ -186,9 +174,9 @@ impl Container {
 #[cfg(test)]
 mod tests {
     use crate::geometry::alias::Point;
-    use crate::objects::common_properties::{GlobalObjectIndex, Linkage};
+    use crate::objects::common_properties::{Linkage, ObjectUid};
     use crate::objects::material::Material;
-    use crate::objects::sphere::{Sphere, SphereIndex};
+    use crate::objects::sphere::Sphere;
     use crate::scene::container::Container;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::SerializableForGpu;
@@ -206,9 +194,9 @@ mod tests {
         let expected_sphere_radius = 1.5;
 
         const SPHERES_TO_ADD: usize = 3;
-        let mut expected_serialized_spheres = GpuReadySerializationBuffer::new(SPHERES_TO_ADD, crate::objects::sphere::Sphere::SERIALIZED_QUARTET_COUNT);
-        for i in 0..SPHERES_TO_ADD {
-            let linkage = Linkage::new(GlobalObjectIndex(0), SphereIndex(i), sphere_material);
+        let mut expected_serialized_spheres = GpuReadySerializationBuffer::new(SPHERES_TO_ADD, Sphere::SERIALIZED_QUARTET_COUNT);
+        for _ in 0..SPHERES_TO_ADD {
+            let linkage = Linkage::new(ObjectUid(0), sphere_material);
             let expected_sphere = Sphere::new(expected_sphere_center, expected_sphere_radius, linkage);
             expected_sphere.serialize_into(&mut expected_serialized_spheres);
         }

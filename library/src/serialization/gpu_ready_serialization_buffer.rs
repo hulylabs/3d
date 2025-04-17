@@ -196,7 +196,7 @@ impl<'a> SingleQuartetWriter<'a> {
         self.write_pointer += QUARTET_ELEMENT_SIZE_BYTES;
     }
 
-    pub(crate) fn write_integer(&mut self, value: i32) -> &mut Self {
+    pub(crate) fn write_integer(&mut self, value: u32) -> &mut Self {
         assert!(self.elements_written < ELEMENTS_IN_QUARTET);
         self.write_element(&value.to_ne_bytes());
         self
@@ -339,7 +339,7 @@ mod tests {
             writer
                 .write_integer(42)
                 .write_float(3.14)
-                .write_integer(-7)
+                .write_integer(7)
                 .write_float(2.71);
         });
 
@@ -352,7 +352,7 @@ mod tests {
         offset += 4;
         assert_eq!(f32::from_ne_bytes(backend[offset..offset+4].try_into().unwrap()), 3.14);
         offset += 4;
-        assert_eq!(i32::from_ne_bytes(backend[offset..offset+4].try_into().unwrap()), -7);
+        assert_eq!(i32::from_ne_bytes(backend[offset..offset+4].try_into().unwrap()), 7);
         offset += 4;
         assert_eq!(f32::from_ne_bytes(backend[offset..offset+4].try_into().unwrap()), 2.71);
     }

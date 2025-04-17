@@ -263,17 +263,18 @@ pub(crate) mod tests {
     use crate::geometry::epsilon::DEFAULT_EPSILON;
     use crate::geometry::fundamental_constants::VERTICES_IN_TRIANGLE;
     use crate::geometry::vertex::Vertex;
-    use crate::objects::triangle::{MeshIndex, TriangleIndex};
     use cgmath::{Zero, assert_abs_diff_eq};
     use strum::EnumCount;
+    use crate::objects::common_properties::{Linkage, ObjectUid};
+    use crate::objects::material_index::MaterialIndex;
 
+    #[must_use]
     pub(crate) fn make_triangle(vertex_data: [f64; VERTICES_IN_TRIANGLE * Axis::COUNT]) -> Triangle {
         Triangle::new(
             Vertex::new(Point::new(vertex_data[0], vertex_data[1], vertex_data[2]), Vector::zero()),
             Vertex::new(Point::new(vertex_data[3], vertex_data[4], vertex_data[5]), Vector::zero()),
             Vertex::new(Point::new(vertex_data[6], vertex_data[7], vertex_data[8]), Vector::zero()),
-            TriangleIndex(0),
-            MeshIndex(0),
+            Linkage::new(ObjectUid(0), MaterialIndex(0)),
         )
     }
 

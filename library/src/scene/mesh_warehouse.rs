@@ -3,7 +3,7 @@ use crate::geometry::axis::Axis;
 use crate::geometry::transform::{TransformableCoordinate, Transformation};
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
-use crate::objects::triangle::{MeshIndex, TriangleIndex};
+use crate::objects::triangle::TriangleIndex;
 use crate::objects::triangle_mesh::{TriangleMesh, VertexData};
 use obj::{Obj, ObjError};
 use std::fs::File;
@@ -59,7 +59,7 @@ impl MeshWarehouse {
     }
 
     #[must_use]
-    pub(super) fn instantiate(&self, prototype: WarehouseSlot, transformation: &Transformation, links: Linkage<MeshIndex>, triangle_index: TriangleIndex) -> TriangleMesh {
+    pub(super) fn instantiate(&self, prototype: WarehouseSlot, transformation: &Transformation, links: Linkage, triangle_index: TriangleIndex) -> TriangleMesh {
         let prototype_mesh = &self.prototypes[prototype.0];
         let transformed_vertices: Vec<Vertex> = prototype_mesh
             .vertices
@@ -91,15 +91,15 @@ impl MeshWarehouse {
 mod tests {
     use super::*;
     use crate::geometry::transform::Affine;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-    use crate::objects::common_properties::GlobalObjectIndex;
+    use crate::objects::common_properties::ObjectUid;
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::triangle::Triangle;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     const _: () = assert!(size_of::<VertexData>() == size_of::<obj::Vertex>());
 
-    const TEST_LINKS: Linkage<MeshIndex> = Linkage::new(GlobalObjectIndex(0), MeshIndex(3), MaterialIndex(0));
+    const TEST_LINKS: Linkage = Linkage::new(ObjectUid(0), MaterialIndex(1));
 
     const SINGLE_TRIANGLE_OBJ_FILE: &str = r#"
         v  0.0  1.0  0.0

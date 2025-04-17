@@ -1,13 +1,16 @@
 /// header
 
 const PI = 3.1415926535897932385;
+
 const MIN_FLOAT = 0.0001;
 const MAX_FLOAT = 999999999.999;
+
 const LAMBERTIAN = 0.0;
 const MIRROR = 1.0;
 const GLASS = 2.0;
 const ISOTROPIC = 3.0;
 const ANISOTROPIC = 4.0;
+
 const NUM_SAMPLES = 1.0;
 const MAX_BOUNCES = 30;
 const STRATIFY = true;
@@ -21,16 +24,14 @@ const MAX_SDF_RAY_MARCH_STEPS = 20;
 @group(1) @binding( 1) var<storage, read_write> object_id_buffer: array<u32>;
 
 @group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
-@group(2) @binding( 1) var<storage, read> quad_objs: array<Quad>;
+@group(2) @binding( 1) var<storage, read> quad_objs: array<Parallelogram>;
 @group(2) @binding( 2) var<storage, read> sdf: array<SdfBox>;
 @group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
-@group(2) @binding( 4) var<storage, read> meshes: array<Mesh>;
-@group(2) @binding( 5) var<storage, read> materials: array<Material>;
-@group(2) @binding( 6) var<storage, read> bvh: array<AABB>;
+@group(2) @binding( 4) var<storage, read> materials: array<Material>;
+@group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
 
 var<private> NUM_SPHERES : i32;
 var<private> NUM_QUADS : i32;
-var<private> NUM_MESHES : i32;
 var<private> NUM_TRIANGLES : i32;
 var<private> NUM_AABB : i32;
 var<private> NUM_SDF : i32;
@@ -40,7 +41,7 @@ var<private> pixelCoords : vec3f;
 
 var<private> hitRec : HitRecord;
 var<private> scatterRec : ScatterRecord;
-var<private> lights : Quad;
+var<private> lights : Parallelogram;
 var<private> ray_tmin : f32 = 0.000001;
 var<private> ray_tmax : f32 = MAX_FLOAT;
 var<private> stack : array<i32, STACK_SIZE>;
@@ -71,19 +72,17 @@ struct Material {
 struct Sphere {
 	center : vec3f,
 	r : f32,
-	global_id : f32,
-	local_id : f32,
+	object_uid : u32,
 	material_id : f32,
 }
 
-struct Quad {
+struct Parallelogram {
 	Q : vec3f,
 	u : vec3f,
-	local_id : f32,
+	object_uid : u32,
 	v : vec3f,
-	global_id : f32,
-	normal : vec3f,
 	D : f32,
+	normal : vec3f,
 	w : vec3f,
 	material_id : f32,
 }
@@ -94,10 +93,9 @@ struct Triangle {
 	C : vec3f,
 	normalA : vec3f,
 	normalB : vec3f,
-	local_id : f32,
+	object_uid : u32,
 	normalC : vec3f,
-
-	mesh_id : f32,
+	material_id : f32,
 }
 
 struct Mesh {
@@ -323,7 +321,7 @@ fn hit_volume(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	return true;
 }
 
-fn hit_quad(quad : Quad, tmin : f32, tmax : f32, ray : Ray) -> bool {
+fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 	if(dot(ray.dir, quad.normal) > 0) {
 		return false;
@@ -368,8 +366,6 @@ fn hit_quad(quad : Quad, tmin : f32, tmax : f32, ray : Ray) -> bool {
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html
 fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bool {
 
-	let mesh = meshes[i32(tri.mesh_id)];
-
 	let ray = Ray(incidentRay.origin, incidentRay.dir);
 
 	let AB = tri.B - tri.A;
@@ -409,7 +405,7 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[i32(mesh.material_id)];
+	hitRec.material = materials[i32(tri.material_id)];
 
 	return true;
 }
@@ -472,11 +468,9 @@ fn setup_buffers_length() {
         NUM_QUADS = 0;
     }
 
-    NUM_MESHES = i32(arrayLength(&meshes));
     NUM_TRIANGLES = i32(arrayLength(&triangles));
     NUM_AABB = i32(arrayLength(&bvh));
-    if (meshes[0].num_triangles < 0.0) {
-        NUM_MESHES = 0;
+    if (triangles[0].material_id < 0.0) {
         NUM_TRIANGLES = 0;
         NUM_AABB = 0;
     }
@@ -1155,17 +1149,17 @@ fn onb_lambertian_scattering_pdf(scattered : Ray) -> f32 {
 	return max(0.0, cosine_theta/PI);
 }
 
-fn get_random_on_quad(q : Quad, origin : vec3f) -> Ray {
+fn get_random_on_quad(q : Parallelogram, origin : vec3f) -> Ray {
 	let p = q.Q + (rand2D() * q.u) + (rand2D() * q.v);
 	return Ray(origin, normalize(p - origin));
 }
 
-fn get_random_on_quad_point(q : Quad) -> vec3f {
+fn get_random_on_quad_point(q : Parallelogram) -> vec3f {
 	let p = q.Q + (rand2D() * q.u) + (rand2D() * q.v);
 	return p;
 }
 
-fn light_pdf(ray : Ray, quad : Quad) -> f32 {
+fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 
 	if(dot(ray.dir, quad.normal) > 0) {
 		return MIN_FLOAT;

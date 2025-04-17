@@ -60,8 +60,8 @@ impl SerializableForGpu for SdfBox {
 mod tests {
     use super::*;
     use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
-    use crate::serialization::helpers::MATRIX_FLOATS_COUNT;
     use bytemuck::cast_slice;
+    use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
 
     #[must_use]
     fn matrix_at(index: usize, matrix: &Affine) -> f32 {

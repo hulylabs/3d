@@ -1,6 +1,6 @@
 ﻿use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::binding_groups::BindingGroups;
-use wgpu::{BindGroupLayout, ComputePass};
+use wgpu::ComputePass;
 
 pub(super) struct ComputePipeline {
     pipeline: wgpu::ComputePipeline,
