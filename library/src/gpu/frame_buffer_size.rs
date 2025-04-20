@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy)]
+﻿#[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) struct FrameBufferSize {
     width: u32,
     height: u32,

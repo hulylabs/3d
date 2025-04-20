@@ -1,16 +1,18 @@
 ﻿use crate::bvh::builder::build_serialized_bvh;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
-use crate::objects::common_properties::{Linkage, ObjectUid};
+use crate::objects::common_properties::Linkage;
 use crate::objects::material::Material;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::{SdfBox, SdfBoxIndex};
+use crate::objects::sdf::SdfBox;
 use crate::objects::sphere::Sphere;
 use crate::objects::triangle::{Triangle, TriangleIndex};
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use crate::utils::object_uid::ObjectUid;
+use crate::utils::uid_generator::UidGenerator;
 
 pub(crate) struct GpuReadyTriangles {
     triangles: GpuReadySerializationBuffer,
@@ -43,6 +45,7 @@ pub struct Container {
     parallelograms: Vec<Parallelogram>,
     sdf: Vec<SdfBox>,
     materials: Vec<Material>,
+    uid_generator: UidGenerator,
     data_version: u64, // TODO: make per object kind granularity
 }
 
@@ -51,6 +54,7 @@ impl Container {
     pub fn new() -> Self {
         Self {
             data_version: 0,
+            uid_generator: UidGenerator::new(),
             ..Self::default()
         }
     }
@@ -77,24 +81,25 @@ impl Container {
 
     #[must_use]
     pub fn add_material(&mut self, target: &Material) -> MaterialIndex {
-        Container::add_object(&mut self.materials, &mut self.data_version, |_| *target)
+        self.materials.push(target.clone());
+        MaterialIndex(self.materials.len()-1)
     }
 
     pub fn add_sphere(&mut self, center: Point, radius: f64, material: MaterialIndex) -> ObjectUid {
         assert!(radius > 0.0, "radius must be positive");
-        Container::add_object(&mut self.spheres, &mut self.data_version, |_index| {
-            Sphere::new(center, radius, Linkage::new(ObjectUid(0), material)) // TODO: refactor: get rid of global indices
+        Self::add_object(&mut self.uid_generator, &mut self.spheres, &mut self.data_version, |uid| {
+            Sphere::new(center, radius, Linkage::new(uid, material))
         })
     }
 
     pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
-        Container::add_object(&mut self.parallelograms, &mut self.data_version, |_index| {
-            Parallelogram::new(origin, local_x, local_y, Linkage::new(ObjectUid(0), material))
+        Self::add_object(&mut self.uid_generator, &mut self.parallelograms, &mut self.data_version, |uid| {
+            Parallelogram::new(origin, local_x, local_y, Linkage::new(uid, material))
         })
     }
 
     pub fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> ObjectUid {
-        let links = Linkage::new(ObjectUid(0), material);
+        let links = Linkage::new(self.uid_generator.next(), material);
         let base_triangle_index = TriangleIndex(self.triangles.len());
         let instance = source.instantiate(slot, transformation, links, base_triangle_index);
         instance.put_triangles_into(&mut self.triangles);
@@ -102,26 +107,25 @@ impl Container {
         links.uid()
     }
 
-    pub fn add_sdf_box(&mut self, location: &Affine, half_size: Vector, corners_radius: f64, material: MaterialIndex) -> SdfBoxIndex {
+    pub fn add_sdf_box(&mut self, location: &Affine, half_size: Vector, corners_radius: f64, material: MaterialIndex) -> ObjectUid {
         assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0);
         assert!(corners_radius >= 0.0);
-        Container::add_object(&mut self.sdf, &mut self.data_version, |_index| {
-            SdfBox::new(*location, half_size, corners_radius, material)
+        Self::add_object(&mut self.uid_generator, &mut self.sdf, &mut self.data_version, |uid| {
+            SdfBox::new(*location, half_size, corners_radius, Linkage::new(uid, material))
         })
     }
 
     #[must_use]
-    fn add_object<Object, ObjectIndex, Constructor>(container: &mut Vec<Object>, data_version: &mut u64, create_object: Constructor) -> ObjectIndex
+    fn add_object<Object, Constructor>(uid_generator: &mut UidGenerator, container: &mut Vec<Object>, data_version: &mut u64, create_object: Constructor) -> ObjectUid
     where
-        ObjectIndex: From<usize> + Copy,
-        Constructor: FnOnce(ObjectIndex) -> Object,
+        Constructor: FnOnce(ObjectUid) -> Object,
     {
-        let index = ObjectIndex::from(container.len());
-        let object = create_object(index);
+        let uid = uid_generator.next();
+        let object = create_object(uid);
         container.push(object);
         *data_version += 1;
 
-        index
+        uid
     }
 
     #[must_use]
@@ -174,12 +178,13 @@ impl Container {
 #[cfg(test)]
 mod tests {
     use crate::geometry::alias::Point;
-    use crate::objects::common_properties::{Linkage, ObjectUid};
+    use crate::objects::common_properties::Linkage;
     use crate::objects::material::Material;
     use crate::objects::sphere::Sphere;
     use crate::scene::container::Container;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::SerializableForGpu;
+    use crate::utils::object_uid::ObjectUid;
 
     #[test]
     fn test_add_sphere() {

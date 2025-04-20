@@ -156,13 +156,13 @@ impl ApplicationHandler for Application {
                     .with_roughness(0.95));
 
                 scene.add_sdf_box(
-                    &Affine::from_translation(Vector::new(0.7, 0.2, -0.7)),
+                    &(Affine::from_translation(Vector::new(0.7, 0.2, -0.7))*Affine::from_angle_z(Deg(-30.0))),
                     Vector::new(0.24, 0.1, 0.02),
                     0.03,
                     silver_material);
 
                 scene.add_sdf_box(
-                    &Affine::from_translation(Vector::new(1.5, -0.4, -0.9)),
+                    &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
                     Vector::new(0.24, 0.1, 0.02),
                     0.03,
                     bright_red_material);

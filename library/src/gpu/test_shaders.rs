@@ -1,13 +1,12 @@
 ﻿#[cfg(test)]
 mod tests {
-    use crate::gpu::headless_device::tests::create_headless_wgpu_device;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::render::CODE_FOR_GPU;
     use crate::gpu::resources::{Resources, ShaderCreationError};
-    use std::rc::Rc;
 
     #[test]
     fn test_compilation() {
-        let context = Rc::new(pollster::block_on(create_headless_wgpu_device()));
+        let context = create_headless_wgpu_context();
         let resources = Resources::new(context, wgpu::TextureFormat::Rgba8Unorm);
 
         let shader = resources.create_shader_module("whole gpu code", CODE_FOR_GPU);

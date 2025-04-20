@@ -1,34 +1,26 @@
 ﻿use crate::geometry::alias::Vector;
 use crate::geometry::transform::Affine;
-use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::helpers::serialize_matrix;
 use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
-
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct SdfBoxIndex(pub(crate) usize);
-impl From<usize> for SdfBoxIndex {
-    fn from(value: usize) -> Self {
-        SdfBoxIndex(value)
-    }
-}
+use crate::objects::common_properties::Linkage;
 
 pub(crate) struct SdfBox {
     location: Affine,
     half_size: Vector,
     corners_radius: f64,
-    material_index: MaterialIndex,
+    links: Linkage,
 }
 
 impl SdfBox {
     #[must_use]
-    pub(crate) fn new(location: Affine, half_size: Vector, corners_radius: f64, material_index: MaterialIndex) -> Self {
+    pub(crate) fn new(location: Affine, half_size: Vector, corners_radius: f64, links: Linkage) -> Self {
         assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0);
         assert!(corners_radius >= 0.0);
         assert!(abs(location.determinant()) > 0.0);
-        Self { location, half_size, corners_radius, material_index }
+        Self { location, half_size, corners_radius, links }
     }
 }
 
@@ -49,7 +41,8 @@ impl SerializableForGpu for SdfBox {
         );
 
         container.write(|writer| {
-            writer.write_float(self.material_index.as_f64() as f32);
+            writer.write_float(self.links.material_index().0 as f32);
+            writer.write_integer(self.links.uid().0);
         });
 
         debug_assert!(container.object_fully_written());
@@ -62,6 +55,8 @@ mod tests {
     use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
     use bytemuck::cast_slice;
     use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
+    use crate::objects::material_index::MaterialIndex;
+    use crate::utils::object_uid::ObjectUid;
 
     #[must_use]
     fn matrix_at(index: usize, matrix: &Affine) -> f32 {
@@ -77,8 +72,9 @@ mod tests {
         let expected_half_size = Vector { x: 1.0, y: 2.0, z: 3.0 };
         let expected_corners_radius = 0.9;
         let expected_material_index = MaterialIndex(4);
-
-        let system_under_test = SdfBox::new(expected_location, expected_half_size, expected_corners_radius, expected_material_index);
+        let expected_object_uid = ObjectUid(7);
+        
+        let system_under_test = SdfBox::new(expected_location, expected_half_size, expected_corners_radius, Linkage::new(expected_object_uid, expected_material_index));
 
         let mut container = GpuReadySerializationBuffer::new(1, SdfBox::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
@@ -118,7 +114,7 @@ mod tests {
 
         assert_eq!(serialized[values_checked], expected_material_index.as_f64() as f32);
         values_checked += 1;
-        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
+        assert_eq!(serialized[values_checked].to_bits(), expected_object_uid.0);
         values_checked += 1;
         assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
         values_checked += 1;

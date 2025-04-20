@@ -6,6 +6,7 @@ mod gpu;
 pub mod scene;
 mod serialization;
 mod bvh;
+mod utils;
 
 use std::cmp::max;
 use std::rc::Rc;
@@ -191,7 +192,8 @@ impl Engine {
             // TODO: schedule surface reconfigure
         }
 
-        self.renderer.execute(&surface_texture);
+        self.renderer.accumulate_more_rays();
+        self.renderer.present(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();

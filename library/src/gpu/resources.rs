@@ -2,12 +2,9 @@
 use std::rc::Rc;
 use thiserror::Error;
 use wgpu::util::DeviceExt;
-use wgpu::{BufferAddress, BufferUsages};
-use crate::gpu::frame_buffer_size::FrameBufferSize;
+use wgpu::BufferUsages;
 
 // TODO: work in progress
-
-const PIXELS_BUFFER_CHANNELS_COUNT: usize = 4;
 
 #[derive(Error, Debug)]
 pub(super) enum ShaderCreationError {
@@ -26,13 +23,6 @@ pub(super) enum ShaderCreationError {
 pub(super) struct Resources {
     context: Rc<Context>,
     presentation_format: wgpu::TextureFormat,
-}
-
-struct FrameBufferParameters<'a> {
-    label: Option<&'a str>,
-    frame_buffer_size: FrameBufferSize,
-    channel_size_bytes: usize,
-    channels_count: usize,
 }
 
 impl Resources {
@@ -81,42 +71,6 @@ impl Resources {
     }
 
     #[must_use]
-    pub(super) fn create_object_id_buffer(&self, frame_buffer_size: FrameBufferSize) -> Rc<wgpu::Buffer> {
-         let parameters = FrameBufferParameters {
-            label: Some("object id buffer"),
-            frame_buffer_size,
-            channel_size_bytes: size_of::<u32>(),
-            channels_count: 1,
-        };
-        self.create_g_buffer_layer(parameters)
-    }
-
-    #[must_use]
-    pub(super) fn create_pixel_color_buffer(&self, frame_buffer_size: FrameBufferSize) -> Rc<wgpu::Buffer> {
-        let parameters = FrameBufferParameters {
-            label: Some("pixel color buffer"),
-            frame_buffer_size,
-            channel_size_bytes: size_of::<u32>(),
-            channels_count: PIXELS_BUFFER_CHANNELS_COUNT,
-        };
-        self.create_g_buffer_layer(parameters)
-    }
-
-    #[must_use]
-    fn create_g_buffer_layer(&self, parameters: FrameBufferParameters, ) -> Rc<wgpu::Buffer> {
-        let size_bytes = parameters.frame_buffer_size.area() as usize * parameters.channels_count * parameters.channel_size_bytes;
-
-        let result = self.context.device().create_buffer(&wgpu::BufferDescriptor {
-            label: parameters.label,
-            usage: BufferUsages::STORAGE,
-            size: size_bytes as BufferAddress,
-            mapped_at_creation: false,
-        });
-
-        Rc::new(result)
-    }
-
-    #[must_use]
     pub(super) fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         self.create_buffer(label, BufferUsages::VERTEX | BufferUsages::COPY_DST, buffer_data)
     }
@@ -159,33 +113,43 @@ impl Resources {
             cache: None, // TODO: how can we use it?
         })
     }
-
-    const SHADER_RAY_TRACING_ENTRY_POINT : &'static str = "compute_color_buffer";
-    const SHADER_OBJECT_ID_ENTRY_POINT : &'static str = "compute_object_id_buffer";
-
+    
     #[must_use]
-    pub(super) fn create_ray_tracing_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
+    pub(super) fn create_compute_pipeline(&self, routine: ComputeRoutine, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("ray tracing compute pipeline"),
+            label: Some(routine.name()),
             compilation_options: Default::default(), //TODO: what options are available?
             layout: None,
             module,
-            entry_point: Some(Self::SHADER_RAY_TRACING_ENTRY_POINT),
+            entry_point: Some(routine.name()),
             cache: None, // TODO: how can be used?
         })
+    }
+}
+
+pub(super) enum ComputeRoutine {
+    ShaderRayTracingEntryPoint,
+    ShaderObjectIdEntryPoint,
+}
+
+impl ComputeRoutine {
+    fn name(&self) -> &'static str {
+        match self {
+            ComputeRoutine::ShaderObjectIdEntryPoint { .. } => "compute_object_id_buffer",
+            ComputeRoutine::ShaderRayTracingEntryPoint { .. } => "compute_color_buffer",
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_device;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
 
     #[must_use]
     fn make_system_under_test() -> Resources {
-        let context = pollster::block_on(create_headless_wgpu_device());
         Resources {
-            context: Rc::new(context),
+            context : create_headless_wgpu_context(),
             presentation_format: wgpu::TextureFormat::Rgba8Unorm,
         }
     }

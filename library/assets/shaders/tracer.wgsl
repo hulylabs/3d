@@ -98,13 +98,6 @@ struct Triangle {
 	material_id : f32,
 }
 
-struct Mesh {
-	num_triangles : f32,
-	offset : f32,
-	global_id : f32,
-	material_id : f32
-}
-
 struct AABB {
 	min : vec3f,
 	right_offset : f32,
@@ -124,6 +117,7 @@ struct SdfBox {
     half_size : vec3f,
     corners_radius : f32,
     material_id : f32,
+    object_uid : u32,
 }
 
 struct HitRecord {
@@ -590,21 +584,21 @@ fn trace_first_intersection(ray : Ray) -> u32 {
 
     for(var i = 0; i < NUM_SPHERES; i++){
         if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray)){
-            hit_id = 1;
+            hit_id = sphere_objs[i].object_uid;
             closest_so_far = hitRec.t;
         }
     }
 
     for(var i = 0; i < NUM_QUADS; i++){
         if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray)) {
-            hit_id = 2;
+            hit_id = quad_objs[i].object_uid;
             closest_so_far = hitRec.t;
         }
     }
 
     for(var i = 0; i < NUM_SDF; i++){
         if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)){
-            hit_id = 3;
+            hit_id = sdf[i].object_uid;
             closest_so_far = hitRec.t;
         }
     }
@@ -624,7 +618,7 @@ fn trace_first_intersection(ray : Ray) -> u32 {
                 let countPrim = i32(node.prim_count);
                 for(var j = 0; j < countPrim; j++) {
                     if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray)) {
-                        hit_id = 4;
+                        hit_id = triangles[startPrim + j].object_uid;
                         closest_so_far = hitRec.t;
                     }
                 }

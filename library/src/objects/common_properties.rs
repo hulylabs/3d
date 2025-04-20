@@ -1,12 +1,5 @@
 ﻿use crate::objects::material_index::MaterialIndex;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct ObjectUid(pub u32);
-impl From<usize> for ObjectUid {
-    fn from(value: usize) -> Self {
-        ObjectUid(value as u32)
-    }
-}
+pub(crate) use crate::utils::object_uid::ObjectUid;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Linkage {
