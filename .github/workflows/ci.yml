@@ -81,16 +81,16 @@ jobs:
 
       - name: Build (${{ matrix.build-type }})
         run: |
-          if [ "${{ matrix.build-type }}" = "release" ]; then
-            cargo build --workspace --release --verbose
-          else
-            cargo build --workspace --verbose
-          fi
+          if ("${{ matrix.build-type }}" -eq "release") {
+          cargo build --workspace --release --verbose
+          } else {
+          cargo build --workspace --verbose
+          }
 
       - name: Run Tests (${{ matrix.build-type }})
         run: |
-          if [ "${{ matrix.build-type }}" = "release" ]; then
+          if ("${{ matrix.build-type }}" -eq "release") {
             cargo test -p library --release --verbose
-          else
+          } else {
             cargo test -p library --verbose
-          fi
+          }
