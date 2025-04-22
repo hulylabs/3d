@@ -13,14 +13,22 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        build-type: [debug, release]
+
     steps:
       - name: Checkout the Code
         uses: actions/checkout@v4
 
-      - name: Install Vulkan SDK
+      - name: Install Vulkan Software Implementation
         run: |
           sudo apt update
-          sudo apt install -y libvulkan1 vulkan-utils mesa-vulkan-drivers
+          sudo apt install -y libvulkan1 mesa-vulkan-drivers
+
+#      Uncomment this in case of local running via 'act'
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Cache
         uses: actions/cache@v4
@@ -29,10 +37,20 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ matrix.build-type }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build
-        run: cargo build --workspace --verbose
+      - name: Build (${{ matrix.build-type }})
+        run: |
+          if [ "${{ matrix.build-type }}" = "release" ]; then
+            cargo build --workspace --release --verbose
+          else
+            cargo build --workspace --verbose
+          fi
 
-      - name: Run Tests
-        run: cargo test -p library --verbose
+      - name: Run Tests (${{ matrix.build-type }})
+        run: |
+          if [ "${{ matrix.build-type }}" = "release" ]; then
+            cargo test -p library --release --verbose
+          else
+            cargo test -p library --verbose
+          fi
