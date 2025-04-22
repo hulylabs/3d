@@ -17,6 +17,11 @@ jobs:
       - name: Checkout the Code
         uses: actions/checkout@v4
 
+      - name: Install Vulkan SDK
+        run: |
+          sudo apt update
+          sudo apt install -y libvulkan1 vulkan-utils mesa-vulkan-drivers
+
       - name: Cache
         uses: actions/cache@v4
         with:
