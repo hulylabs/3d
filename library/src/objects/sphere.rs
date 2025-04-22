@@ -27,7 +27,7 @@ impl GpuSerializationSize for Sphere {
 
 impl GpuSerializable for Sphere {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
-        debug_assert!(container.has_free_slot(), "buffer overflow");
+        assert!(container.has_free_slot(), "buffer overflow");
 
         container.write_quartet_f64(self.center.x, self.center.y, self.center.z, self.radius);
         container.write(|writer| {
