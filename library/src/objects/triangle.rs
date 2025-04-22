@@ -1,20 +1,17 @@
 use crate::geometry::aabb::Aabb;
 use crate::geometry::epsilon::DEFAULT_EPSILON;
 use crate::geometry::vertex::Vertex;
+use crate::objects::common_properties::Linkage;
+use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+use crate::utils::object_uid::ObjectUid;
 use cgmath::AbsDiffEq;
 use std::ops::Add;
-use crate::objects::common_properties::{Linkage};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TriangleIndex(pub(crate) usize);
-impl TriangleIndex {
-    #[must_use]
-    pub(crate) const fn as_f64(self) -> f64 {
-        self.0 as f64
-    }
-}
+
 impl Add<usize> for TriangleIndex {
     type Output = TriangleIndex;
     fn add(self, right: usize) -> Self::Output {
@@ -38,7 +35,7 @@ pub(crate) struct Triangle {
 
 impl Triangle {
     #[must_use]
-    pub(crate) fn new(a: Vertex, b: Vertex, c: Vertex, links: Linkage) -> Self {
+    pub(crate) fn new(a: Vertex, b: Vertex, c: Vertex, links: Linkage,) -> Self {
         Self {
             a,
             b,
@@ -51,6 +48,15 @@ impl Triangle {
     pub(crate) fn bounding_box(&self) -> Aabb {
         let result = Aabb::from_triangle(self.a.position(), self.b.position(), self.c.position());
         result.pad()
+    }
+
+    #[must_use]
+    pub(crate) fn host(&self) -> ObjectUid {
+        self.links.uid()
+    }
+
+    pub(crate) fn set_material(&mut self, new_material: MaterialIndex) {
+        self.links.set_material_index(new_material);
     }
 }
 
@@ -71,9 +77,11 @@ impl AbsDiffEq for Triangle {
     }
 }
 
-impl SerializableForGpu for Triangle {
+impl GpuSerializationSize for Triangle {
     const SERIALIZED_QUARTET_COUNT: usize = 6;
+}
 
+impl GpuSerializable for Triangle {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -90,7 +98,7 @@ impl SerializableForGpu for Triangle {
                 .write_float(self.b.normal().z as f32)
                 .write_integer(self.links.uid().0);
         });
-        
+
         container.write_quartet_f64(self.c.normal().x, self.c.normal().y, self.c.normal().z, self.links.material_index().0 as f64);
 
         debug_assert!(container.object_fully_written());
@@ -101,10 +109,10 @@ impl SerializableForGpu for Triangle {
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
-    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
-    use bytemuck::cast_slice;
     use crate::objects::common_properties::ObjectUid;
     use crate::objects::material_index::MaterialIndex;
+    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
+    use bytemuck::cast_slice;
 
     #[test]
     fn test_triangle_creation() {
@@ -114,7 +122,7 @@ mod tests {
 
         let expected_linkage = Linkage::new(ObjectUid(3), MaterialIndex(1));
 
-        let system_under_test = Triangle::new(a, b, c, expected_linkage);
+        let system_under_test = Triangle::new(a, b, c, expected_linkage,);
 
         assert_eq!(system_under_test.a, a);
         assert_eq!(system_under_test.b, b);

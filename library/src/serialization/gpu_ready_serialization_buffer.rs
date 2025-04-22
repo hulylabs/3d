@@ -14,20 +14,25 @@ pub(crate) struct GpuReadySerializationBuffer {
 
 impl GpuReadySerializationBuffer {
     #[must_use]
-    pub(crate) fn new(objects_count_capacity: usize, quartets_per_object: usize) -> Self {
+    pub(crate) fn new(objects_count: usize, quartets_per_object: usize) -> Self {
         assert!(quartets_per_object > 0);
         Self {
-            backend: vec![0; Self::backend_size_bytes(objects_count_capacity, quartets_per_object)],
+            backend: vec![0; Self::backend_size_bytes(objects_count, quartets_per_object)],
             write_pointer: 0,
             quartets_per_object,
         }
     }
 
     #[must_use]
-    pub(crate) fn make_filled(objects_count_capacity: usize, quartets_per_object: usize, filler: f32) -> Self {
+    pub(crate) fn total_slots_count(&self) -> usize {
+        self.backend.len() / (self.quartets_per_object * QUARTET_SIZE_BYTES)
+    }
+
+    #[must_use]
+    pub(crate) fn make_filled(objects_count: usize, quartets_per_object: usize, filler: f32) -> Self {
         assert!(quartets_per_object > 0);
 
-        let mut result = Self::new(objects_count_capacity, quartets_per_object);
+        let mut result = Self::new(objects_count, quartets_per_object);
         loop {
             if result.fully_written()
             {

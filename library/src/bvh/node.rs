@@ -8,6 +8,7 @@ use std::rc::Rc;
 use strum::EnumCount;
 use crate::geometry::utils::MaxAxis;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 struct BvhNodeContent {
     start_triangle_index: usize,
@@ -43,6 +44,10 @@ pub(crate) struct BvhNode {
     miss_node: Option<Rc<RefCell<BvhNode>>>,
     right_offset: Option<Rc<RefCell<BvhNode>>>,
     axis: Axis,
+}
+
+impl GpuSerializationSize for BvhNode {
+    const SERIALIZED_QUARTET_COUNT: usize = 3;
 }
 
 impl BvhNode {
@@ -203,8 +208,6 @@ impl BvhNode {
         BvhNode::box_y_compare,
         BvhNode::box_z_compare,
     ];
-
-    pub(crate) const SERIALIZED_QUARTET_COUNT: usize = 3;
 
     pub(super) fn serialize_by_index_into(&self, container: &mut GpuReadySerializationBuffer) {
         assert!(self.serial_index.is_some(), "index was not set");

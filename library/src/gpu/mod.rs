@@ -10,3 +10,5 @@ mod test_shaders;
 mod binding_groups;
 mod rasterization_pipeline;
 mod output;
+mod versioned_buffer;
+mod buffers_update_status;

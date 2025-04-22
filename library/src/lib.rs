@@ -6,7 +6,7 @@ mod gpu;
 pub mod scene;
 mod serialization;
 mod bvh;
-mod utils;
+pub mod utils;
 
 use std::cmp::max;
 use std::rc::Rc;
@@ -21,6 +21,7 @@ use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::Renderer;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
+use crate::utils::object_uid::ObjectUid;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -174,7 +175,7 @@ impl Engine {
         self.configure_render();
     }
 
-    pub fn render<Code>(&mut self, pre_present_notify: Code) where Code : Fn() {
+    pub fn render<Code: Fn()>(&mut self, pre_present_notify: Code) {
         if self.ignore_render_requests {
             return;
         }
@@ -189,7 +190,7 @@ impl Engine {
             .expect("failed to acquire next image in the swapchain");
 
         if surface_texture.suboptimal {
-            // TODO: schedule surface reconfigure
+            // TODO: schedule surface reconfigure?
         }
 
         self.renderer.accumulate_more_rays();
@@ -198,8 +199,21 @@ impl Engine {
         pre_present_notify();
         surface_texture.present();
     }
+    
+    #[must_use]
+    pub fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
+        assert!(x < self.window_pixels_size.width);
+        assert!(y < self.window_pixels_size.height);
+        self.renderer.object_in_pixel(x, y)
+    }
 
-    pub fn get_camera(&mut self) -> &mut Camera {
+    #[must_use]
+    pub fn camera(&mut self) -> &mut Camera {
         self.renderer.camera()
+    }
+
+    #[must_use]
+    pub fn scene(&mut self) -> &mut Container {
+        self.renderer.scene()
     }
 }

@@ -3,7 +3,6 @@ use crate::geometry::axis::Axis;
 use crate::geometry::transform::{TransformableCoordinate, Transformation};
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
-use crate::objects::triangle::TriangleIndex;
 use crate::objects::triangle_mesh::{TriangleMesh, VertexData};
 use obj::{Obj, ObjError};
 use std::fs::File;
@@ -59,7 +58,7 @@ impl MeshWarehouse {
     }
 
     #[must_use]
-    pub(super) fn instantiate(&self, prototype: WarehouseSlot, transformation: &Transformation, links: Linkage, triangle_index: TriangleIndex) -> TriangleMesh {
+    pub(super) fn instantiate(&self, prototype: WarehouseSlot, transformation: &Transformation, links: Linkage,) -> TriangleMesh {
         let prototype_mesh = &self.prototypes[prototype.0];
         let transformed_vertices: Vec<Vertex> = prototype_mesh
             .vertices
@@ -67,7 +66,7 @@ impl MeshWarehouse {
             .map(|v| Vertex::new( MeshWarehouse::transform::<Point>(v.position, transformation), MeshWarehouse::transform::<Vector>(v.normal, transformation)))
             .collect();
 
-        TriangleMesh::new(&transformed_vertices, &prototype_mesh.indices, links, triangle_index)
+        TriangleMesh::new(&transformed_vertices, &prototype_mesh.indices, links,)
     }
 
     #[must_use]
@@ -164,10 +163,9 @@ mod tests {
         let first_mesh_index = system_under_test.load(temp_file.path()).unwrap();
         let second_mesh_index = system_under_test.load(temp_file.path()).unwrap();
         assert_ne!(first_mesh_index, second_mesh_index);
-
-        let base_triangle_index = TriangleIndex(1);
+        
         let transformation = Transformation::new(Affine::from_translation(Vector::new(1.0, 2.0, 3.0)));
-        let instance = system_under_test.instantiate(second_mesh_index, &transformation, TEST_LINKS, base_triangle_index);
+        let instance = system_under_test.instantiate(second_mesh_index, &transformation, TEST_LINKS,);
 
         let mut triangles: Vec<Triangle> = vec![];
         instance.put_triangles_into(&mut triangles);

@@ -12,16 +12,17 @@ use crate::objects::sdf::SdfBox;
 use crate::objects::sphere::Sphere;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
-use crate::scene::container::Container;
+use crate::scene::container::{Container, DataKind};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use crate::utils::object_uid::ObjectUid;
 use bytemuck::checked::cast_slice;
-use image::{ImageBuffer, Rgba};
-use std::path::Path;
 use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::gpu::buffers_update_status::BuffersUpdateStatus;
+use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
+use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 // TODO: work in progress
 
@@ -33,6 +34,7 @@ pub(crate) struct Renderer {
     pipeline_ray_tracing: ComputePipeline,
     pipeline_object_id: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
+    scene: Container,
 }
 
 impl Renderer {
@@ -56,13 +58,12 @@ impl Renderer {
         let resources = Resources::new(context.clone(), presentation_format);
         let buffers = Self::init_buffers(&mut scene, &context, &uniforms, &resources, uniforms.frame_buffer_size);
         
-        let ray_tracing_shader_module = resources.create_shader_module("ray tracer shader", CODE_FOR_GPU)?;
-        let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &ray_tracing_shader_module);
+        let shader_module = resources.create_shader_module("ray tracer shader", CODE_FOR_GPU);
         
-        let object_id_shader_module = resources.create_shader_module("object id shader", CODE_FOR_GPU)?;
-        let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &object_id_shader_module);
+        let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module);
+        let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
         
-        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &ray_tracing_shader_module);
+        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
 
         Ok(Self {
             context,
@@ -72,33 +73,84 @@ impl Renderer {
             pipeline_ray_tracing: ray_tracing,
             pipeline_object_id: object_id,
             pipeline_final_image_rasterization: final_image_rasterization,
+            scene,
         })
     }
 
-    fn init_buffers(scene: &mut Container, context: &Context, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
-        let empty_triangles_marker
-            = GpuReadySerializationBuffer::make_filled(1, Triangle::SERIALIZED_QUARTET_COUNT, -1.0_f32);
-        let empty_bvh_marker
-            = GpuReadySerializationBuffer::make_filled(1, BvhNode::SERIALIZED_QUARTET_COUNT, -1.0_f32);
+    #[must_use]
+    pub(crate) fn scene(&mut self) -> &mut Container {
+        &mut self.scene
+    }
 
-        let serialized_triangles = scene.evaluate_serialized_triangles();
+    #[must_use]
+    fn update_buffer<T: GpuSerializationSize>(geometry_kind: &'static DataKind, buffer: &mut VersionedBuffer, resources: &Resources, scene: &Container, queue: &wgpu::Queue,) -> BufferUpdateStatus {
+        let actual_data_version = scene.data_version(*geometry_kind);
+        let serializer = || Self::serialize_scene_data::<T>(&scene, &geometry_kind);
+        buffer.try_update_and_resize(actual_data_version, resources, queue, serializer)
+    }
+    
+    #[must_use]
+    fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
+        let mut composite_status = BuffersUpdateStatus::new();
+
+        composite_status.merge_geometry(Self::update_buffer::<Sphere>(&DataKind::Sphere, &mut self.buffers.spheres, &self.resources, &self.scene, self.context.queue()));
+        composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
+        composite_status.merge_geometry(Self::update_buffer::<SdfBox>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
+
+        composite_status.merger_material(self.buffers.materials.try_update_and_resize(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
         
-        let triangles = if serialized_triangles.empty()
-        { &empty_triangles_marker } else { serialized_triangles.geometry() };
-        let bvh = if serialized_triangles.empty()
-        { &empty_bvh_marker } else { serialized_triangles.bvh() };
+        let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
+        if self.buffers.triangles.version_diverges(triangles_set_version) {
 
-        let materials = if scene.materials_count() > 0
-            { scene.evaluate_serialized_materials() } else { GpuReadySerializationBuffer::make_filled(1, Material::SERIALIZED_QUARTET_COUNT, 0.0_f32) };
+            let mut serialized_triangles = self.scene.evaluate_serialized_triangles();
 
-        let spheres = if scene.spheres_count() > 0
-            { scene.evaluate_serialized_spheres() } else { GpuReadySerializationBuffer::make_filled(1, Sphere::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
+            let (triangles, bvh)
+                = if serialized_triangles.empty()
+                    { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) }
+                        else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
+            
+            composite_status.merge_geometry(self.buffers.triangles.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || triangles));
+            composite_status.merge_geometry(self.buffers.bvh.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || bvh));
+        }
+        
+        if composite_status.any_resized() {
+            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
+            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_object_id);
+        }
+        
+        composite_status
+    }
+    
+    #[must_use]
+    fn make_empty_buffer_marker<T: GpuSerializationSize>() -> GpuReadySerializationBuffer {
+        GpuReadySerializationBuffer::make_filled(1, T::SERIALIZED_QUARTET_COUNT, -1.0_f32)
+    }
+    
+    #[must_use]
+    fn serialize_scene_data<T: GpuSerializationSize>(scene: &Container, geometry_kind: &'static DataKind) -> GpuReadySerializationBuffer {
+        if scene.count_of_a_kind(*geometry_kind) > 0 { 
+            scene.evaluate_serialized(*geometry_kind) 
+        } else {
+            Self::make_empty_buffer_marker::<T>() 
+        }
+    }
+    
+    #[must_use]
+    fn make_buffer<T: GpuSerializationSize>(scene: &Container, resources: &Resources, geometry_kind: &'static DataKind) -> VersionedBuffer {
+        let serialized = Self::serialize_scene_data::<T>(scene, geometry_kind);
+        VersionedBuffer::new(scene.data_version(*geometry_kind), resources, geometry_kind.as_ref(), || serialized)
+    }
+    
+    fn init_buffers(scene: &mut Container, context: &Context, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
+        let mut serialized_triangles = scene.evaluate_serialized_triangles();
+        
+        let (triangles, bvh) 
+            = if serialized_triangles.empty()
+                { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) } 
+                    else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
 
-        let parallelograms = if scene.parallelograms_count() > 0
-            { scene.evaluate_serialized_parallelograms() } else { GpuReadySerializationBuffer::make_filled(1, Parallelogram::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
-
-        let sdf = if scene.sdf_objects_count() > 0
-            { scene.evaluate_serialized_sdf() } else { GpuReadySerializationBuffer::make_filled(1, SdfBox::SERIALIZED_QUARTET_COUNT, -1.0_f32) };
+        let materials = if scene.materials().count() > 0
+            { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
 
         // TODO: we can use inline defined shader data, rather than this complication
         let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
@@ -107,13 +159,14 @@ impl Renderer {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
             frame_buffer: FrameBuffer::new(context.device(), frame_buffer_size),
-
-            spheres: resources.create_storage_buffer_write_only("spheres", spheres.backend()),
-            parallelograms: resources.create_storage_buffer_write_only("parallelograms", parallelograms.backend()),
-            sdf: resources.create_storage_buffer_write_only("sdf", sdf.backend()),
-            triangles: resources.create_storage_buffer_write_only("triangles from all meshes", triangles.backend()),
-            materials: resources.create_storage_buffer_write_only("materials", materials.backend()),
-            bvh: resources.create_storage_buffer_write_only("bvh", bvh.backend()),
+            
+            spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
+            parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
+            sdf: Self::make_buffer::<SdfBox>(scene, resources, &DataKind::Sdf),
+            materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
+            triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || triangles),
+            bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
+            
             vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
     }
@@ -125,60 +178,65 @@ impl Renderer {
     #[must_use]
     fn create_object_id_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
         let pipeline = resources.create_compute_pipeline(ComputeRoutine::ShaderObjectIdEntryPoint, module);
-        Self::create_compute_pipeline(context, buffers, pipeline, |context, buffers, pipeline| {
-            Self::create_frame_buffers_bindings_for_object_id_compute(context, buffers, pipeline);
+        Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
+            Self::create_frame_buffers_bindings_for_object_id_compute(device, buffers, pipeline);
         })
     }
     
     #[must_use]
     fn create_ray_tracing_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
         let pipeline = resources.create_compute_pipeline(ComputeRoutine::ShaderRayTracingEntryPoint, module);
-        Self::create_compute_pipeline(context, buffers, pipeline, |context, buffers, pipeline| {
-            Self::create_frame_buffers_bindings_for_ray_tracing_compute(context, buffers, pipeline);
+        Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
+            Self::create_frame_buffers_bindings_for_ray_tracing_compute(device, buffers, pipeline);
         })
     }
 
     #[must_use]
-    fn create_compute_pipeline<Code>(context: &Context, buffers: &Buffers, pipeline: wgpu::ComputePipeline, customization: Code) -> ComputePipeline
-        where Code: FnOnce(&Context, &Buffers, &mut ComputePipeline), {
+    fn create_compute_pipeline<Code>(device: &wgpu::Device, buffers: &Buffers, pipeline: wgpu::ComputePipeline, customization: Code) -> ComputePipeline
+        where Code: FnOnce(&wgpu::Device, &Buffers, &mut ComputePipeline), 
+    {
         let mut pipeline = ComputePipeline::new(pipeline);
 
-        pipeline.setup_bind_group(Self::UNIFORMS_GROUP_INDEX, Some("compute pipeline uniform group"), context.device(), |bind_group| {
+        pipeline.setup_bind_group(Self::UNIFORMS_GROUP_INDEX, Some("compute pipeline uniform group"), device, |bind_group| {
             bind_group
                 .add_entry(0, buffers.uniforms.clone())
             ;
         });
 
-        customization(context, buffers, &mut pipeline);
+        customization(device, buffers, &mut pipeline);
 
-        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), context.device(), |bind_group| {
-            bind_group
-                .add_entry(0, buffers.spheres.clone())
-                .add_entry(1, buffers.parallelograms.clone())
-                .add_entry(2, buffers.sdf.clone())
-                .add_entry(3, buffers.triangles.clone())
-                .add_entry(4, buffers.materials.clone())
-                .add_entry(5, buffers.bvh.clone())
-            ;
-        });
-
+        Self::create_geometry_buffers_bindings(device, buffers, &mut pipeline);
+        
         pipeline
     }
+    
+    fn create_geometry_buffers_bindings(device: &wgpu::Device, buffers: &Buffers, pipeline: &mut ComputePipeline) {
+        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), device, |bind_group| {
+            bind_group
+                .add_entry(0, buffers.spheres.backend().clone())
+                .add_entry(1, buffers.parallelograms.backend().clone())
+                .add_entry(2, buffers.sdf.backend().clone())
+                .add_entry(3, buffers.triangles.backend().clone())
+                .add_entry(4, buffers.materials.backend().clone())
+                .add_entry(5, buffers.bvh.backend().clone())
+            ;
+        });
+    }
 
-    fn create_frame_buffers_bindings_for_object_id_compute(context: &Context, buffers: &Buffers, object_id_pipeline: &mut ComputePipeline) {
+    fn create_frame_buffers_bindings_for_object_id_compute(device: &wgpu::Device, buffers: &Buffers, object_id_pipeline: &mut ComputePipeline) {
         let label = Some("object id compute pipeline frame buffers group");
 
-        object_id_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, context.device(), |bind_group_builder| {
+        object_id_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder
                 .add_entry(1, buffers.frame_buffer.object_id_at_gpu())
             ;
         });
     }
     
-    fn create_frame_buffers_bindings_for_ray_tracing_compute(context: &Context, buffers: &Buffers, ray_tracing_pipeline: &mut ComputePipeline) {
+    fn create_frame_buffers_bindings_for_ray_tracing_compute(device: &wgpu::Device, buffers: &Buffers, ray_tracing_pipeline: &mut ComputePipeline) {
         let label = Some("ray tracing compute pipeline frame buffers group");
 
-        ray_tracing_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, context.device(), |bind_group_builder| {
+        ray_tracing_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder
                 .add_entry(0, buffers.frame_buffer.pixel_color())
             ;
@@ -222,27 +280,50 @@ impl Renderer {
         if previous_frame_size < new_frame_size {
             self.buffers.frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
             
-            Self::create_frame_buffers_bindings_for_ray_tracing_compute(&self.context, &self.buffers, &mut self.pipeline_ray_tracing);
-            Self::create_frame_buffers_bindings_for_object_id_compute(&self.context, &self.buffers, &mut self.pipeline_object_id);
+            Self::create_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
+            Self::create_frame_buffers_bindings_for_object_id_compute(self.context.device(), &self.buffers, &mut self.pipeline_object_id);
             Self::create_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
         } else {
             self.buffers.frame_buffer.invalidate();
         }
     }
 
+    #[must_use]
+    pub(crate) fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
+        let map = self.buffers.frame_buffer.object_id_at_cpu();
+        let index = (self.uniforms.frame_buffer_size.width() * y + x) as usize;
+        assert!(index < map.len());
+        let uid = map[index];
+        
+        if 0 == uid {
+            return None;
+        }
+        
+        Some(ObjectUid(uid))
+    }
+
     pub(crate) fn accumulate_more_rays(&mut self)  {
         let mut rebuild_object_id_buffer = self.buffers.frame_buffer.object_id_at_cpu().is_empty();
+        
         {
-            if self.uniforms.camera.check_and_clear_updated_status() {
+            let scene_status = self.update_buffers_if_scene_changed();
+            
+            let camera_changed = self.uniforms.camera.check_and_clear_updated_status();
+            let geometry_changed = scene_status.geometry_updated();
+            
+            if scene_status.any_updated() {
+                self.uniforms.reset_frame_accumulation();
+            }
+            
+            if camera_changed || geometry_changed {
                 self.uniforms.reset_frame_accumulation();
                 rebuild_object_id_buffer = true;
             }
+            
             self.uniforms.next_frame();
-
             // TODO: rewrite with 'write_buffer_with'? May be we need kind of ping-pong or circular buffer here?
             let uniform_values = self.uniforms.serialize();
             self.context.queue().write_buffer(&self.buffers.uniforms, 0, uniform_values.backend());
-
             self.uniforms.drop_reset_flag();
         }
         
@@ -325,12 +406,13 @@ struct Buffers {
 
     frame_buffer: FrameBuffer,
 
-    spheres: Rc<wgpu::Buffer>,
-    parallelograms: Rc<wgpu::Buffer>,
-    sdf: Rc<wgpu::Buffer>,
-    triangles: Rc<wgpu::Buffer>,
-    materials: Rc<wgpu::Buffer>,
-    bvh: Rc<wgpu::Buffer>,
+    spheres: VersionedBuffer,
+    parallelograms: VersionedBuffer,
+    sdf: VersionedBuffer,
+    triangles: VersionedBuffer,
+    materials: VersionedBuffer,
+    bvh: VersionedBuffer,
+    
     vertex: Rc<wgpu::Buffer>,
 }
 
@@ -384,29 +466,13 @@ impl Uniforms {
     }
 }
 
-fn save_u32_buffer_as_png(buffer: &Vec<u32>, image_width: u32, image_height: u32, path: &Path) {
-    let pixel_count = (image_width * image_height) as usize;
-    assert!(buffer.len() >= pixel_count);
-
-    let sliced = &buffer[..pixel_count];
-
-    let raw_bytes: Vec<u8> = sliced
-        .iter()
-        .flat_map(|&px| px.to_ne_bytes())
-        .collect();
-
-    let buffer: ImageBuffer<Rgba<u8>, _> = ImageBuffer::from_raw(image_width, image_height, raw_bytes.to_vec())
-        .expect("failed to create image buffer");
-
-    buffer.save(path).expect(format!("failed to save PNG into {}", path.display()).as_str());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use cgmath::EuclideanSpace;
+    use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
     use wgpu::TextureFormat;
@@ -516,7 +582,7 @@ mod tests {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
         let mut scene = Container::new();
-        let dummy_material = scene.add_material(&Material::new());
+        let dummy_material = scene.materials().add(&Material::new());
         
         scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), dummy_material);
 
@@ -548,5 +614,22 @@ mod tests {
             Ok(full_path) => println!("full path to '{}': {}", entity_name, full_path.display()),
             Err(e) => eprintln!("error: {}", e),
         }
+    }
+
+    fn save_u32_buffer_as_png(buffer: &Vec<u32>, image_width: u32, image_height: u32, path: &Path) {
+        let pixel_count = (image_width * image_height) as usize;
+        assert!(buffer.len() >= pixel_count);
+
+        let sliced = &buffer[..pixel_count];
+
+        let raw_bytes: Vec<u8> = sliced
+            .iter()
+            .flat_map(|&px| px.to_ne_bytes())
+            .collect();
+
+        let buffer: ImageBuffer<Rgba<u8>, _> = ImageBuffer::from_raw(image_width, image_height, raw_bytes.to_vec())
+            .expect("failed to create image buffer");
+
+        buffer.save(path).expect(format!("failed to save PNG into {}", path.display()).as_str());
     }
 }

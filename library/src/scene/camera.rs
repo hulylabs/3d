@@ -84,6 +84,7 @@ pub struct Camera {
 const MIN_ROD_LENGTH: f64 = 0.01;
 
 impl Camera {
+    #[must_use]
     fn new(eye_rod_length: f64, kind: Box<dyn CameraKind>, look_at: Point) -> Camera {
         assert!(eye_rod_length > 0.0);
         let mut result = Camera {

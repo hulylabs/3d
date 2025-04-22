@@ -3,10 +3,12 @@ use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use crate::objects::ray_traceable::RayTraceable;
 use alias::Point;
 use alias::Vector;
+use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 
 pub(crate) struct Parallelogram {
     origin: Point,
@@ -22,9 +24,11 @@ impl Parallelogram {
     }
 }
 
-impl SerializableForGpu for Parallelogram {
+impl GpuSerializationSize for Parallelogram {
     const SERIALIZED_QUARTET_COUNT: usize = 5;
+}
 
+impl GpuSerializable for Parallelogram {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -41,10 +45,10 @@ impl SerializableForGpu for Parallelogram {
         );
 
         container.write(|writer| {
-           writer.write_float(self.local_x.x as f32);
-           writer.write_float(self.local_x.y as f32);
-           writer.write_float(self.local_x.z as f32);
-           writer.write_integer(self.links.uid().0);
+            writer.write_float(self.local_x.x as f32);
+            writer.write_float(self.local_x.y as f32);
+            writer.write_float(self.local_x.z as f32);
+            writer.write_integer(self.links.uid().0);
         });
 
         container.write_quartet_f64(
@@ -68,6 +72,22 @@ impl SerializableForGpu for Parallelogram {
         );
 
         debug_assert!(container.object_fully_written());
+    }
+}
+
+impl RayTraceable for Parallelogram {
+    #[must_use]
+    fn material(&self) -> MaterialIndex {
+        self.links.material_index()
+    }
+
+    fn set_material(&mut self, new_material_index: MaterialIndex) {
+        self.links.set_material_index(new_material_index)
+    }
+
+    #[must_use]
+    fn serialized_quartet_count(&self) -> usize {
+        Parallelogram::SERIALIZED_QUARTET_COUNT
     }
 }
 

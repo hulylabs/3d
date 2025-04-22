@@ -1,2 +1,2 @@
-﻿pub(crate) mod uid_generator;
-pub mod object_uid;
+﻿pub mod object_uid;
+pub(crate) mod uid_generator;

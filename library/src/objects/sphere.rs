@@ -1,9 +1,11 @@
 ﻿use crate::geometry::alias;
 
 use crate::objects::common_properties::Linkage;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
-use alias::Point;
+use crate::objects::material_index::MaterialIndex;
+use crate::objects::ray_traceable::RayTraceable;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+use alias::Point;
 
 pub(crate) struct Sphere {
     center: Point,
@@ -19,9 +21,11 @@ impl Sphere {
     }
 }
 
-impl SerializableForGpu for Sphere {
+impl GpuSerializationSize for Sphere {
     const SERIALIZED_QUARTET_COUNT: usize = 2;
+}
 
+impl GpuSerializable for Sphere {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -36,14 +40,30 @@ impl SerializableForGpu for Sphere {
     }
 }
 
+impl RayTraceable for Sphere {
+    #[must_use]
+    fn material(&self) -> MaterialIndex {
+        self.links.material_index()
+    }
+
+    fn set_material(&mut self, new_material_index: MaterialIndex) {
+        self.links.set_material_index(new_material_index)
+    }
+
+    #[must_use]
+    fn serialized_quartet_count(&self) -> usize {
+        Sphere::SERIALIZED_QUARTET_COUNT
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use bytemuck::cast_slice;
     use super::*;
     use crate::objects::common_properties::ObjectUid;
     use crate::objects::material_index::MaterialIndex;
-    use cgmath::EuclideanSpace;
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
+    use bytemuck::cast_slice;
+    use cgmath::EuclideanSpace;
 
     #[test]
     fn test_origin() {

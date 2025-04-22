@@ -1,24 +1,9 @@
 ﻿use crate::gpu::context::Context;
 use std::rc::Rc;
-use thiserror::Error;
 use wgpu::util::DeviceExt;
 use wgpu::BufferUsages;
 
 // TODO: work in progress
-
-#[derive(Error, Debug)]
-pub(super) enum ShaderCreationError {
-    #[error("shader '{shader_name:?}' parse error: {message:?}")]
-    ParseError {
-        shader_name: String,
-        message: String,
-    },
-    #[error("shader '{shader_name:?}' validation error: {message:?}")]
-    ValidationError {
-        shader_name: String,
-        message: String,
-    },
-}
 
 pub(super) struct Resources {
     context: Rc<Context>,
@@ -31,21 +16,12 @@ impl Resources {
         Self { context, presentation_format }
     }
 
-    pub(super) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> Result<wgpu::ShaderModule, ShaderCreationError> {
-        // TODO: this validation text output is unreadable =( but create_shader_module panics
-        // let module = parse_str(shader_source_code).map_err(|e| ShaderCreationError::ParseError {
-        //     shader_name: shader_name.to_string(),
-        //     message: format!("{:?}", e),
-        // })?;
-        // let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-        // validator.validate(&module).map_err(|e| ShaderCreationError::ValidationError {
-        //     shader_name: shader_name.to_string(),
-        //     message: format!("{:?}", e),
-        // })?;
-        Ok(self.context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
+    #[must_use]
+    pub(super) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> wgpu::ShaderModule {
+        self.context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(shader_name),
             source: wgpu::ShaderSource::Wgsl(shader_source_code.into()), //TODO: can we use naga module created above?
-        }))
+        })
     }
 
     #[must_use]
@@ -181,56 +157,26 @@ mod tests {
     fn test_create_shader_module_successful_compilation() {
         let system_under_test = make_system_under_test();
 
-        let shader = system_under_test.create_shader_module(
+        let _ = system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), TRIVIAL_SHADER_CODE);
-
-        shader.err().and_then(|error| -> Option<ShaderCreationError>{
-            panic!("{}", error);
-        });
     }
 
     #[test]
+    #[should_panic]
     fn test_create_shader_module_syntax_error_compilation() {
         let system_under_test = make_system_under_test();
 
-        let shader = system_under_test.create_shader_module(
+        let _ = system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_SYNTAX_ERROR);
-
-        match shader {
-            Ok(_) => {
-                panic!("shader compilation expected to fail");
-            }
-            Err(error) => {
-                match error {
-                    ShaderCreationError::ParseError { .. } => {}
-                    ShaderCreationError::ValidationError { .. } => {
-                        panic!("parse error expected");
-                    }
-                }
-            }
-        }
     }
 
     #[test]
+    #[should_panic]
     fn test_create_shader_module_validation_error_compilation() {
         let system_under_test = make_system_under_test();
 
-        let shader = system_under_test.create_shader_module(
+        let _ = system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_VALIDATION_ERROR);
-
-        match shader {
-            Ok(_) => {
-                panic!("shader compilation expected to fail");
-            }
-            Err(error) => {
-                match error {
-                    ShaderCreationError::ParseError { .. } => {
-                        panic!("validation error expected");
-                    }
-                    ShaderCreationError::ValidationError { .. } => {}
-                }
-            }
-        }
     }
 
     #[test]
@@ -265,5 +211,4 @@ mod tests {
 
         assert_eq!(buffer.usage(), BufferUsages::VERTEX | BufferUsages::COPY_DST);
     }
-
 }

@@ -1,11 +1,13 @@
 ﻿use crate::geometry::alias::Vector;
 use crate::geometry::transform::Affine;
+use crate::objects::common_properties::Linkage;
+use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::helpers::serialize_matrix;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
+use crate::objects::ray_traceable::RayTraceable;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
-use crate::objects::common_properties::Linkage;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 
 pub(crate) struct SdfBox {
     location: Affine,
@@ -24,9 +26,11 @@ impl SdfBox {
     }
 }
 
-impl SerializableForGpu for SdfBox {
+impl GpuSerializationSize for SdfBox {
     const SERIALIZED_QUARTET_COUNT: usize = 10;
+}
 
+impl GpuSerializable for SdfBox {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -49,14 +53,30 @@ impl SerializableForGpu for SdfBox {
     }
 }
 
+impl RayTraceable for SdfBox {
+    #[must_use]
+    fn material(&self) -> MaterialIndex {
+        self.links.material_index()
+    }
+
+    fn set_material(&mut self, new_material_index: MaterialIndex) {
+        self.links.set_material_index(new_material_index)
+    }
+
+    #[must_use]
+    fn serialized_quartet_count(&self) -> usize {
+        SdfBox::SERIALIZED_QUARTET_COUNT
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
-    use bytemuck::cast_slice;
     use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
     use crate::objects::material_index::MaterialIndex;
+    use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
     use crate::utils::object_uid::ObjectUid;
+    use bytemuck::cast_slice;
 
     #[must_use]
     fn matrix_at(index: usize, matrix: &Affine) -> f32 {

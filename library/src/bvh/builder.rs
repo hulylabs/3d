@@ -3,6 +3,7 @@ use crate::objects::triangle::Triangle;
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 #[must_use]
 pub(crate) fn build_serialized_bvh(support: &mut Vec<Triangle>) -> GpuReadySerializationBuffer {
@@ -13,7 +14,9 @@ pub(crate) fn build_serialized_bvh(support: &mut Vec<Triangle>) -> GpuReadySeria
     let mut index = 0_usize;
     evaluate_serial_indices(Some(root.clone()), &mut index);
 
-    let mut serialized = GpuReadySerializationBuffer::make_filled(index, BvhNode::SERIALIZED_QUARTET_COUNT, 0.0);
+    let quartet_count = <BvhNode as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT;
+    let filler = 0.0;
+    let mut serialized = GpuReadySerializationBuffer::make_filled(index, quartet_count, filler);
     serialize(Some(root.clone()), &mut serialized);
 
     serialized

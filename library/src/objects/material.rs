@@ -1,7 +1,7 @@
 ﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::serializable_for_gpu::SerializableForGpu;
 use palette::Srgb;
 use strum_macros::{EnumCount, EnumIter};
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 
 #[derive(Copy, Clone, Debug, PartialEq, EnumCount, EnumIter)]
 pub enum MaterialClass {
@@ -45,17 +45,17 @@ impl Material {
     }
 
     pub fn with_albedo(mut self, r: f32, g: f32, b: f32) -> Self {
-        assert!(r >= 0.0 && r <= 1.0);
-        assert!(g >= 0.0 && g <= 1.0);
-        assert!(b >= 0.0 && b <= 1.0);
+        assert!(r >= 0.0);
+        assert!(g >= 0.0);
+        assert!(b >= 0.0);
         self.albedo = Srgb::new(r, g, b);
         self
     }
 
     pub fn with_specular(mut self, r: f32, g: f32, b: f32) -> Self {
-        assert!(r >= 0.0 && r <= 1.0);
-        assert!(g >= 0.0 && g <= 1.0);
-        assert!(b >= 0.0 && b <= 1.0);
+        assert!(r >= 0.0);
+        assert!(g >= 0.0);
+        assert!(b >= 0.0);
         self.specular = Srgb::new(r, g, b);
         self
     }
@@ -86,27 +86,14 @@ impl Material {
     pub fn with_class(mut self, class: MaterialClass) -> Self {
         self.class = class;
         self
-    }
+    }    
 }
 
-impl Default for Material {
-    #[must_use]
-    fn default() -> Self {
-        Material {
-            albedo: Self::ZERO_COLOR,
-            specular: Self::ZERO_COLOR,
-            emission: Self::ZERO_COLOR,
-            specular_strength: 0.0,
-            roughness: 0.0,
-            refractive_index_eta: 0.0,
-            class: MaterialClass::Lambert,
-        }
-    }
-}
-
-impl SerializableForGpu for Material {
+impl GpuSerializationSize for Material {
     const SERIALIZED_QUARTET_COUNT: usize = 4;
+}
 
+impl GpuSerializable for Material {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -133,6 +120,21 @@ impl SerializableForGpu for Material {
         );
 
         debug_assert!(container.object_fully_written());
+    }
+}
+
+impl Default for Material {
+    #[must_use]
+    fn default() -> Self {
+        Material {
+            albedo: Self::ZERO_COLOR,
+            specular: Self::ZERO_COLOR,
+            emission: Self::ZERO_COLOR,
+            specular_strength: 0.0,
+            roughness: 0.0,
+            refractive_index_eta: 0.0,
+            class: MaterialClass::Lambert,
+        }
     }
 }
 
