@@ -18,7 +18,7 @@ impl BufferUpdateStatus {
     pub(crate) fn updated(&self) -> bool {
         self.updated
     }
-    
+
     #[must_use]
     pub(crate) fn merge(&self, another: BufferUpdateStatus) -> Self {
         let resized = self.resized || another.resized;
@@ -26,7 +26,7 @@ impl BufferUpdateStatus {
         Self { resized, updated }
     }
 
-    #[must_use]
+    #[must_use] #[allow(dead_code)]
     pub(crate) fn new_resized(resized: bool) -> Self {
         Self { resized, updated: true }
     }
@@ -53,7 +53,7 @@ impl VersionedBuffer {
         let content = generate_data();
         let buffer = resources.create_storage_buffer_write_only(label, content.backend());
         let elements_count = content.total_slots_count();
-        
+
         Self { content_version, backend: buffer, elements_count, label }
     }
 
@@ -61,7 +61,7 @@ impl VersionedBuffer {
     pub(super) fn version_diverges(&self, another: Version) -> bool {
         self.content_version != another
     }
-    
+
     #[must_use]
     pub(super) fn try_update_and_resize<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
     where
@@ -72,19 +72,19 @@ impl VersionedBuffer {
         }
 
         self.content_version = new_version;
-        
+
         let new_content = generate_data();
         self.elements_count = new_content.total_slots_count();
-            
+
         if self.backend.size() >= new_content.backend().len() as u64 {
             queue.write_buffer(self.backend.as_ref(), 0, new_content.backend());
             return BufferUpdateStatus { resized: false, updated: true };
         }
-        
+
         self.backend = resources.create_storage_buffer_write_only(self.label, new_content.backend());
         BufferUpdateStatus { resized: true, updated: true }
     }
-    
+
     #[must_use]
     pub(super) fn backend(&self) -> &Rc<wgpu::Buffer> {
         &self.backend
@@ -102,11 +102,11 @@ mod tests {
     fn make_test_content(slots_count: usize) -> GpuReadySerializationBuffer {
         GpuReadySerializationBuffer::make_filled(slots_count, 1, 7.0)
     }
-    
+
     const SYSTEM_UNDER_TEST_INITIAL_SLOTS: usize = 2;
     const SYSTEM_UNDER_TEST_INITIAL_VERSION: Version = Version(0);
     const SYSTEM_UNDER_TEST_LABEL: &str = "test-buffer";
-    
+
     #[must_use]
     fn make_system_under_test() -> (VersionedBuffer, Resources, Rc<Context>) {
         let context = create_headless_wgpu_context();
@@ -114,10 +114,10 @@ mod tests {
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
         let system_under_test = VersionedBuffer::new(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, SYSTEM_UNDER_TEST_LABEL, generate_data);
-        
+
         (system_under_test, resources, context.clone())
     }
-    
+
     #[test]
     fn test_construction() {
         let (system_under_test, _, _) = make_system_under_test();
@@ -130,16 +130,16 @@ mod tests {
     fn test_try_update_and_resize_same_version() {
         let (mut system_under_test, resources, context) = make_system_under_test();
         let make_new_data = || make_test_content(1);
-        
+
         let status = system_under_test.try_update_and_resize(
-            SYSTEM_UNDER_TEST_INITIAL_VERSION, 
-            &resources, 
+            SYSTEM_UNDER_TEST_INITIAL_VERSION,
+            &resources,
             context.queue(),
             make_new_data);
 
         assert!(!status.resized());
     }
-    
+
     #[test]
     fn test_try_update_and_resize_smaller_size() {
         let (mut system_under_test, resources, context) = make_system_under_test();
