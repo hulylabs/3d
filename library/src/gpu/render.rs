@@ -366,7 +366,7 @@ impl Renderer {
 
             {let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some(label),
-                timestamp_writes: None, // TODO: what can be used for?
+                timestamp_writes: None,
             });
 
             compute_pipeline.set_into_pass(&mut pass);

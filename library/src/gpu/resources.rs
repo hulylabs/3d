@@ -59,7 +59,7 @@ impl Resources {
             vertex: wgpu::VertexState {
                 module,
                 entry_point: Some("vs"),
-                compilation_options: Default::default(), //TODO: what options are available?
+                compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
                     array_stride: 2 * 4, // TODO: magic constants
                     step_mode: wgpu::VertexStepMode::Vertex,
@@ -75,7 +75,7 @@ impl Resources {
             fragment: Some(wgpu::FragmentState {
                 module,
                 entry_point: Some("fs"),
-                compilation_options: Default::default(), //TODO: what options are available?
+                compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.presentation_format,
                     blend: Some(wgpu::BlendState::REPLACE),
@@ -94,7 +94,7 @@ impl Resources {
     pub(super) fn create_compute_pipeline(&self, routine: ComputeRoutine, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some(routine.name()),
-            compilation_options: Default::default(), //TODO: what options are available?
+            compilation_options: Default::default(),
             layout: None,
             module,
             entry_point: Some(routine.name()),

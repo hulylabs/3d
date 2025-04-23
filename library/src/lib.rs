@@ -22,8 +22,15 @@ use crate::gpu::render::Renderer;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::object_uid::ObjectUid;
+use crate::utils::sliding_time_frame::SlidingTimeFrame;
+use crate::utils::throttled_logger::ThrottledInfoLogger;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
+
+const FPS_MEASUREMENT_SAMPLES: usize = 15;
+const FPS_WRITE_FREQUENCY: usize = 5;
+
+const RAYS_ACCUMULATIONS_PER_FRAME: usize = 60;
 
 pub struct Engine {
     /*Actually, we do not need any synchronization stuff; our code is
@@ -40,6 +47,8 @@ pub struct Engine {
     window_surface_format: wgpu::TextureFormat,
 
     renderer: Renderer,
+    fps_measurer: SlidingTimeFrame,
+    fps_reporter: ThrottledInfoLogger,
 }
 
 #[derive(Error, Debug)]
@@ -127,6 +136,9 @@ impl Engine {
             window_output_surface: window_surface,
             window_surface_format: output_surface_format,
             renderer,
+            
+            fps_measurer: SlidingTimeFrame::new(FPS_MEASUREMENT_SAMPLES),
+            fps_reporter: ThrottledInfoLogger::new(FPS_WRITE_FREQUENCY),
         };
 
         ware.configure_surface();
@@ -151,6 +163,7 @@ impl Engine {
 
     fn configure_render(&mut self) {
         self.renderer.set_output_size(self.window_pixels_size);
+        self.fps_measurer.start();
     }
 
     // TODO: add handling of window obscuring → request to unload all occupied resources (iOS)
@@ -193,11 +206,19 @@ impl Engine {
             // TODO: schedule surface reconfigure?
         }
 
-        self.renderer.accumulate_more_rays();
+        for _ in 0..RAYS_ACCUMULATIONS_PER_FRAME {
+            self.renderer.accumulate_more_rays();   
+        }
+        
         self.renderer.present(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();
+        
+        self.fps_measurer.sample();
+        let average_frame_time = self.fps_measurer.average_delta();
+        let fps = 1.0 / average_frame_time.as_secs_f32();
+        self.fps_reporter.do_write(format!("CPU observed FPS: {}", fps));
     }
     
     #[must_use]

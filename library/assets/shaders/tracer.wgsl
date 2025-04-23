@@ -12,11 +12,11 @@ const ISOTROPIC = 3.0;
 const ANISOTROPIC = 4.0;
 
 const NUM_SAMPLES = 1.0;
-const MAX_BOUNCES = 30;
+const MAX_BOUNCES = 50;
 const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
-const MAX_SDF_RAY_MARCH_STEPS = 20;
+const MAX_SDF_RAY_MARCH_STEPS = 10;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
 
