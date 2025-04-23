@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_sample_without_start() {
-        let mut system_under_test = SlidingTimeFrame::new(2);
+        let mut system_under_test = SlidingTimeFrame::new(1);
 
         let sleep_time = Duration::from_millis(27);
         sleep(sleep_time);
