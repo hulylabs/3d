@@ -28,6 +28,12 @@ jobs:
           sudo apt update
           sudo apt install -y libvulkan1 mesa-vulkan-drivers
 
+      - run: rustup toolchain install stable --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: ${{ matrix.job.os }}
+
 #      Uncomment this in case of local running via 'act'
 #      - name: Setup Rust
 #        uses: actions-rust-lang/setup-rust-toolchain@v1
