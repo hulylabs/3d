@@ -1,4 +1,5 @@
-﻿use cgmath::Deg;
+﻿use std::env;
+use cgmath::Deg;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
@@ -7,7 +8,7 @@ use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
 use library::Engine;
 use log::error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton};
@@ -221,8 +222,16 @@ impl Sandbox {
         scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), red_material);
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), green_material);
 
+        #[must_use]
+        fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
+            let exe_path = env::current_exe().unwrap();
+            let exe_directory = exe_path.parent().unwrap();
+            exe_directory.join(file_name)
+        }
+        
         let mut meshes = MeshWarehouse::new();
-        let cube_mesh_or_error = meshes.load(Path::new("assets/cube.obj"));
+        let cube_mesh_file = get_resource_path(Path::new("assets").join("cube.obj"));
+        let cube_mesh_or_error = meshes.load(cube_mesh_file);
 
         match cube_mesh_or_error {
             Ok(cube_mesh) => {

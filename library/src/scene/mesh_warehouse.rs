@@ -39,7 +39,7 @@ impl MeshWarehouse {
         Self { prototypes: Vec::new() }
     }
 
-    pub fn load(&mut self, source_file: &Path) -> Result<WarehouseSlot, MeshLoadError> {
+    pub fn load(&mut self, source_file: impl AsRef<Path>) -> Result<WarehouseSlot, MeshLoadError> {
         let file = File::open(source_file).map_err(|e| MeshLoadError::IoError { what: e.to_string() })?;
         let reader = BufReader::new(file);
         let obj: Obj<obj::Vertex, u32> = obj::load_obj::<obj::Vertex, BufReader<File>, u32>(reader).map_err(|e| MeshWarehouse::translate_error(e))?;

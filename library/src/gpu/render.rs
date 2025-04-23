@@ -17,6 +17,7 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 use crate::utils::object_uid::ObjectUid;
 use bytemuck::checked::cast_slice;
 use std::rc::Rc;
+use cgmath::Vector2;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
@@ -40,6 +41,7 @@ pub(crate) struct Renderer {
 impl Renderer {
     const WORK_GROUP_SIZE_X: u32 = 8;
     const WORK_GROUP_SIZE_Y: u32 = 8;
+    const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
     
     #[must_use]
     pub(crate) fn new(
@@ -366,9 +368,6 @@ impl Renderer {
     fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate)
         where CustomizationDelegate : FnOnce(&mut wgpu::CommandEncoder) {
         
-        let work_groups_needed_x = self.uniforms.frame_buffer_size.width().div_ceil(Self::WORK_GROUP_SIZE_X);
-        let work_groups_needed_y = self.uniforms.frame_buffer_size.height().div_ceil(Self::WORK_GROUP_SIZE_Y);
-        
         let mut encoder = self.create_command_encoder("compute pass encoder"); {
 
             {let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -376,8 +375,9 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
+            let work_groups_needed = self.uniforms.frame_buffer_size.work_groups_count(Self::WORK_GROUP_SIZE);
             compute_pipeline.set_into_pass(&mut pass);
-            pass.dispatch_workgroups(work_groups_needed_x, work_groups_needed_y, 1);}
+            pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, 1);}
             
             customize(&mut encoder);
         }
@@ -611,19 +611,19 @@ mod tests {
         let expected_uid = 1;
         assert_eq!(expected_uid, actual_uid);
         
-        let png_path = Path::new("./single_parallelogram_identification.png");
-        save_u32_buffer_as_png(object_id_map, frame_buffer_width, frame_buffer_height, png_path);
-        print_full_path(png_path, "object id map");
+        let png_path = Path::new("tests").join("out/single_parallelogram_identification.png");
+        save_u32_buffer_as_png(object_id_map, frame_buffer_width, frame_buffer_height, png_path.clone());
+        print_full_path(png_path.clone(), "object id map");
     }
 
-    fn print_full_path(path: &Path, entity_name: &str) {
+    fn print_full_path(path: impl AsRef<Path>, entity_name: &str) {
         match fs::canonicalize(path) {
             Ok(full_path) => println!("full path to '{}': {}", entity_name, full_path.display()),
             Err(e) => eprintln!("error: {}", e),
         }
     }
 
-    fn save_u32_buffer_as_png(buffer: &Vec<u32>, image_width: u32, image_height: u32, path: &Path) {
+    fn save_u32_buffer_as_png(buffer: &Vec<u32>, image_width: u32, image_height: u32, path: impl AsRef<Path>) {
         let pixel_count = (image_width * image_height) as usize;
         assert!(buffer.len() >= pixel_count);
 
@@ -637,6 +637,10 @@ mod tests {
         let buffer: ImageBuffer<Rgba<u8>, _> = ImageBuffer::from_raw(image_width, image_height, raw_bytes.to_vec())
             .expect("failed to create image buffer");
 
-        buffer.save(path).expect(format!("failed to save PNG into {}", path.display()).as_str());
+        if let Some(parent) = path.as_ref().parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        
+        buffer.save(path.as_ref()).expect(format!("failed to save PNG into {}", path.as_ref().display()).as_str());
     }
 }
