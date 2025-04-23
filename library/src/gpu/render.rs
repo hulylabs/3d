@@ -38,6 +38,10 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
+    const WORK_GROUP_SIZE_X: u32 = 8;
+    const WORK_GROUP_SIZE_Y: u32 = 8;
+    
+    #[must_use]
     pub(crate) fn new(
         context: Rc<Context>,
         scene_container: Container,
@@ -361,7 +365,10 @@ impl Renderer {
 
     fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate)
         where CustomizationDelegate : FnOnce(&mut wgpu::CommandEncoder) {
-        let work_groups_needed = self.uniforms.frame_buffer_size.area() / 64; // TODO: 64?
+        
+        let work_groups_needed_x = self.uniforms.frame_buffer_size.width().div_ceil(Self::WORK_GROUP_SIZE_X);
+        let work_groups_needed_y = self.uniforms.frame_buffer_size.height().div_ceil(Self::WORK_GROUP_SIZE_Y);
+        
         let mut encoder = self.create_command_encoder("compute pass encoder"); {
 
             {let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -370,7 +377,7 @@ impl Renderer {
             });
 
             compute_pipeline.set_into_pass(&mut pass);
-            pass.dispatch_workgroups(work_groups_needed, 1, 1);}
+            pass.dispatch_workgroups(work_groups_needed_x, work_groups_needed_y, 1);}
             
             customize(&mut encoder);
         }

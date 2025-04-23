@@ -12,6 +12,7 @@ use std::cmp::max;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use winit::window::Window;
 use log::info;
 use thiserror::Error;
@@ -23,12 +24,12 @@ use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::sliding_time_frame::SlidingTimeFrame;
-use crate::utils::throttled_logger::ThrottledInfoLogger;
+use crate::utils::time_throttled_logger::TimeThrottledInfoLogger;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
 const FPS_MEASUREMENT_SAMPLES: usize = 15;
-const FPS_WRITE_FREQUENCY: usize = 5;
+const FPS_WRITE_INTERVAL: Duration = Duration::from_secs(2);
 
 const RAYS_ACCUMULATIONS_PER_FRAME: usize = 60;
 
@@ -48,7 +49,7 @@ pub struct Engine {
 
     renderer: Renderer,
     fps_measurer: SlidingTimeFrame,
-    fps_reporter: ThrottledInfoLogger,
+    fps_reporter: TimeThrottledInfoLogger,
 }
 
 #[derive(Error, Debug)]
@@ -136,9 +137,9 @@ impl Engine {
             window_output_surface: window_surface,
             window_surface_format: output_surface_format,
             renderer,
-            
+
             fps_measurer: SlidingTimeFrame::new(FPS_MEASUREMENT_SAMPLES),
-            fps_reporter: ThrottledInfoLogger::new(FPS_WRITE_FREQUENCY),
+            fps_reporter: TimeThrottledInfoLogger::new(FPS_WRITE_INTERVAL),
         };
 
         ware.configure_surface();
@@ -207,14 +208,14 @@ impl Engine {
         }
 
         for _ in 0..RAYS_ACCUMULATIONS_PER_FRAME {
-            self.renderer.accumulate_more_rays();   
+            self.renderer.accumulate_more_rays();
         }
-        
+
         self.renderer.present(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();
-        
+
         self.fps_measurer.sample();
         let average_frame_time = self.fps_measurer.average_delta();
         let fps = 1.0 / average_frame_time.as_secs_f32();

@@ -11,6 +11,11 @@ const GLASS = 2.0;
 const ISOTROPIC = 3.0;
 const ANISOTROPIC = 4.0;
 
+const WORK_GROUP_SIZE_X = 8;
+const WORK_GROUP_SIZE_Y = 8;
+const WORK_GROUP_SIZE_Z = 1;
+const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
+
 const NUM_SAMPLES = 1.0;
 const MAX_BOUNCES = 50;
 const STRATIFY = true;
@@ -47,11 +52,16 @@ var<private> ray_tmax : f32 = MAX_FLOAT;
 var<private> stack : array<i32, STACK_SIZE>;
 
 struct Uniforms {
-	screenDims : vec2f,
-	frameNum : f32,
-	resetBuffer : f32,
-	viewMatrix : mat4x4f,
-	viewRayOriginMatrix : mat4x4f,
+	frame_buffer_size : vec2f,
+	frame_number : f32,
+	if_reset_frame_buffer : f32,
+	view_matrix : mat4x4f,
+	/* Consider a view ray defined by an origin (e.g., the eye position for a perspective camera)
+    and a direction that intersects the view plane at a world-space pixel position.
+    This matrix, when multiplied by the world-space pixel position, returns the ray's origin.
+    For a perspective camera, the origin is always the eye position — the same for all pixels.
+    For an orthographic camera, the origin lies on the camera plane and varies per pixel. */
+	view_ray_origin_matrix : mat4x4f,
 }
 
 struct Ray {
@@ -471,63 +481,71 @@ fn setup_buffers_length() {
 }
 
 fn evaluate_pixel_index(
-    workgroup_id : vec3<u32>,
-    local_invocation_id : vec3<u32>,
-    local_invocation_index: u32,
-    num_workgroups: vec3<u32>) -> u32 {
-    let workgroup_index = workgroup_id.x + workgroup_id.y * num_workgroups.x + workgroup_id.z * num_workgroups.x * num_workgroups.y;
-	let pixelIndex = workgroup_index * 64 + local_invocation_index;
-    return pixelIndex;
+    global_invocation_id: vec3<u32>,
+    num_workgroups: vec3<u32>,) -> u32 {
+    let grid_dimension = WORK_GROUP_SIZE * num_workgroups;
+    return
+        global_invocation_id.z * (grid_dimension.x * grid_dimension.y) +
+        global_invocation_id.y * (grid_dimension.x) +
+        global_invocation_id.x ;
 }
 
 fn setup_pixel_coordinates(pixel_index: u32) {
-    pixelCoords = vec3f(f32(pixel_index) % uniforms.screenDims.x, f32(pixel_index) / uniforms.screenDims.x, 1);
+    pixelCoords = vec3f(f32(pixel_index) % uniforms.frame_buffer_size.x, f32(pixel_index) / uniforms.frame_buffer_size.x, 1);
 }
 
 fn setup_camera() {
     fovFactor = 1 / tan(60 * (PI / 180) / 2);
-	cam_origin = (uniforms.viewMatrix * vec4f(0, 0, 0, 1)).xyz;
+	cam_origin = (uniforms.view_matrix * vec4f(0, 0, 0, 1)).xyz;
 }
 
-@compute @workgroup_size(64, 1, 1) fn compute_object_id_buffer(
-    @builtin(workgroup_id) workgroup_id : vec3<u32>,
-    @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-    @builtin(local_invocation_index) local_invocation_index: u32,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
+    return f32(pixel_index) >= uniforms.frame_buffer_size.x * uniforms.frame_buffer_size.y;
+}
 
-	let pixelIndex = evaluate_pixel_index(workgroup_id, local_invocation_id, local_invocation_index, num_workgroups);
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_object_id_buffer(
+    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
 
-	setup_pixel_coordinates(pixelIndex);
+	let pixel_index = evaluate_pixel_index(global_invocation_id, num_workgroups);
+
+    if (pixel_outside_frame_buffer(pixel_index)) {
+        return;
+    }
+
+	setup_pixel_coordinates(pixel_index);
 	setup_camera();
     setup_buffers_length();
 
     let ray = ray_to_pixel(0.0, 0.0);
 	let intersection_uid = trace_first_intersection(ray);
-    object_id_buffer[pixelIndex] = intersection_uid;
+    object_id_buffer[pixel_index] = intersection_uid;
 }
 
-@compute @workgroup_size(64, 1, 1) fn compute_color_buffer(
-    @builtin(workgroup_id) workgroup_id : vec3<u32>,
-    @builtin(local_invocation_id) local_invocation_id : vec3<u32>,
-    @builtin(local_invocation_index) local_invocation_index: u32,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer(
+    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
 
-	let pixelIndex = evaluate_pixel_index(workgroup_id, local_invocation_id, local_invocation_index, num_workgroups);
+	let pixel_index = evaluate_pixel_index(global_invocation_id, num_workgroups);
 
-	setup_pixel_coordinates(pixelIndex);
+    if (pixel_outside_frame_buffer(pixel_index)) {
+        return;
+    }
+
+	setup_pixel_coordinates(pixel_index);
 	setup_camera();
     setup_buffers_length();
 
-	randState = pixelIndex + u32(uniforms.frameNum) * 719393;
+	randState = pixel_index + u32(uniforms.frame_number) * 719393;
 
 	get_lights();
 
 	let traced_color = pathTrace();
 
-	if(uniforms.resetBuffer == 0) {
-		pixel_color_buffer[pixelIndex] = vec4f(pixel_color_buffer[pixelIndex].xyz + traced_color, 1.0);
+	if(uniforms.if_reset_frame_buffer == 0) {
+		pixel_color_buffer[pixel_index] = vec4f(pixel_color_buffer[pixel_index].xyz + traced_color, 1.0);
 	} else {
-	    pixel_color_buffer[pixelIndex] = vec4f(traced_color, 1.0);
+	    pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
 	}
 }
 
@@ -539,8 +557,8 @@ fn setup_camera() {
 
 fn ray_to_pixel(subPixelX: f32, subPixelY: f32) -> Ray {
     return getCameraRay(
-        (uniforms.screenDims.x / uniforms.screenDims.y) * (2 * ((pixelCoords.x - 0.5 + subPixelX) / uniforms.screenDims.x) - 1),
-        -1 * (2 * ((pixelCoords.y - 0.5 + subPixelY) / uniforms.screenDims.y) - 1)
+        (uniforms.frame_buffer_size.x / uniforms.frame_buffer_size.y) * (2 * ((pixelCoords.x - 0.5 + subPixelX) / uniforms.frame_buffer_size.x) - 1),
+        -1 * (2 * ((pixelCoords.y - 0.5 + subPixelY) / uniforms.frame_buffer_size.y) - 1)
         );
 }
 
@@ -659,10 +677,10 @@ var<private> fovFactor : f32;
 var<private> cam_origin : vec3f;
 
 fn getCameraRay(s : f32, t : f32) -> Ray {
-	let eye_to_pixel_direction = (uniforms.viewMatrix * vec4f(vec3f(s, t, -fovFactor), 0)).xyz;
+	let eye_to_pixel_direction = (uniforms.view_matrix * vec4f(vec3f(s, t, -fovFactor), 0)).xyz;
 
 	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0f);
-	let ray_origin_world_space = uniforms.viewRayOriginMatrix * pixel_world_space;
+	let ray_origin_world_space = uniforms.view_ray_origin_matrix * pixel_world_space;
 
 	let ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
 
@@ -1204,19 +1222,18 @@ struct Vertex {
 
 /// fragment
 
-fn get2Dfrom1D(pos: vec2f) -> u32 {
-    return (u32(pos.y) * u32(uniforms.screenDims.x) + u32(pos.x));
+fn pixel_global_index(pixel_position: vec2f) -> u32 {
+    return (u32(pixel_position.y) * u32(uniforms.frame_buffer_size.x) + u32(pixel_position.x));
 }
 
-@fragment fn fs(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
-    let i = get2Dfrom1D(fragCoord.xy);
-    var color = pixel_color_buffer[i].xyz / uniforms.frameNum;
+@fragment fn fs(@builtin(position) fragment_coordinate: vec4f) -> @location(0) vec4f {
+    let i = pixel_global_index(fragment_coordinate.xy);
+    var color = pixel_color_buffer[i].xyz / uniforms.frame_number;
 
     color = aces_approx(color.xyz);
     color = pow(color.xyz, vec3f(1/2.2));
 
-    if(uniforms.resetBuffer == 1)
-    {
+    if(uniforms.if_reset_frame_buffer == 1) {
         pixel_color_buffer[i] = vec4f(0);
     }
 
