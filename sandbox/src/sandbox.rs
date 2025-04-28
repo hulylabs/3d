@@ -87,6 +87,21 @@ impl Sandbox {
             }
         } else if MouseButton::Left == button {
             self.left_mouse_down = state == ElementState::Pressed;
+        } else if MouseButton::Middle == button {
+            if state == ElementState::Pressed {
+                if let Some((last_x, last_y)) = self.last_cursor_position {
+                    let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
+                    if let Some(clicked_object) = clicked_object_or_none {
+                        self.engine.scene().delete(clicked_object);
+
+                        if let Some(selected_object) = self.selected_object {
+                            if selected_object.uid == clicked_object {
+                                self.selected_object = None;
+                            }
+                        }
+                    }
+                }   
+            }
         }
     }
     

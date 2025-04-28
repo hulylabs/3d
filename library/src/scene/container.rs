@@ -22,6 +22,7 @@ use crate::utils::uid_generator::UidGenerator;
 use std::collections::HashMap;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
+use crate::utils::remove_with_reorder::remove_with_reorder;
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum DataKind {
@@ -63,8 +64,10 @@ impl Container {
     pub fn set_material(&mut self, victim: ObjectUid, material: MaterialIndex) {
         match self.objects.get_mut(&victim) {
             Some(object) => {
-                object.set_material(material, &mut self.triangles);
-                self.per_object_kind_statistics[object.data_kind_uid()].register_object_mutation();
+                if object.material() != material {
+                    object.set_material(material, &mut self.triangles);
+                    self.per_object_kind_statistics[object.data_kind_uid()].register_object_mutation();   
+                }
             },
             None => panic!("object {} not found", victim),
         }
@@ -123,6 +126,18 @@ impl Container {
         links.uid()
     }
 
+    pub fn delete(&mut self, target: ObjectUid) {
+        let removed_or_none = self.objects.remove(&target);
+        if let Some(removed) = removed_or_none {
+            self.per_object_kind_statistics[removed.data_kind_uid()].delete_object();
+            self.uid_generator.put_back(target);
+            
+            if removed.data_kind_uid() == DataKind::TriangleMesh as usize {
+                remove_with_reorder(&mut self.triangles, |triangle| triangle.host() == target);
+            }
+        }
+    }
+    
     #[must_use]
     pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
         let bvh = build_serialized_bvh(&mut self.triangles);
@@ -213,8 +228,10 @@ mod tests {
     use crate::utils::object_uid::ObjectUid;
     use cgmath::{EuclideanSpace, SquareMatrix, Zero};
     use std::cell::RefCell;
+    use std::io::Write;
     use std::path::Path;
     use std::rc::Rc;
+    use tempfile::NamedTempFile;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -372,5 +389,112 @@ mod tests {
         let actual_serialized = system_under_test.evaluate_serialized(DataKind::Sphere);
 
         assert_eq!(actual_serialized.backend(), expected_serialized.backend());
+    }
+
+    const CUBE_OBJ_FILE: &str = r#"
+        v 0.270893 0.270893 -0.270893
+        v 0.270893 -0.270893 -0.270893
+        v 0.270893 0.270893 0.270893
+        v 0.270893 -0.270893 0.270893
+        v -0.270893 0.270893 -0.270893
+        v -0.270893 -0.270893 -0.270893
+        v -0.270893 0.270893 0.270893
+        v -0.270893 -0.270893 0.270893
+        vn -0.0000 1.0000 -0.0000
+        vn -0.0000 -0.0000 1.0000
+        vn -1.0000 -0.0000 -0.0000
+        vn -0.0000 -1.0000 -0.0000
+        vn 1.0000 -0.0000 -0.0000
+        vn -0.0000 -0.0000 -1.0000
+        vt 0.625000 0.500000
+        vt 0.375000 0.500000
+        vt 0.625000 0.750000
+        vt 0.375000 0.750000
+        vt 0.875000 0.500000
+        vt 0.625000 0.250000
+        vt 0.125000 0.500000
+        vt 0.375000 0.250000
+        vt 0.875000 0.750000
+        vt 0.625000 1.000000
+        vt 0.625000 0.000000
+        vt 0.375000 0.000000
+        vt 0.375000 1.000000
+        vt 0.125000 0.750000
+        s 0
+        f 5/5/1 3/3/1 1/1/1
+        f 3/3/2 8/13/2 4/4/2
+        f 7/11/3 6/8/3 8/12/3
+        f 2/2/4 8/14/4 6/7/4
+        f 1/1/5 4/4/5 2/2/5
+        f 5/6/6 2/2/6 6/8/6
+        f 5/5/1 7/9/1 3/3/1
+        f 3/3/2 7/10/2 8/13/2
+        f 7/11/3 5/6/3 6/8/3
+        f 2/2/4 4/4/4 8/14/4
+        f 1/1/5 3/3/5 4/4/5
+        f 5/6/6 1/1/6 2/2/6
+        "#;
+    
+    #[must_use]
+    fn prepare_test_mesh() -> (WarehouseSlot, MeshWarehouse) {
+        let mut temp_file = NamedTempFile::new_in("./").expect("failed to create temp file");
+        temp_file.write_all(CUBE_OBJ_FILE.as_bytes()).expect("failed to write cube data into the temp file");
+
+        let mut warehouse = MeshWarehouse::new();
+        let mesh_index = warehouse.load(temp_file.path()).unwrap();
+
+        (mesh_index, warehouse)
+    }
+
+    #[test]
+    fn test_delete_mesh() {
+        let mut system_under_test = Container::new();
+
+        let (mesh, meshes) = prepare_test_mesh();
+        let dummy_material = system_under_test.materials().add(&Material::default());
+        
+        let to_be_kept_one = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
+        let to_be_deleted = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
+        let to_be_kept_two = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
+        let to_be_kept_three = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
+
+        system_under_test.delete(to_be_deleted);
+
+        let expected_mesh_count = 3;
+        assert_eq!(system_under_test.count_of_a_kind(DataKind::TriangleMesh), expected_mesh_count);
+        assert_eq!(system_under_test.material_of(to_be_kept_one), dummy_material);
+        assert_eq!(system_under_test.material_of(to_be_kept_two), dummy_material);
+        assert_eq!(system_under_test.material_of(to_be_kept_three), dummy_material);
+
+        let triangles_in_a_cube = 12;
+        let mut serialized_triangles = system_under_test.evaluate_serialized_triangles();
+        assert_eq!(serialized_triangles.extract_geometry().total_slots_count(), expected_mesh_count * triangles_in_a_cube);
+    }
+
+    #[test]
+    fn test_delete_sdf() {
+        let mut system_under_test = Container::new();
+
+        let dummy_material = system_under_test.materials().add(&Material::default());
+        let (mesh, meshes) = prepare_test_mesh();
+        
+        let dummy_corners_radius = 0.0;
+        let dummy_size = Vector::new(1.0, 1.0, 1.0);
+        
+        let to_be_deleted = system_under_test.add_sdf_box(&Affine::identity(), dummy_size, dummy_corners_radius, dummy_material);
+        let parallelogram_to_keep = system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
+        let sdf_to_keep = system_under_test.add_sdf_box(&Affine::identity(), dummy_size, dummy_corners_radius, dummy_material);
+        let mesh_to_keep = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
+        
+        system_under_test.delete(to_be_deleted);
+        
+        assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), 1);
+        assert_eq!(system_under_test.count_of_a_kind(DataKind::Parallelogram), 1);
+        assert_eq!(system_under_test.count_of_a_kind(DataKind::TriangleMesh), 1);
+        
+        // check if expected objects are kept: there will be a panic, if we try to get material of an absent object 
+        assert_eq!(system_under_test.material_of(parallelogram_to_keep), dummy_material);
+        assert_eq!(system_under_test.material_of(sdf_to_keep), dummy_material);
+        assert_eq!(system_under_test.material_of(mesh_to_keep), dummy_material);
     }
 }

@@ -26,11 +26,6 @@ impl BufferUpdateStatus {
         Self { resized, updated }
     }
 
-    #[must_use] #[allow(dead_code)]
-    pub(crate) fn new_resized(resized: bool) -> Self {
-        Self { resized, updated: true }
-    }
-
     #[must_use]
     pub(crate) fn new_updated(updated: bool) -> Self {
         Self { resized: false, updated }
@@ -98,6 +93,13 @@ mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use super::*;
 
+    impl BufferUpdateStatus {
+        #[must_use]
+        pub(crate) fn new_resized(resized: bool) -> Self {
+            Self { resized, updated: true }
+        }
+    }
+    
     #[must_use]
     fn make_test_content(slots_count: usize) -> GpuReadySerializationBuffer {
         GpuReadySerializationBuffer::make_filled(slots_count, 1, 7.0)

@@ -47,34 +47,19 @@ impl Resources {
     }
 
     #[must_use]
-    pub(super) fn create_vertex_buffer(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
-        self.create_buffer(label, BufferUsages::VERTEX | BufferUsages::COPY_DST, buffer_data)
-    }
-
-    #[must_use]
     pub(super) fn create_rasterization_pipeline(&self, module: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
         self.context.device().create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("rasterization pipeline"),
             layout: None,
             vertex: wgpu::VertexState {
                 module,
-                entry_point: Some("vs"),
+                entry_point: None,
                 compilation_options: Default::default(),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 2 * 4, // TODO: magic constants
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttribute {
-                            offset: 0,
-                            shader_location: 0,
-                            format: wgpu::VertexFormat::Float32x2,
-                        },
-                    ],
-                }],
+                buffers: &[], // full screen quad vertices specified as a const in the shader
             },
             fragment: Some(wgpu::FragmentState {
                 module,
-                entry_point: Some("fs"),
+                entry_point: None,
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.presentation_format,
@@ -200,15 +185,5 @@ mod tests {
             concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
 
         assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_DST);
-    }
-
-    #[test]
-    fn test_create_vertex_buffer() {
-        let system_under_test = make_system_under_test();
-
-        let buffer = system_under_test.create_vertex_buffer(
-            concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
-
-        assert_eq!(buffer.usage(), BufferUsages::VERTEX | BufferUsages::COPY_DST);
     }
 }

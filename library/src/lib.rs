@@ -16,7 +16,7 @@ use std::time::Duration;
 use winit::window::Window;
 use log::info;
 use thiserror::Error;
-use wgpu::Trace;
+use wgpu::{Adapter, Trace};
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::Renderer;
@@ -31,7 +31,7 @@ const DEVICE_LABEL: &str = "Rust Tracer Library";
 const FPS_MEASUREMENT_SAMPLES: usize = 15;
 const FPS_WRITE_INTERVAL: Duration = Duration::from_secs(2);
 
-const RAYS_ACCUMULATIONS_PER_FRAME: usize = 60;
+const RAYS_ACCUMULATIONS_PER_FRAME: usize = 1;
 
 pub struct Engine {
     /*Actually, we do not need any synchronization stuff; our code is
@@ -76,9 +76,15 @@ pub enum EngineInstantiationError {
 }
 
 impl Engine {
+    #[must_use]
+    pub fn get_reasonable_log_filter() -> &'static str {
+        "wgpu=warn,naga=warn"
+    }
+    
     pub async fn new(window: Arc<Window>, scene: Container, camera: Camera) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
+            flags: wgpu::InstanceFlags::empty(),
             ..Default::default()
         });
 
@@ -95,6 +101,8 @@ impl Engine {
             .await
             .map_err(|error| EngineInstantiationError::AdapterRequisitionError{what: error.to_string()})?;
 
+        log_adapter_info(&graphics_adapter);
+        
         let (graphics_device, commands_queue) = graphics_adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(DEVICE_LABEL),
@@ -211,6 +219,7 @@ impl Engine {
             self.renderer.accumulate_more_rays();
         }
 
+        //self.renderer.denoise_and_save();
         self.renderer.present(&surface_texture);
 
         pre_present_notify();
@@ -238,4 +247,25 @@ impl Engine {
     pub fn scene(&mut self) -> &mut Container {
         self.renderer.scene()
     }
+}
+
+fn log_adapter_info(adapter: &Adapter) {
+    let adapter_info = adapter.get_info();
+    info!(
+        "Adapter Info:\n\
+         Name: {}\n\
+         Backend: {:?}\n\
+         Vendor: {:#x}\n\
+         Device: {:#x}\n\
+         Device Type: {:?}\n\
+         Driver: {:?}\n\
+         Driver Info: {:?}",
+        adapter_info.name,
+        adapter_info.backend,
+        adapter_info.vendor,
+        adapter_info.device,
+        adapter_info.device_type,
+        adapter_info.driver,
+        adapter_info.driver_info,
+    );
 }

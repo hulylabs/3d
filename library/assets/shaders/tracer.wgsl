@@ -21,12 +21,14 @@ const MAX_BOUNCES = 50;
 const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
-const MAX_SDF_RAY_MARCH_STEPS = 10;
+const MAX_SDF_RAY_MARCH_STEPS = 20;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
 
 @group(1) @binding( 0) var<storage, read_write> pixel_color_buffer: array<vec4f>;
 @group(1) @binding( 1) var<storage, read_write> object_id_buffer: array<u32>;
+@group(1) @binding( 2) var<storage, read_write> normal_buffer: array<vec4f>;
+@group(1) @binding( 3) var<storage, read_write> albedo_buffer: array<vec4f>;
 
 @group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
 @group(2) @binding( 1) var<storage, read> quad_objs: array<Parallelogram>;
@@ -35,11 +37,11 @@ const MAX_SDF_RAY_MARCH_STEPS = 10;
 @group(2) @binding( 4) var<storage, read> materials: array<Material>;
 @group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
 
-var<private> NUM_SPHERES : i32;
-var<private> NUM_QUADS : i32;
-var<private> NUM_TRIANGLES : i32;
-var<private> NUM_AABB : i32;
-var<private> NUM_SDF : i32;
+var<private> NUM_SPHERES : u32;
+var<private> NUM_QUADS : u32;
+var<private> NUM_TRIANGLES : u32;
+var<private> NUM_AABB : u32;
+var<private> NUM_SDF : u32;
 
 var<private> randState : u32 = 0u;
 var<private> pixelCoords : vec3f;
@@ -62,6 +64,12 @@ struct Uniforms {
     For a perspective camera, the origin is always the eye position — the same for all pixels.
     For an orthographic camera, the origin lies on the camera plane and varies per pixel. */
 	view_ray_origin_matrix : mat4x4f,
+
+	spheres_count: u32,
+	parallelograms_count: u32,
+	sdf_count: u32,
+	triangles_count: u32,
+	bvh_length: u32,
 }
 
 struct Ray {
@@ -136,6 +144,12 @@ struct HitRecord {
 	normal : vec3f,
 	front_face : bool,
 	material : Material,
+}
+
+struct FirstHitSurface {
+	object_uid : u32,
+	albedo : vec3f,
+	normal : vec3f,
 }
 
 struct ScatterRecord {
@@ -429,7 +443,7 @@ fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray,
 }
 
 fn get_lights() -> bool {
-	for(var i = 0; i < NUM_QUADS; i++) {
+	for(var i = u32(0); i < NUM_QUADS; i++) {
 		let emission = materials[i32(quad_objs[i].material_id)].emissionColor;
 
 		if(emission.x > 0.0) {
@@ -457,27 +471,11 @@ fn aces_approx(v : vec3f) -> vec3f
 /// main
 
 fn setup_buffers_length() {
-    NUM_SDF = i32(arrayLength(&sdf));
-    if (sdf[0].material_id < 0.0) {
-        NUM_SDF = 0;
-    }
-
-    NUM_SPHERES = i32(arrayLength(&sphere_objs));
-    if (sphere_objs[0].r < 0.0) { // in WGPU there is no way to bind an ampty buffer, so we use a marker objects to indicate the situation
-        NUM_SPHERES = 0;
-    }
-
-    NUM_QUADS = i32(arrayLength(&quad_objs));
-    if (quad_objs[0].material_id < 0.0) {
-        NUM_QUADS = 0;
-    }
-
-    NUM_TRIANGLES = i32(arrayLength(&triangles));
-    NUM_AABB = i32(arrayLength(&bvh));
-    if (triangles[0].material_id < 0.0) {
-        NUM_TRIANGLES = 0;
-        NUM_AABB = 0;
-    }
+    NUM_SDF = uniforms.sdf_count;
+    NUM_SPHERES = uniforms.spheres_count;
+    NUM_QUADS = uniforms.parallelograms_count;
+    NUM_TRIANGLES = uniforms.triangles_count;
+    NUM_AABB = uniforms.bvh_length;
 }
 
 fn evaluate_pixel_index(
@@ -518,8 +516,10 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
     setup_buffers_length();
 
     let ray = ray_to_pixel(0.0, 0.0);
-	let intersection_uid = trace_first_intersection(ray);
-    object_id_buffer[pixel_index] = intersection_uid;
+	let surface_intersection = trace_first_intersection(ray);
+    object_id_buffer[pixel_index] = surface_intersection.object_uid;
+    albedo_buffer[pixel_index] = vec4f(surface_intersection.albedo, 1.0f);
+    normal_buffer[pixel_index] = vec4f(surface_intersection.normal, 0.0f);
 }
 
 @compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer(
@@ -596,27 +596,38 @@ fn pathTrace() -> vec3f {
 	return pixColor;
 }
 
-fn trace_first_intersection(ray : Ray) -> u32 {
+fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var closest_so_far = MAX_FLOAT;
-    var hit_id: u32 = 0;
+    var hit_uid: u32 = 0;
+    var hit_albedo: vec3f = vec3f(0.0f, 0.0f, 0.0f);
+    var hit_normal: vec3f = vec3f(0.0f, 0.0f, 0.0f);
 
-    for(var i = 0; i < NUM_SPHERES; i++){
-        if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray)){
-            hit_id = sphere_objs[i].object_uid;
+    for(var i = u32(0); i < NUM_SPHERES; i++){
+        let sphere = sphere_objs[i];
+        if(hit_sphere(sphere, ray_tmin, closest_so_far, ray)){
+            hit_uid = sphere.object_uid;
+            hit_albedo = materials[u32(sphere.material_id)].color;
+            hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
     }
 
-    for(var i = 0; i < NUM_QUADS; i++){
-        if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray)) {
-            hit_id = quad_objs[i].object_uid;
+    for(var i = u32(0); i < NUM_QUADS; i++){
+        let parallelogram = quad_objs[i];
+        if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
+            hit_uid = parallelogram.object_uid;
+            hit_albedo = materials[u32(parallelogram.material_id)].color;
+            hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
     }
 
-    for(var i = 0; i < NUM_SDF; i++){
-        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)){
-            hit_id = sdf[i].object_uid;
+    for(var i = u32(0); i < NUM_SDF; i++){
+        let sdf = sdf[i];
+        if(hit_sdf(sdf, ray_tmin, closest_so_far, ray)){
+            hit_uid = sdf.object_uid;
+            hit_albedo = materials[u32(sdf.material_id)].color;
+            hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
     }
@@ -635,8 +646,11 @@ fn trace_first_intersection(ray : Ray) -> u32 {
                 let startPrim = i32(node.prim_id);
                 let countPrim = i32(node.prim_count);
                 for(var j = 0; j < countPrim; j++) {
-                    if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray)) {
-                        hit_id = triangles[startPrim + j].object_uid;
+                    let triangle = triangles[startPrim + j];
+                    if(hit_triangle(triangle, ray_tmin, closest_so_far, ray)) {
+                        hit_uid = triangle.object_uid;
+                        hit_albedo = materials[u32(triangle.material_id)].color;
+                        hit_normal = hitRec.normal;
                         closest_so_far = hitRec.t;
                     }
                 }
@@ -670,7 +684,7 @@ fn trace_first_intersection(ray : Ray) -> u32 {
             break;
         }
     }
-    return hit_id;
+    return FirstHitSurface(hit_uid, hit_albedo, hit_normal);
 }
 
 var<private> fovFactor : f32;
@@ -694,7 +708,7 @@ fn hitScene(ray : Ray) -> bool
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
 
-	for(var i = 0; i < NUM_SPHERES; i++)
+	for(var i = u32(0); i < NUM_SPHERES; i++)
 	{
 		let medium = materials[i32(sphere_objs[i].material_id)].material_type;
 		if(medium < ISOTROPIC)
@@ -715,7 +729,7 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = 0; i < NUM_QUADS; i++)
+	for(var i = u32(0); i < NUM_QUADS; i++)
 	{
 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
 		{
@@ -792,7 +806,7 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = 0; i < NUM_SDF; i++)
+	for(var i = u32(0); i < NUM_SDF; i++)
     {
         if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray))
         {
@@ -1212,12 +1226,18 @@ fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 
 /// vertex
 
-struct Vertex {
-	@location(0) position: vec2f,
-};
+const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32> (1.0, -1.0),
+    vec2<f32>(-1.0,  1.0),
 
-@vertex fn vs(vert: Vertex) -> @builtin(position) vec4f {
-    return vec4f(vert.position, 0.0, 1.0);
+    vec2<f32>(-1.0,  1.0),
+    vec2<f32>( 1.0, -1.0),
+    vec2<f32>( 1.0,  1.0),
+);
+
+@vertex fn vs(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
+    return vec4<f32>(full_screen_quad_positions[in_vertex_index], 0.0, 1.0);
 }
 
 /// fragment

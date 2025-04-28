@@ -1,11 +1,13 @@
 ﻿use super::resources::{ComputeRoutine, Resources};
 use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
+use crate::gpu::buffers_update_status::BuffersUpdateStatus;
 use crate::gpu::compute_pipeline::ComputePipeline;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::frame_buffer::FrameBuffer;
 use crate::gpu::rasterization_pipeline::RasterizationPipeline;
+use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfBox;
@@ -14,16 +16,18 @@ use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::container::{Container, DataKind};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::pod_vector::PodVector;
+use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
-use bytemuck::checked::cast_slice;
-use std::rc::Rc;
 use cgmath::Vector2;
+use exr::prelude::write_rgba_file;
+use pxm::PFMBuilder;
+use std::fs::File;
+use std::path::Path;
+use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::gpu::buffers_update_status::BuffersUpdateStatus;
-use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
-use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 // TODO: work in progress
 
@@ -33,7 +37,7 @@ pub(crate) struct Renderer {
     buffers: Buffers,
     uniforms: Uniforms,
     pipeline_ray_tracing: ComputePipeline,
-    pipeline_object_id: ComputePipeline,
+    pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
     scene: Container,
 }
@@ -43,7 +47,6 @@ impl Renderer {
     const WORK_GROUP_SIZE_Y: u32 = 8;
     const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
     
-    #[must_use]
     pub(crate) fn new(
         context: Rc<Context>,
         scene_container: Container,
@@ -52,17 +55,22 @@ impl Renderer {
         frame_buffer_size: FrameBufferSize,
     )
     -> anyhow::Result<Self> {
-        let uniforms = Uniforms {
+        let mut uniforms = Uniforms {
             frame_buffer_size,
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
+            spheres_count: 0,
+            parallelograms_count: 0,
+            sdf_count: 0,
+            triangles_count: 0,
+            bvh_length: 0,
         };
 
         let mut scene = scene_container;
 
         let resources = Resources::new(context.clone(), presentation_format);
-        let buffers = Self::init_buffers(&mut scene, &context, &uniforms, &resources, uniforms.frame_buffer_size);
+        let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
         
         let shader_module = resources.create_shader_module("ray tracer shader", CODE_FOR_GPU);
         
@@ -77,7 +85,7 @@ impl Renderer {
             buffers,
             uniforms,
             pipeline_ray_tracing: ray_tracing,
-            pipeline_object_id: object_id,
+            pipeline_surface_attributes: object_id,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
         })
@@ -107,13 +115,21 @@ impl Renderer {
         
         let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
         if self.buffers.triangles.version_diverges(triangles_set_version) {
-
             let mut serialized_triangles = self.scene.evaluate_serialized_triangles();
-
+            let no_triangles = serialized_triangles.empty();
+            
             let (triangles, bvh)
-                = if serialized_triangles.empty()
+                = if no_triangles
                     { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) }
                         else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
+
+            if no_triangles {
+                self.uniforms.triangles_count = 0;
+                self.uniforms.bvh_length = 0;
+            } else {
+                self.uniforms.triangles_count = triangles.total_slots_count() as u32;
+                self.uniforms.bvh_length = bvh.total_slots_count() as u32;   
+            }
             
             composite_status.merge_geometry(self.buffers.triangles.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || triangles));
             composite_status.merge_geometry(self.buffers.bvh.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || bvh));
@@ -121,8 +137,12 @@ impl Renderer {
         
         if composite_status.any_resized() {
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
-            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_object_id);
+            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
         }
+
+        self.uniforms.spheres_count = self.scene.count_of_a_kind(DataKind::Sphere) as u32;
+        self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
+        self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
         
         composite_status
     }
@@ -147,7 +167,7 @@ impl Renderer {
         VersionedBuffer::new(scene.data_version(*geometry_kind), resources, geometry_kind.as_ref(), || serialized)
     }
     
-    fn init_buffers(scene: &mut Container, context: &Context, uniforms: &Uniforms, resources: &Resources, frame_buffer_size: FrameBufferSize) -> Buffers {
+    fn init_buffers(scene: &mut Container, context: &Context, uniforms: &mut Uniforms, resources: &Resources) -> Buffers {
         let mut serialized_triangles = scene.evaluate_serialized_triangles();
         
         let (triangles, bvh) 
@@ -157,14 +177,17 @@ impl Renderer {
 
         let materials = if scene.materials().count() > 0
             { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
-
-        // TODO: we can use inline defined shader data, rather than this complication
-        let full_screen_quad_vertices: Vec<f32> = vec![-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0];
-
+        
+        uniforms.spheres_count = scene.count_of_a_kind(DataKind::Sphere) as u32;
+        uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
+        uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
+        uniforms.triangles_count = triangles.total_slots_count() as u32;
+        uniforms.bvh_length = bvh.total_slots_count() as u32;
+        
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
-            frame_buffer: FrameBuffer::new(context.device(), frame_buffer_size),
+            frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
             
             spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
@@ -172,8 +195,6 @@ impl Renderer {
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || triangles),
             bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
-            
-            vertex: resources.create_vertex_buffer("full screen quad vertices", cast_slice(&full_screen_quad_vertices)),
         }
     }
 
@@ -185,7 +206,7 @@ impl Renderer {
     fn create_object_id_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
         let pipeline = resources.create_compute_pipeline(ComputeRoutine::ShaderObjectIdEntryPoint, module);
         Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
-            Self::create_frame_buffers_bindings_for_object_id_compute(device, buffers, pipeline);
+            Self::create_frame_buffers_bindings_for_surface_attributes_compute(device, buffers, pipeline);
         })
     }
     
@@ -229,12 +250,14 @@ impl Renderer {
         });
     }
 
-    fn create_frame_buffers_bindings_for_object_id_compute(device: &wgpu::Device, buffers: &Buffers, object_id_pipeline: &mut ComputePipeline) {
+    fn create_frame_buffers_bindings_for_surface_attributes_compute(device: &wgpu::Device, buffers: &Buffers, surface_attributes_pipeline: &mut ComputePipeline) {
         let label = Some("object id compute pipeline frame buffers group");
 
-        object_id_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
+        surface_attributes_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder
                 .add_entry(1, buffers.frame_buffer.object_id_at_gpu())
+                .add_entry(2, buffers.frame_buffer.normal_at_gpu())
+                .add_entry(3, buffers.frame_buffer.albedo_gpu())
             ;
         });
     }
@@ -287,10 +310,10 @@ impl Renderer {
             self.buffers.frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
             
             Self::create_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
-            Self::create_frame_buffers_bindings_for_object_id_compute(self.context.device(), &self.buffers, &mut self.pipeline_object_id);
+            Self::create_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
             Self::create_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
         } else {
-            self.buffers.frame_buffer.invalidate();
+            self.buffers.frame_buffer.invalidate_object_id_and_normal();
         }
     }
 
@@ -309,11 +332,10 @@ impl Renderer {
     }
 
     pub(crate) fn accumulate_more_rays(&mut self)  {
-        let mut rebuild_object_id_buffer = self.buffers.frame_buffer.object_id_at_cpu().is_empty();
-        
+        let mut rebuild_geometry_buffers = self.buffers.frame_buffer.object_id_at_cpu().is_empty();
+        let scene_status = self.update_buffers_if_scene_changed();
+
         {
-            let scene_status = self.update_buffers_if_scene_changed();
-            
             let camera_changed = self.uniforms.camera.check_and_clear_updated_status();
             let geometry_changed = scene_status.geometry_updated();
             
@@ -323,7 +345,7 @@ impl Renderer {
             
             if camera_changed || geometry_changed {
                 self.uniforms.reset_frame_accumulation();
-                rebuild_object_id_buffer = true;
+                rebuild_geometry_buffers = true;
             }
             
             self.uniforms.next_frame();
@@ -332,17 +354,86 @@ impl Renderer {
             self.context.queue().write_buffer(&self.buffers.uniforms, 0, uniform_values.backend());
             self.uniforms.drop_reset_flag();
         }
-        
-        self.compute_pass("ray tracing compute pass", &self.pipeline_ray_tracing, |_|{});
 
-        if rebuild_object_id_buffer {
-            self.compute_pass("object id compute pass", &self.pipeline_object_id, |after_pass| {
-                self.buffers.frame_buffer.prepare_object_id_copy_from_gpu(after_pass);
+        let rebuild_albedo_buffer = rebuild_geometry_buffers
+            || self.buffers.frame_buffer.albedo_at_cpu().is_empty()
+            || scene_status.any_updated();
+        
+        self.compute_pass("ray tracing compute pass", &self.pipeline_ray_tracing, |ray_tracing_pass|{
+            self.buffers.frame_buffer.prepare_pixel_color_copy_from_gpu(ray_tracing_pass);
+        });
+
+        if rebuild_geometry_buffers || rebuild_albedo_buffer {
+            self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
+                if rebuild_geometry_buffers {
+                    self.buffers.frame_buffer.prepare_object_id_and_normal_copy_from_gpu(after_pass);
+                }
+                if rebuild_albedo_buffer {
+                    self.buffers.frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
+                }
             });
-            let object_id_buffer_gpu_to_cpu_transfer = self.buffers.frame_buffer.copy_object_id_from_gpu();
-            self.context.device().poll(PollType::Wait).expect("failed to poll the device");
-            pollster::block_on(object_id_buffer_gpu_to_cpu_transfer);
+            
+            if rebuild_geometry_buffers {
+                let copy_operation = self.buffers.frame_buffer.copy_all_from_gpu();
+                self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+                pollster::block_on(copy_operation);
+            } else if rebuild_albedo_buffer {
+                let copy_operation = self.buffers.frame_buffer.copy_albedo_from_gpu();
+                self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+                pollster::block_on(copy_operation);
+            }
         }
+
+        // {
+        //     let pixel_colors_buffer_gpu_to_cpu_transfer = self.buffers.frame_buffer.copy_pixel_colors_from_gpu();
+        //     self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+        //     pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
+        // }
+    }
+    
+    pub(crate) fn denoise_and_save(&self) {
+        let divider = self.uniforms.frame_number as f32;
+        fn save(name: &str, width: usize, height: usize, data: &Vec<PodVector>, divider: f32) {
+            write_rgba_file(Path::new(format!("{}.exr", name).as_str()), width, height,
+            |x,y| {
+                let index = y * width + x;
+                let element = data[index];
+                (
+                    aces_approx(element.x / divider), 
+                    aces_approx(element.y / divider), 
+                    aces_approx(element.z / divider), 
+                    1.0,
+                )
+            }).unwrap();
+
+            let mut data_cast = vec![0.0; width * height * 3];
+            for y in 0..height {
+                for x in 0..width {
+                    let index = y * width + x;
+                    data_cast[index * 3 + 0] = aces_approx(data[index].x / divider);
+                    data_cast[index * 3 + 1] = aces_approx(data[index].y / divider);
+                    data_cast[index * 3 + 2] = aces_approx(data[index].z / divider);
+                }
+            }
+            let pfm = PFMBuilder::new()
+                .size(width, height)
+                .color(true)
+                .scale(-1.0)
+                .data(data_cast)
+                .build()
+                .unwrap();
+            let mut file = File::create(format!("{}.pfm", name).as_str()).unwrap();
+            pfm.write_into(&mut file).unwrap();
+        }
+
+        let pixel_color_map = self.buffers.frame_buffer.pixel_color_at_cpu();
+        save("beauty", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, pixel_color_map, divider);
+
+        let albedo_map = self.buffers.frame_buffer.albedo_at_cpu();
+        save("albedo", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, albedo_map, 1.0);
+
+        let normal_map = self.buffers.frame_buffer.normal_at_cpu();
+        save("normal", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, normal_map, 1.0);
     }
     
     pub(crate) fn present(&mut self, surface_texture: &wgpu::SurfaceTexture) {
@@ -362,7 +453,7 @@ impl Renderer {
             timestamp_writes: None,
         };
 
-        self.final_image_rasterization_pass(&mut render_pass_descriptor, &self.pipeline_final_image_rasterization, &self.buffers.vertex);
+        self.final_image_rasterization_pass(&mut render_pass_descriptor, &self.pipeline_final_image_rasterization,);
     }
 
     fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate)
@@ -385,11 +476,10 @@ impl Renderer {
         self.context.queue().submit(Some(command_buffer));
     }
 
-    fn final_image_rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline, vertex_buffer: &wgpu::Buffer) {
+    fn final_image_rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline) {
         let mut encoder = self.create_command_encoder("rasterization pass encoder"); {
             let mut rasterization_pass = encoder.begin_render_pass(rasterization_pass_descriptor);
             rasterization_pipeline.set_into_pass(&mut rasterization_pass);
-            rasterization_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             rasterization_pass.draw(0..6, 0..1); // TODO: magic const
         }
         let render_command_buffer = encoder.finish();
@@ -406,6 +496,18 @@ impl Renderer {
     }
 }
 
+fn aces_approx(v: f32) -> f32
+{
+    v
+    // let v1: f32 = v * 0.6;
+    // let  a: f32 = 2.51;
+    // let  b: f32 = 0.03;
+    // let  c: f32 = 2.43;
+    // let  d: f32 = 0.59;
+    // let  e: f32 = 0.14;
+    // ((v1*(a*v1+b))/(v1*(c*v1+d)+e)).clamp(0.0, 1.0)
+}
+
 pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
 
 struct Buffers {
@@ -419,8 +521,6 @@ struct Buffers {
     triangles: VersionedBuffer,
     materials: VersionedBuffer,
     bvh: VersionedBuffer,
-    
-    vertex: Rc<wgpu::Buffer>,
 }
 
 struct Uniforms {
@@ -428,6 +528,12 @@ struct Uniforms {
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
+
+    spheres_count: u32,
+    parallelograms_count: u32,
+    sdf_count: u32,
+    triangles_count: u32,
+    bvh_length: u32,
 }
 
 impl Uniforms {
@@ -454,7 +560,7 @@ impl Uniforms {
         self.frame_buffer_size.area()
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 1 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -466,9 +572,16 @@ impl Uniforms {
             self.frame_number as f32,
             if self.if_reset_framebuffer { 1.0 } else { 0.0 },
         );
+        
         self.camera.serialize_into(&mut result);
-        debug_assert!(result.object_fully_written());
 
+        result.write_quartet_u32(self.spheres_count, self.parallelograms_count, self.sdf_count, self.triangles_count);
+
+        result.write_quartet(|writer| {
+            writer.write_integer(self.bvh_length);
+        });
+
+        debug_assert!(result.object_fully_written());
         result
     }
 }
@@ -478,7 +591,9 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::serialization::pod_vector::PodVector;
     use cgmath::EuclideanSpace;
+    use exr::prelude::write_rgba_file;
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
@@ -486,6 +601,12 @@ mod tests {
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
+
+    const DEFAULT_SPHERES_COUNT: u32 = 4;
+    const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
+    const DEFAULT_SDF_COUNT: u32 = 6;
+    const DEFAULT_TRIANGLES_COUNT: u32 = 7;
+    const DEFAULT_BVH_LENGTH: u32 = 8;
 
     #[must_use]
     fn make_system_under_test() -> Uniforms {
@@ -497,6 +618,12 @@ mod tests {
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
+            
+            spheres_count: DEFAULT_SPHERES_COUNT,
+            parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
+            sdf_count: DEFAULT_SDF_COUNT,
+            triangles_count: DEFAULT_TRIANGLES_COUNT,
+            bvh_length: DEFAULT_BVH_LENGTH,
         }
     }
 
@@ -504,6 +631,12 @@ mod tests {
     const SLOT_FRAME_HEIGHT: usize = 1;
     const SLOT_FRAME_NUMBER: usize = 2;
     const SLOT_RESET_FRAME_BUFFER: usize = 3;
+
+    const SLOT_SPHERES_COUNT: usize = 36;
+    const SLOT_PARALLELOGRAMS_COUNT: usize = 37;
+    const SLOT_SDF_COUNT: usize = 38;
+    const SLOT_TRIANGLES_COUNT: usize = 39;
+    const SLOT_BVH_LENGTH: usize = 40;
 
     #[test]
     fn test_reset_frame_accumulation() {
@@ -578,41 +711,93 @@ mod tests {
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
-        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], 800.0);
-        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], 600.0);
+        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], DEFAULT_FRAME_WIDTH as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], DEFAULT_FRAME_HEIGHT as f32);
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
         assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
+        
+        assert_eq!(actual_state_floats[SLOT_SPHERES_COUNT].to_bits(), DEFAULT_SPHERES_COUNT);
+        assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
+        assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
+        assert_eq!(actual_state_floats[SLOT_TRIANGLES_COUNT].to_bits(), DEFAULT_TRIANGLES_COUNT);
+        assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
     }
+
+    const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
+    const TEST_FRAME_BUFFER_HEIGHT: u32 = 256;
+    const TEST_FRAME_BUFFER_SIZE: FrameBufferSize = FrameBufferSize::new(TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT);
+
+    const TEST_COLOR_R: f32 = 0.25;
+    const TEST_COLOR_G: f32 = 0.5;
+    const TEST_COLOR_B: f32 = 1.0;
 
     #[test]
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
         let mut scene = Container::new();
-        let dummy_material = scene.materials().add(&Material::new());
+        let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
-        scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), dummy_material);
+        scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);
 
-        let frame_buffer_width = 256;
-        let frame_buffer_height = 256;
-        let frame_buffer_size = FrameBufferSize::new(frame_buffer_width, frame_buffer_height);
+
         let context = create_headless_wgpu_context();
 
         let mut system_under_test 
-            = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, frame_buffer_size)
+            = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, TEST_FRAME_BUFFER_SIZE)
                 .expect("render instantiation has failed");
 
         system_under_test.accumulate_more_rays();
+
+        assert_parallelogram_ids_in_center(&mut system_under_test);
+        assert_parallelogram_normals_in_center(&mut system_under_test);
+        assert_parallelogram_colors_in_center(&mut system_under_test);
+    }
+
+    fn assert_parallelogram_vector_data_in_center(data: &Vec<PodVector>, expected: PodVector, data_name: &str) {
+        assert_eq!(data.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
+
+        // TODO: compare with reference image from file, not a single pixel
+        let center = TEST_FRAME_BUFFER_WIDTH * (TEST_FRAME_BUFFER_HEIGHT / 2) + TEST_FRAME_BUFFER_WIDTH / 2;
+        let actual = data[center as usize];
+
+        assert_eq!(actual, expected);
+
+        let exr_path = Path::new("tests").join(format!("out/{}.exr", data_name));
+
+        write_rgba_file(exr_path, TEST_FRAME_BUFFER_WIDTH as usize, TEST_FRAME_BUFFER_HEIGHT as usize,
+        |x,y| {
+            let index = y * TEST_FRAME_BUFFER_WIDTH as usize + x;
+            let element = data[index];
+            (element.x, element.y, element.z, 1.0)
+        }
+        ).unwrap();
+    }
+
+    fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer) {
+        let normal_map = system_under_test.buffers.frame_buffer.albedo_at_cpu();
+        let expected_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
+        assert_parallelogram_vector_data_in_center(normal_map, expected_color, "single_parallelogram_colors");
+    }
+
+    fn assert_parallelogram_normals_in_center(system_under_test: &mut Renderer) {
+        let normal_map = system_under_test.buffers.frame_buffer.normal_at_cpu();
+        let expected_normal = PodVector { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        assert_parallelogram_vector_data_in_center(normal_map, expected_normal, "single_parallelogram_normals");
+    }
+
+    fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer) {
         let object_id_map = system_under_test.buffers.frame_buffer.object_id_at_cpu();
-        assert_eq!(object_id_map.len(), frame_buffer_size.area() as usize);
-        
-        let center_pixel = frame_buffer_width * (frame_buffer_height / 2) + frame_buffer_width / 2;
+        assert_eq!(object_id_map.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
+
+        // TODO: compare with reference image from file, not a single pixel
+        let center_pixel = TEST_FRAME_BUFFER_WIDTH * (TEST_FRAME_BUFFER_HEIGHT / 2) + TEST_FRAME_BUFFER_WIDTH / 2;
         let actual_uid = object_id_map[center_pixel as usize];
         let expected_uid = 1;
         assert_eq!(expected_uid, actual_uid);
-        
+
         let png_path = Path::new("tests").join("out/single_parallelogram_identification.png");
-        save_u32_buffer_as_png(object_id_map, frame_buffer_width, frame_buffer_height, png_path.clone());
+        save_u32_buffer_as_png(object_id_map, TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
         print_full_path(png_path.clone(), "object id map");
     }
 

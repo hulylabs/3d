@@ -91,7 +91,7 @@ impl GpuSerializable for Triangle {
 
         container.write_padded_quartet_f64(self.a.normal().x, self.a.normal().y, self.a.normal().z);
 
-        container.write(|writer|{
+        container.write_quartet(|writer|{
             writer
                 .write_float(self.b.normal().x as f32)
                 .write_float(self.b.normal().y as f32)

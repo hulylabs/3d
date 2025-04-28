@@ -12,6 +12,12 @@ impl Statistics {
         self.data_version += 1;
     }
     
+    pub(super) fn delete_object(&mut self) {
+        assert!(self.object_count > 0);
+        self.object_count -= 1;
+        self.data_version += 1;
+    }
+    
     pub(super) fn register_object_mutation(&mut self) {
         self.data_version += 1;
     }
@@ -36,6 +42,17 @@ mod tests {
         let system_under_test = Statistics::default();
         assert_eq!(system_under_test.data_version(), Version(0));
         assert_eq!(system_under_test.object_count(), 0);
+    }
+
+    #[test]
+    fn test_delete_object() {
+        let mut system_under_test = Statistics::default();
+
+        system_under_test.register_new_object();
+        let version_before_deletion = system_under_test.data_version();
+        system_under_test.delete_object();
+        assert_eq!(system_under_test.object_count(), 0);
+        assert_ne!(system_under_test.data_version(), version_before_deletion);
     }
 
     #[test]

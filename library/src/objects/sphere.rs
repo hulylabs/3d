@@ -30,7 +30,7 @@ impl GpuSerializable for Sphere {
         assert!(container.has_free_slot(), "buffer overflow");
 
         container.write_quartet_f64(self.center.x, self.center.y, self.center.z, self.radius);
-        container.write(|writer| {
+        container.write_quartet(|writer| {
             writer
                 .write_integer(self.links.uid().0)
                 .write_float(self.links.material_index().as_f64() as f32);

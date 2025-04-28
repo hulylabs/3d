@@ -8,7 +8,7 @@ pub(crate) struct FrameBufferSize {
 
 impl FrameBufferSize {
     #[must_use]
-    pub(crate) fn new(width: u32, height: u32) -> Self {
+    pub(crate) const fn new(width: u32, height: u32) -> Self {
         assert!(width > 0);
         assert!(height > 0);
         Self { width, height }

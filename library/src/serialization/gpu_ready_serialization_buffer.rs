@@ -111,8 +111,14 @@ impl GpuReadySerializationBuffer {
     }
 
     pub(crate) fn write_quartet_f32(&mut self, x: f32, y: f32, z: f32, w: f32) {
-        self.write(|writer| {
+        self.write_quartet(|writer| {
             writer.write_float(x).write_float(y).write_float(z).write_float(w);
+        });
+    }
+
+    pub(crate) fn write_quartet_u32(&mut self, x: u32, y: u32, z: u32, w: u32) {
+        self.write_quartet(|writer| {
+            writer.write_integer(x).write_integer(y).write_integer(z).write_integer(w);
         });
     }
 
@@ -120,7 +126,7 @@ impl GpuReadySerializationBuffer {
         self.write_quartet_f32(x, y, z, DEFAULT_PAD_VALUE);
     }
 
-    pub(crate) fn write<WritingCode>(&mut self, execute_writing: WritingCode)
+    pub(crate) fn write_quartet<WritingCode>(&mut self, execute_writing: WritingCode)
     where
         WritingCode: FnOnce(&mut SingleQuartetWriter),
     {
@@ -258,7 +264,7 @@ mod tests {
     fn test_write_using_closure() {
         let mut system_under_test = GpuReadySerializationBuffer::new(1, 1);
 
-        system_under_test.write(|writer| {
+        system_under_test.write_quartet(|writer| {
             writer
                 .write_float(10.0)
                 .write_float(20.0)
@@ -294,7 +300,7 @@ mod tests {
     fn test_single_quartet_writer_auto_padding() {
         let mut system_under_test = GpuReadySerializationBuffer::new(1, 1);
 
-        system_under_test.write(|writer| {
+        system_under_test.write_quartet(|writer| {
             writer.write_float(1.0).write_float(2.0);
         });
 
@@ -340,7 +346,7 @@ mod tests {
     fn test_mixed_integer_and_float_writing() {
         let mut system_under_test = GpuReadySerializationBuffer::new(1, 1);
 
-        system_under_test.write(|writer| {
+        system_under_test.write_quartet(|writer| {
             writer
                 .write_integer(42)
                 .write_float(3.14)
@@ -367,7 +373,7 @@ mod tests {
     fn test_write_more_than_four_elements() {
         let mut system_under_test = GpuReadySerializationBuffer::new(1, 1);
 
-        system_under_test.write(|writer| {
+        system_under_test.write_quartet(|writer| {
             writer
                 .write_float(1.0)
                 .write_float(2.0)

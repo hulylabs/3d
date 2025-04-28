@@ -24,7 +24,6 @@ impl UidGenerator {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn put_back(&mut self, uid: ObjectUid) {
         self.returned.push(uid);
     }

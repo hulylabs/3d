@@ -44,7 +44,7 @@ impl GpuSerializable for SdfBox {
             self.corners_radius,
         );
 
-        container.write(|writer| {
+        container.write_quartet(|writer| {
             writer.write_float(self.links.material_index().0 as f32);
             writer.write_integer(self.links.uid().0);
         });

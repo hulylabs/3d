@@ -15,11 +15,12 @@ use crate::sandbox::Sandbox;
 use log::error;
 use log::info;
 use log::trace;
+use library::Engine;
 
 const WINDOW_TITLE: &str = "Rust Tracer Sandbox";
 
 fn main() -> Result<(), String> {
-    colog::init();
+    setup_logging();
 
     match env::current_dir() {
         Ok(path) => println!("current directory: {}", path.display()),
@@ -36,6 +37,12 @@ fn main() -> Result<(), String> {
         .map_err(|e| format!("event loop has failed: {}", e))?;
 
     Ok(())
+}
+
+fn setup_logging() {
+    let default_log_filter = format!("info,{}", Engine::get_reasonable_log_filter());
+    let log_setup = env_logger::Env::default().default_filter_or(default_log_filter);
+    env_logger::Builder::from_env(log_setup).init();
 }
 
 #[derive(Default)]

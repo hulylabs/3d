@@ -44,7 +44,7 @@ impl GpuSerializable for Parallelogram {
             self.origin.z,
         );
 
-        container.write(|writer| {
+        container.write_quartet(|writer| {
             writer.write_float(self.local_x.x as f32);
             writer.write_float(self.local_x.y as f32);
             writer.write_float(self.local_x.z as f32);

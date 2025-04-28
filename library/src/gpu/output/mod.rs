@@ -1,3 +1,4 @@
 ﻿pub(crate) mod frame_buffer;
-mod object_id_layer;
+mod frame_buffer_layer;
 mod utils;
+mod duplex_layer;

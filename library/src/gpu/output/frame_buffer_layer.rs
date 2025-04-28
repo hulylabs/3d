@@ -1,47 +1,44 @@
 ﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::output::utils::{FrameBufferLayerParameters, FrameBufferLayerParametersBuilder, create_frame_buffer_layer, frame_buffer_layer_size_bytes};
+use crate::gpu::output::utils::{create_frame_buffer_layer, frame_buffer_layer_size_bytes, FrameBufferLayerParameters, FrameBufferLayerParametersBuilder};
+use bytemuck::AnyBitPattern;
 use futures_intrusive::channel::shared::oneshot_channel;
+use std::marker::PhantomData;
 use std::rc::Rc;
 use wgpu::{BufferAddress, BufferUsages, CommandEncoder};
 
-pub(super) struct ObjectIdLayer {
+pub(super) struct FrameBufferLayer<T: Sized + AnyBitPattern> {
     gpu_located_render_target: Rc<wgpu::Buffer>,
     cpu_mappable_mediator: wgpu::Buffer,
     buffer_size_bytes: BufferAddress,
+    
+    _marker: PhantomData<T>,
 }
 
-type ObjectId = u32;
-
-impl ObjectIdLayer {
-    const CHANNELS_COUNT: u32 = 1;
-
-    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = "object id render target";
-    const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = "object id cpu mappable mediator";
+impl<T: Sized + AnyBitPattern> FrameBufferLayer<T> {
+    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = " render target";
+    const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = " cpu mappable mediator";
 
     #[must_use]
-    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize) -> Self {
-        fn parameters(frame_buffer_size: FrameBufferSize, usage: BufferUsages, label: &str) -> FrameBufferLayerParameters {
-            FrameBufferLayerParametersBuilder::new(usage)
-                .label(label)
-                .frame_buffer_size(frame_buffer_size)
-                .bytes_per_channel(size_of::<ObjectId>() as u32)
-                .channels_count(ObjectIdLayer::CHANNELS_COUNT)
-                .build()
-        }
-
-        let parameters_gpu_located_render_target = parameters(frame_buffer_size, BufferUsages::STORAGE | BufferUsages::COPY_SRC, Self::LABEL_GPU_LOCATED_RENDER_TARGET);
+    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, marker: &str) -> Self {
+        let render_target_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
+        let render_target_label = format!("{} {}", marker, Self::LABEL_GPU_LOCATED_RENDER_TARGET);
+        let parameters_gpu_located_render_target = Self::parameters(frame_buffer_size, render_target_usage, render_target_label.as_str());
         let gpu_located_copy = create_frame_buffer_layer(device, &parameters_gpu_located_render_target);
 
-        let parameters_cpu_mappable_mediator = parameters(frame_buffer_size, BufferUsages::MAP_READ | BufferUsages::COPY_DST, Self::LABEL_CPU_MAPPABLE_MEDIATOR);
-        let cpu_mappable_copy = create_frame_buffer_layer(device, &parameters_cpu_mappable_mediator);
+        let mediator_usage = BufferUsages::MAP_READ | BufferUsages::COPY_DST;
+        let mediator_label = format!("{} {}", marker, Self::LABEL_CPU_MAPPABLE_MEDIATOR);
+        let parameters_cpu_mappable_mediator = Self::parameters(frame_buffer_size, mediator_usage, mediator_label.as_str());
+        let cpu_mappable_mediator = create_frame_buffer_layer(device, &parameters_cpu_mappable_mediator);
 
         let buffer_size_bytes: BufferAddress = frame_buffer_layer_size_bytes(&parameters_cpu_mappable_mediator);
         debug_assert_eq!(buffer_size_bytes, frame_buffer_layer_size_bytes(&parameters_gpu_located_render_target));
 
-        ObjectIdLayer {
+        Self {
             gpu_located_render_target: Rc::new(gpu_located_copy),
-            cpu_mappable_mediator: cpu_mappable_copy,
+            cpu_mappable_mediator,
             buffer_size_bytes,
+            
+            _marker: PhantomData,
         }
     }
 
@@ -50,7 +47,7 @@ impl ObjectIdLayer {
         self.gpu_located_render_target.clone()
     }
 
-    pub(super) fn issue_copy_to_staging(&self, encoder: &mut CommandEncoder) {
+    pub(super) fn issue_copy_to_cpu_mediator(&self, encoder: &mut CommandEncoder) {
         const SOURCE_OFFSET: BufferAddress = 0;
         const DESTINATION_OFFSET: BufferAddress = 0;
 
@@ -63,7 +60,7 @@ impl ObjectIdLayer {
         );
     }
 
-    pub(crate) fn read_staging<ConsumeData: FnOnce(&[ObjectId])>(&self, consume: ConsumeData) -> impl Future<Output = ()> {
+    pub(crate) fn read_cpu_mediator<ConsumeData: FnOnce(&[T])>(&self, consume: ConsumeData) -> impl Future<Output = ()> {
         let cpu_mediator_slice = self.cpu_mappable_mediator.slice(..);
 
         let (sender, receiver) = oneshot_channel();
@@ -76,12 +73,22 @@ impl ObjectIdLayer {
             map_result.expect("the result of 'map' operation is unknown").expect("'map' operation has failed");
             {
                 let raw_data = cpu_mediator_slice.get_mapped_range();
-                let object_ids: &[ObjectId] = bytemuck::cast_slice(&raw_data);
+                let object_ids: &[T] = bytemuck::cast_slice(&raw_data);
                 consume(object_ids);
             }
 
             self.cpu_mappable_mediator.unmap();
         }
+    }
+
+    #[must_use]
+    fn parameters(frame_buffer_size: FrameBufferSize, usage: BufferUsages, label: &str) -> FrameBufferLayerParameters {
+        FrameBufferLayerParametersBuilder::new(usage)
+            .label(label)
+            .frame_buffer_size(frame_buffer_size)
+            .bytes_per_channel(size_of::<T>() as u32)
+            .channels_count(1)
+            .build()
     }
 }
 
@@ -103,7 +110,7 @@ mod tests {
     fn test_construction() {
         let context = create_headless_wgpu_context();
 
-        let system_under_test = ObjectIdLayer::new(context.device(), test_buffer_size());
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), "test layer");
 
         let actual_gpu_original_usage = system_under_test.gpu_render_target().usage();
         let expected_gpu_original_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
@@ -114,10 +121,10 @@ mod tests {
     fn test_read_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = ObjectIdLayer::new(context.device(), buffer_size);
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, "test layer");
         let callback_spy_call_counter = Rc::new(RefCell::new(0_u32));
 
-        let read_callback = system_under_test.read_staging(|data| {
+        let read_callback = system_under_test.read_cpu_mediator(|data| {
             assert_eq!(data.len(), buffer_size.area() as usize);
             *callback_spy_call_counter.borrow_mut() += 1;
         });
@@ -137,10 +144,10 @@ mod tests {
     fn test_issue_copy_to_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = ObjectIdLayer::new(context.device(), buffer_size);
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, "test layer");
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
-        system_under_test.issue_copy_to_staging(&mut encoder);
+        system_under_test.issue_copy_to_cpu_mediator(&mut encoder);
         context.queue().submit(Some(encoder.finish()));
 
         let (copy_request_finished_cast, copy_request_finished_signal) = oneshot_channel();
