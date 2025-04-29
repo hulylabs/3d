@@ -16,7 +16,7 @@ const WORK_GROUP_SIZE_Y = 8;
 const WORK_GROUP_SIZE_Z = 1;
 const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
 
-const NUM_SAMPLES = 1.0;
+const NUM_SAMPLES = 2.0;
 const MAX_BOUNCES = 50;
 const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
@@ -36,12 +36,6 @@ const MAX_SDF_RAY_MARCH_STEPS = 20;
 @group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
 @group(2) @binding( 4) var<storage, read> materials: array<Material>;
 @group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
-
-var<private> NUM_SPHERES : u32;
-var<private> NUM_QUADS : u32;
-var<private> NUM_TRIANGLES : u32;
-var<private> NUM_AABB : u32;
-var<private> NUM_SDF : u32;
 
 var<private> randState : u32 = 0u;
 var<private> pixelCoords : vec3f;
@@ -256,7 +250,7 @@ fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	hitRec.t = root;
 	hitRec.p = at(ray, root);
 
-	hitRec.normal = normalize((hitRec.p - sphere.center) / sphere.r);
+	hitRec.normal = normalize(hitRec.p - sphere.center);
 
 	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
@@ -369,7 +363,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 	hitRec.t = t;
 	hitRec.p = intersection;
-	hitRec.normal = normalize(quad.normal);
+	hitRec.normal = quad.normal;
 	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
 	{
@@ -443,7 +437,7 @@ fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray,
 }
 
 fn get_lights() -> bool {
-	for(var i = u32(0); i < NUM_QUADS; i++) {
+	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
 		let emission = materials[i32(quad_objs[i].material_id)].emissionColor;
 
 		if(emission.x > 0.0) {
@@ -470,14 +464,6 @@ fn aces_approx(v : vec3f) -> vec3f
 
 /// main
 
-fn setup_buffers_length() {
-    NUM_SDF = uniforms.sdf_count;
-    NUM_SPHERES = uniforms.spheres_count;
-    NUM_QUADS = uniforms.parallelograms_count;
-    NUM_TRIANGLES = uniforms.triangles_count;
-    NUM_AABB = uniforms.bvh_length;
-}
-
 fn evaluate_pixel_index(
     global_invocation_id: vec3<u32>,
     num_workgroups: vec3<u32>,) -> u32 {
@@ -494,7 +480,7 @@ fn setup_pixel_coordinates(pixel_index: u32) {
 
 fn setup_camera() {
     fovFactor = 1 / tan(60 * (PI / 180) / 2);
-	cam_origin = (uniforms.view_matrix * vec4f(0, 0, 0, 1)).xyz;
+	cam_origin = uniforms.view_matrix[3].xyz;
 }
 
 fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
@@ -513,7 +499,6 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
 
 	setup_pixel_coordinates(pixel_index);
 	setup_camera();
-    setup_buffers_length();
 
     let ray = ray_to_pixel(0.0, 0.0);
 	let surface_intersection = trace_first_intersection(ray);
@@ -534,7 +519,6 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
 
 	setup_pixel_coordinates(pixel_index);
 	setup_camera();
-    setup_buffers_length();
 
 	randState = pixel_index + u32(uniforms.frame_number) * 719393;
 
@@ -602,7 +586,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var hit_albedo: vec3f = vec3f(0.0f, 0.0f, 0.0f);
     var hit_normal: vec3f = vec3f(0.0f, 0.0f, 0.0f);
 
-    for(var i = u32(0); i < NUM_SPHERES; i++){
+    for(var i = u32(0); i < uniforms.spheres_count; i++){
         let sphere = sphere_objs[i];
         if(hit_sphere(sphere, ray_tmin, closest_so_far, ray)){
             hit_uid = sphere.object_uid;
@@ -612,7 +596,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         }
     }
 
-    for(var i = u32(0); i < NUM_QUADS; i++){
+    for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
@@ -622,7 +606,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         }
     }
 
-    for(var i = u32(0); i < NUM_SDF; i++){
+    for(var i = u32(0); i < uniforms.sdf_count; i++){
         let sdf = sdf[i];
         if(hit_sdf(sdf, ray_tmin, closest_so_far, ray)){
             hit_uid = sdf.object_uid;
@@ -708,7 +692,7 @@ fn hitScene(ray : Ray) -> bool
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
 
-	for(var i = u32(0); i < NUM_SPHERES; i++)
+	for(var i = u32(0); i < uniforms.spheres_count; i++)
 	{
 		let medium = materials[i32(sphere_objs[i].material_id)].material_type;
 		if(medium < ISOTROPIC)
@@ -729,7 +713,7 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = u32(0); i < NUM_QUADS; i++)
+	for(var i = u32(0); i < uniforms.parallelograms_count; i++)
 	{
 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
 		{
@@ -806,7 +790,7 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = u32(0); i < NUM_SDF; i++)
+	for(var i = u32(0); i < uniforms.sdf_count; i++)
     {
         if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray))
         {
@@ -838,7 +822,7 @@ fn hitScene(ray : Ray) -> bool
 
 // 	var invDir = 1 / ray.dir;
 // 	var i = 0;
-// 	while(i < NUM_AABB && i != -1)
+// 	while(i < uniforms.bvh_length && i != -1)
 // 	{
 // 		if(hit_aabb(bvh[i], ray_tmin, closest_so_far, ray, invDir))
 // 		{
@@ -868,7 +852,7 @@ fn hitScene(ray : Ray) -> bool
 // 		}
 // 	}
 
-// 	for(var i = 0; i < NUM_SPHERES; i++)
+// 	for(var i = 0; i < uniforms.spheres_count; i++)
 // 	{
 // 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
 // 		{
@@ -877,7 +861,7 @@ fn hitScene(ray : Ray) -> bool
 // 		}
 // 	}
 
-// 	for(var i = 0; i < NUM_QUADS; i++)
+// 	for(var i = 0; i < uniforms.parallelograms_count; i++)
 // 	{
 // 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
 // 		{
@@ -896,7 +880,7 @@ fn hitScene(ray : Ray) -> bool
 // 	var closest_so_far = MAX_FLOAT;
 // 	var hit_anything = false;
 
-// 	for(var i = 0; i < NUM_TRIANGLES; i++)
+// 	for(var i = 0; i < uniforms.triangles_count; i++)
 // 	{
 // 		if(hit_triangle(triangles[i], ray_tmin, closest_so_far, ray))
 // 		{
@@ -905,7 +889,7 @@ fn hitScene(ray : Ray) -> bool
 // 		}
 // 	}
 
-// 	for(var i = 0; i < NUM_SPHERES; i++)
+// 	for(var i = 0; i < uniforms.spheres_count; i++)
 // 	{
 // 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
 // 		{
@@ -914,7 +898,7 @@ fn hitScene(ray : Ray) -> bool
 // 		}
 // 	}
 
-// 	for(var i = 0; i < NUM_QUADS; i++)
+// 	for(var i = 0; i < uniforms.parallelograms_count; i++)
 // 	{
 // 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
 // 		{
@@ -1056,7 +1040,7 @@ fn material_scatter(ray_in : Ray) -> Ray {
 			ir = (1.0 / ir);
 		}
 
-		let unit_direction = normalize(ray_in.dir);
+		let unit_direction = ray_in.dir;
 		let cos_theta = min(dot(-unit_direction, hitRec.normal), 1.0);
 		let sin_theta = sqrt(1 - cos_theta*cos_theta);
 
@@ -1072,7 +1056,7 @@ fn material_scatter(ray_in : Ray) -> Ray {
 			direction = hitRec.normal;
 		}
 
-		scattered = Ray(hitRec.p, normalize(direction));
+		scattered = Ray(hitRec.p, direction);
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
@@ -1112,13 +1096,12 @@ fn uniform_random_in_unit_sphere() -> vec3f {
 	let y = sin(theta) * sin(phi);
 	let z = cos(theta);
 
-	return normalize(vec3f(x, y, z));
+	return vec3f(x, y, z);
 }
 
 fn random_in_unit_disk() -> vec3f {
 	let theta = 2 * PI * rand2D();
-	let r = sqrt(rand2D());
-	return normalize(vec3f(r * cos(theta), r * sin(theta), 0));
+	return vec3f(cos(theta), sin(theta), 0);
 }
 
 fn uniform_sampling_hemisphere() -> vec3f {
@@ -1158,7 +1141,7 @@ var<private> u : vec3f;
 var<private> v : vec3f;
 // creates an orthonormal basis
 fn onb_build_from_w(w : vec3f) -> mat3x3f {
-	unit_w = normalize(w);
+	unit_w = w;
 	let a = select(vec3f(1, 0, 0), vec3f(0, 1, 0), abs(unit_w.x) > 0.9);
 	v = normalize(cross(unit_w, a));
 	u = cross(unit_w, v);

@@ -1,6 +1,6 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
-use crate::serialization::helpers::serialize_matrix;
+use crate::serialization::serialize_matrix::serialize_matrix;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector2, Zero};
 use std::ops::Mul;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -85,7 +85,7 @@ const MIN_ROD_LENGTH: f64 = 0.01;
 
 impl Camera {
     #[must_use]
-    fn new(eye_rod_length: f64, kind: Box<dyn CameraKind>, look_at: Point) -> Camera {
+    fn new(eye_rod_length: f64, kind: Box<dyn CameraKind>, look_at: Point) -> Self {
         assert!(eye_rod_length > 0.0);
         let mut result = Camera {
             world_to_camera_space: Affine::identity(),
@@ -124,13 +124,13 @@ impl Camera {
     }
 
     #[must_use]
-    pub fn new_perspective_camera(eye_rod_length: f64, look_at: Point) -> Camera {
+    pub fn new_perspective_camera(eye_rod_length: f64, look_at: Point) -> Self {
         assert!(eye_rod_length > 0.0);
         Self::new(eye_rod_length, Box::new(PerspectiveCamera{}), look_at)
     }
 
     #[must_use]
-    pub fn new_orthographic_camera(eye_rod_length: f64, look_at: Point) -> Camera {
+    pub fn new_orthographic_camera(eye_rod_length: f64, look_at: Point) -> Self {
         assert!(eye_rod_length > 0.0);
         Self::new(eye_rod_length, Box::new(OrthographicCamera{}), look_at)
     }

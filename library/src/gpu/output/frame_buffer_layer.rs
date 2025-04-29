@@ -1,12 +1,18 @@
 ﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::utils::{create_frame_buffer_layer, frame_buffer_layer_size_bytes, FrameBufferLayerParameters, FrameBufferLayerParametersBuilder};
-use bytemuck::AnyBitPattern;
+use bytemuck::{AnyBitPattern, Pod};
 use futures_intrusive::channel::shared::oneshot_channel;
 use std::marker::PhantomData;
 use std::rc::Rc;
 use wgpu::{BufferAddress, BufferUsages, CommandEncoder};
 
-pub(super) struct FrameBufferLayer<T: Sized + AnyBitPattern> {
+#[derive(PartialEq)]
+pub(crate) enum SupportUpdateFrom {
+    YES,
+    NO,
+}
+
+pub(crate) struct FrameBufferLayer<T: Sized + AnyBitPattern + Pod> {
     gpu_located_render_target: Rc<wgpu::Buffer>,
     cpu_mappable_mediator: wgpu::Buffer,
     buffer_size_bytes: BufferAddress,
@@ -14,17 +20,18 @@ pub(super) struct FrameBufferLayer<T: Sized + AnyBitPattern> {
     _marker: PhantomData<T>,
 }
 
-impl<T: Sized + AnyBitPattern> FrameBufferLayer<T> {
+impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
     const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = " render target";
     const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = " cpu mappable mediator";
 
     #[must_use]
-    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, marker: &str) -> Self {
-        let render_target_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
+    pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, cpu_updatable: SupportUpdateFrom, marker: &str) -> Self {
+        let mut render_target_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
+        if cpu_updatable == SupportUpdateFrom::YES { render_target_usage |= BufferUsages::COPY_DST }
         let render_target_label = format!("{} {}", marker, Self::LABEL_GPU_LOCATED_RENDER_TARGET);
         let parameters_gpu_located_render_target = Self::parameters(frame_buffer_size, render_target_usage, render_target_label.as_str());
         let gpu_located_copy = create_frame_buffer_layer(device, &parameters_gpu_located_render_target);
-
+        
         let mediator_usage = BufferUsages::MAP_READ | BufferUsages::COPY_DST;
         let mediator_label = format!("{} {}", marker, Self::LABEL_CPU_MAPPABLE_MEDIATOR);
         let parameters_cpu_mappable_mediator = Self::parameters(frame_buffer_size, mediator_usage, mediator_label.as_str());
@@ -43,21 +50,26 @@ impl<T: Sized + AnyBitPattern> FrameBufferLayer<T> {
     }
 
     #[must_use]
-    pub fn gpu_render_target(&self) -> Rc<wgpu::Buffer> {
+    pub(crate) fn gpu_render_target(&self) -> Rc<wgpu::Buffer> {
         self.gpu_located_render_target.clone()
     }
 
-    pub(super) fn issue_copy_to_cpu_mediator(&self, encoder: &mut CommandEncoder) {
-        const SOURCE_OFFSET: BufferAddress = 0;
-        const DESTINATION_OFFSET: BufferAddress = 0;
+    const ZERO_SOURCE_OFFSET: BufferAddress = 0;
+    const ZERO_DESTINATION_OFFSET: BufferAddress = 0;
 
+    pub(crate) fn issue_copy_to_cpu_mediator(&self, encoder: &mut CommandEncoder) {
         encoder.copy_buffer_to_buffer(
             &self.gpu_located_render_target,
-            SOURCE_OFFSET,
+            Self::ZERO_SOURCE_OFFSET,
             &self.cpu_mappable_mediator,
-            DESTINATION_OFFSET,
+            Self::ZERO_DESTINATION_OFFSET,
             self.buffer_size_bytes as BufferAddress,
         );
+    }
+
+    pub(crate) fn fill_render_target(&self, queue: &wgpu::Queue, data: &[T]) {
+        assert!(data.len() * size_of::<T>() <= self.buffer_size_bytes as usize);
+        queue.write_buffer(&self.gpu_located_render_target, Self::ZERO_DESTINATION_OFFSET, bytemuck::cast_slice(data));
     }
 
     pub(crate) fn read_cpu_mediator<ConsumeData: FnOnce(&[T])>(&self, consume: ConsumeData) -> impl Future<Output = ()> {
@@ -110,7 +122,7 @@ mod tests {
     fn test_construction() {
         let context = create_headless_wgpu_context();
 
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), SupportUpdateFrom::NO, "test layer");
 
         let actual_gpu_original_usage = system_under_test.gpu_render_target().usage();
         let expected_gpu_original_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
@@ -121,7 +133,7 @@ mod tests {
     fn test_read_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFrom::NO, "test layer");
         let callback_spy_call_counter = Rc::new(RefCell::new(0_u32));
 
         let read_callback = system_under_test.read_cpu_mediator(|data| {
@@ -144,7 +156,7 @@ mod tests {
     fn test_issue_copy_to_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFrom::NO, "test layer");
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
         system_under_test.issue_copy_to_cpu_mediator(&mut encoder);

@@ -3,34 +3,38 @@ use crate::gpu::output::duplex_layer::DuplexLayer;
 use crate::serialization::pod_vector::PodVector;
 use std::rc::Rc;
 use wgpu::Buffer;
+use crate::gpu::output::frame_buffer_layer::SupportUpdateFrom;
 
 pub(crate) struct FrameBuffer {
     object_id: DuplexLayer<u32>,
+    
     albedo: DuplexLayer<PodVector>,
     normal: DuplexLayer<PodVector>,
 
-    pixel_color: DuplexLayer<PodVector>,
+    noisy_pixel_color: DuplexLayer<PodVector>,
 }
 
 impl FrameBuffer {
     #[must_use]
     pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize) -> Self {
         Self {
-            object_id: DuplexLayer::new(device, frame_buffer_size, "object id"),
-            albedo: DuplexLayer::new(device, frame_buffer_size, "albedo"),
-            normal: DuplexLayer::new(device, frame_buffer_size, "normal"),
+            object_id: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "object id"),
+            
+            albedo: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "albedo"),
+            normal: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "normal"),
 
-            pixel_color: DuplexLayer::new(device, frame_buffer_size, "pixel color"),
+            noisy_pixel_color: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::YES, "noisy pixel color"),
         }
     }
 
     pub(crate) fn prepare_pixel_color_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
-        self.pixel_color.prepare_cpu_read(encoder);
+        self.noisy_pixel_color.prepare_cpu_read(encoder);
     }
     
-    pub(crate) fn prepare_object_id_and_normal_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn prepare_noiseless_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
         self.object_id.prepare_cpu_read(encoder);
         self.normal.prepare_cpu_read(encoder);
+        self.albedo.prepare_cpu_read(encoder);
     }
     
     pub(crate) fn prepare_albedo_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
@@ -38,7 +42,7 @@ impl FrameBuffer {
     }
 
     #[must_use]
-    pub(crate) fn copy_all_from_gpu(&mut self) -> impl Future<Output = ()> {
+    pub(crate) fn copy_noiseless_from_gpu(&mut self) -> impl Future<Output = ()> {
         let object_id_read = self.object_id.read_cpu_copy();
         let normals_read = self.normal.read_cpu_copy();
         let albedo_read = self.albedo.read_cpu_copy();
@@ -51,7 +55,7 @@ impl FrameBuffer {
 
     #[must_use]
     pub(crate) fn copy_pixel_colors_from_gpu(&mut self) -> impl Future<Output = ()> {
-        self.pixel_color.read_cpu_copy()
+        self.noisy_pixel_color.read_cpu_copy()
     }
     
     #[must_use]
@@ -60,8 +64,8 @@ impl FrameBuffer {
     }
 
     #[must_use]
-    pub(crate) fn pixel_color(&self) -> Rc<Buffer> {
-        self.pixel_color.gpu_copy()
+    pub(crate) fn noisy_pixel_color(&self) -> Rc<Buffer> {
+        self.noisy_pixel_color.gpu_copy()
     }
 
     #[must_use]
@@ -80,27 +84,24 @@ impl FrameBuffer {
     }
 
     #[must_use]
-    pub fn object_id_at_cpu(&self) -> &Vec<u32> {
+    pub(crate) fn object_id_at_cpu(&self) -> &Vec<u32> {
         self.object_id.cpu_copy()
     }
     
     #[must_use]
-    pub fn pixel_color_at_cpu(&self) -> &Vec<PodVector> {
-        self.pixel_color.cpu_copy()
-    }
-
-    #[must_use]
-    pub fn albedo_at_cpu(&self) -> &Vec<PodVector> {
-        self.albedo.cpu_copy()
-    }
-
-    #[must_use]
-    pub fn normal_at_cpu(&self) -> &Vec<PodVector> {
-        self.normal.cpu_copy()
+    pub(crate) fn denoiser_input(&mut self) -> (&mut Vec<PodVector>, &Vec<PodVector>, &Vec<PodVector>) {
+        (self.noisy_pixel_color.mutable_cpu_copy(), self.albedo.cpu_copy(), self.normal.cpu_copy())
     }
     
-    pub(crate) fn invalidate_object_id_and_normal(&mut self) {
+    #[must_use]
+    pub(crate) fn albedo_at_cpu_is_absent(&self) -> bool {
+        self.albedo.cpu_copy().is_empty()
+    }
+    
+    pub(crate) fn invalidate_cpu_copies(&mut self) {
         self.object_id.invalidate_cpu_copy();
+        self.noisy_pixel_color.invalidate_cpu_copy();
+        self.albedo.invalidate_cpu_copy();
         self.normal.invalidate_cpu_copy();
     }
 }
@@ -133,15 +134,18 @@ mod tests {
         let mut system_under_test = FrameBuffer::new(context.device(), test_buffer_size());
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
-        system_under_test.prepare_object_id_and_normal_copy_from_gpu(&mut encoder);
+        system_under_test.prepare_noiseless_copy_from_gpu(&mut encoder);
         context.queue().submit(Some(encoder.finish()));
 
-        let gpu_to_cpu_copy = system_under_test.copy_all_from_gpu();
+        let gpu_to_cpu_copy = system_under_test.copy_noiseless_from_gpu();
         context.device().poll(PollType::Wait).expect("failed to poll the device");
         pollster::block_on(gpu_to_cpu_copy);
 
+        {
+            let (_, albedo_at_cpu, normal_at_cpu,) = system_under_test.denoiser_input();
+            assert_eq!(albedo_at_cpu.len(), test_buffer_size().area() as usize);
+            assert_eq!(normal_at_cpu.len(), test_buffer_size().area() as usize);
+        }
         assert_eq!(system_under_test.object_id_at_cpu().len(), test_buffer_size().area() as usize);
-        assert_eq!(system_under_test.normal_at_cpu().len(), test_buffer_size().area() as usize);
-        assert_eq!(system_under_test.albedo_at_cpu().len(), test_buffer_size().area() as usize);
     }
 }

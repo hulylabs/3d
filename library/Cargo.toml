@@ -21,6 +21,8 @@ futures = "0.3.31"
 exr = "1.73.0"
 pxm = "0.1.0"
 
+denoiser = { path = "../denoiser" }
+
 [dev-dependencies]
 tempfile = "3.19.1"
 image = "0.25.6"

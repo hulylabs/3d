@@ -1,18 +1,18 @@
 ﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::output::frame_buffer_layer::FrameBufferLayer;
-use bytemuck::AnyBitPattern;
+use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFrom};
+use bytemuck::{AnyBitPattern, Pod};
 use std::rc::Rc;
 
-pub(super) struct DuplexLayer<T: Sized + AnyBitPattern> {
+pub(super) struct DuplexLayer<T: Sized + AnyBitPattern + Pod> {
     gpu_located_part: FrameBufferLayer<T>,
     last_read: Vec<T>,
 }
 
-impl<T: Sized + AnyBitPattern> DuplexLayer<T> {
+impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
     #[must_use]
-    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, marker: &str) -> Self {
+    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, copy_back_to_gpu: SupportUpdateFrom, marker: &str) -> Self {
         Self {
-            gpu_located_part: FrameBufferLayer::<T>::new(device, frame_buffer_size, marker),
+            gpu_located_part: FrameBufferLayer::<T>::new(device, frame_buffer_size, copy_back_to_gpu, marker),
             last_read: Vec::new(),
         }
     }
@@ -31,6 +31,11 @@ impl<T: Sized + AnyBitPattern> DuplexLayer<T> {
     #[must_use]
     pub(super) fn cpu_copy(&self) -> &Vec<T> {
         &self.last_read
+    }
+
+    #[must_use]
+    pub(super) fn mutable_cpu_copy(&mut self) -> &mut Vec<T> {
+        &mut self.last_read
     }
 
     #[must_use]

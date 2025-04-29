@@ -58,6 +58,7 @@ impl GpuSerializable for Parallelogram {
             distance_to_origin,
         );
 
+        let normal = normal.normalize();
         container.write_padded_quartet_f64(
             normal.x,
             normal.y,

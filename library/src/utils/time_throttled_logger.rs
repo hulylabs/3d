@@ -7,7 +7,8 @@ pub(crate) struct TimeThrottledInfoLogger {
 }
 
 impl TimeThrottledInfoLogger {
-    pub fn new(interval: Duration) -> Self {
+    #[must_use]
+    pub(crate) fn new(interval: Duration) -> Self {
         Self {
             interval,
             last_log_action: Instant::now(),

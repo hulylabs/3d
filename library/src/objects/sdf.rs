@@ -3,7 +3,7 @@ use crate::geometry::transform::Affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::helpers::serialize_matrix;
+use crate::serialization::serialize_matrix::serialize_matrix;
 use crate::objects::ray_traceable::RayTraceable;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;

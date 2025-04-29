@@ -31,7 +31,7 @@ const DEVICE_LABEL: &str = "Rust Tracer Library";
 const FPS_MEASUREMENT_SAMPLES: usize = 15;
 const FPS_WRITE_INTERVAL: Duration = Duration::from_secs(2);
 
-const RAYS_ACCUMULATIONS_PER_FRAME: usize = 1;
+const RAYS_ACCUMULATIONS_PER_FRAME: usize = 10;
 
 pub struct Engine {
     /*Actually, we do not need any synchronization stuff; our code is
