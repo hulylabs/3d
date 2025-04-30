@@ -20,7 +20,7 @@ impl SlidingTimeFrame {
         }
     }
     
-    pub(crate) fn add_delta(&mut self, delta: u128) {
+    fn add_delta(&mut self, delta: u128) {
         let erased_value = self.millisecond_deltas[self.circular_buffer_pointer];
         self.millisecond_deltas[self.circular_buffer_pointer] = delta;
         self.total_delta += delta;

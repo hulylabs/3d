@@ -22,6 +22,7 @@ use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::Renderer;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
+use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::sliding_time_frame::SlidingTimeFrame;
 use crate::utils::time_throttled_logger::TimeThrottledInfoLogger;
@@ -48,8 +49,10 @@ pub struct Engine {
     window_surface_format: wgpu::TextureFormat,
 
     renderer: Renderer,
+    
     fps_measurer: SlidingTimeFrame,
-    fps_reporter: TimeThrottledInfoLogger,
+    denosing_measurer: MinMaxTimeMeasurer,
+    performance_reporter: TimeThrottledInfoLogger,
 }
 
 #[derive(Error, Debug)]
@@ -147,7 +150,8 @@ impl Engine {
             renderer,
 
             fps_measurer: SlidingTimeFrame::new(FPS_MEASUREMENT_SAMPLES),
-            fps_reporter: TimeThrottledInfoLogger::new(FPS_WRITE_INTERVAL),
+            denosing_measurer: MinMaxTimeMeasurer::new(),
+            performance_reporter: TimeThrottledInfoLogger::new(FPS_WRITE_INTERVAL),
         };
 
         ware.configure_surface();
@@ -220,17 +224,34 @@ impl Engine {
         }
 
         //self.renderer.denoise_and_save();
+        self.denosing_measurer.start();
+        self.renderer.denoise_accumulated_image();
+        self.denosing_measurer.stop();
+        
         self.renderer.present(&surface_texture);
 
         pre_present_notify();
         surface_texture.present();
 
         self.fps_measurer.sample();
+
+        self.write_performance_report();
+    }
+
+    fn write_performance_report(&mut self) {
         let average_frame_time = self.fps_measurer.average_delta();
         let fps = 1.0 / average_frame_time.as_secs_f32();
-        self.fps_reporter.do_write(format!("CPU observed FPS: {}", fps));
+
+        let performance_report = format!(
+            "CPU observed FPS: {}; Denoising (ms): min={}, max={}, current={}",
+            fps,
+            self.denosing_measurer.min_time().as_millis(),
+            self.denosing_measurer.max_time().as_millis(),
+            self.denosing_measurer.last_time().as_millis(),
+        );
+        self.performance_reporter.do_write(performance_report);
     }
-    
+
     #[must_use]
     pub fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
         assert!(x < self.window_pixels_size.width);

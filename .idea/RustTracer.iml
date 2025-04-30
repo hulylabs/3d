@@ -5,6 +5,9 @@
       <sourceFolder url="file://$MODULE_DIR$/library/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/sandbox/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/library/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/build/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/denoiser/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/denoiser/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/library/target" />
       <excludeFolder url="file://$MODULE_DIR$/sandbox/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

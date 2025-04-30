@@ -191,7 +191,7 @@ impl Renderer {
 
             ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
             denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFrom::YES, "denoised pixels"),
-            
+
             spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfBox>(scene, resources, &DataKind::Sdf),
@@ -312,7 +312,7 @@ impl Renderer {
         if previous_frame_size < new_frame_size {
             self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
             self.buffers.denoised_beauty_image = FrameBufferLayer::new(&self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFrom::YES, "denoised pixels");
-            
+
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
             Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
@@ -386,7 +386,10 @@ impl Renderer {
                 pollster::block_on(copy_operation);
             }
         }
-
+    }
+    
+    pub(crate) fn denoise_accumulated_image(&mut self)
+    {
         {
             let pixel_colors_buffer_gpu_to_cpu_transfer = self.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
             self.context.device().poll(PollType::Wait).expect("failed to poll the device");
@@ -442,7 +445,7 @@ impl Renderer {
         }
 
         let (beauty, albedo, normal) = self.buffers.ray_tracing_frame_buffer.denoiser_input();
-        
+
         save("_beauty", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, beauty, divider);
         save("_albedo", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, albedo, 1.0);
         save("_normal", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, normal, 1.0);
