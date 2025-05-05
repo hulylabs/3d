@@ -29,7 +29,7 @@ use pxm::PFMBuilder;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFrom};
+use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
 // TODO: work in progress
 
 pub(crate) struct Renderer {
@@ -190,7 +190,7 @@ impl Renderer {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
             ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
-            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFrom::YES, "denoised pixels"),
+            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels"),
 
             spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
@@ -311,7 +311,7 @@ impl Renderer {
 
         if previous_frame_size < new_frame_size {
             self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
-            self.buffers.denoised_beauty_image = FrameBufferLayer::new(&self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFrom::YES, "denoised pixels");
+            self.buffers.denoised_beauty_image = FrameBufferLayer::new(&self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels");
 
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);

@@ -1,5 +1,5 @@
 ﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFrom};
+use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
 use bytemuck::{AnyBitPattern, Pod};
 use std::rc::Rc;
 
@@ -10,7 +10,7 @@ pub(super) struct DuplexLayer<T: Sized + AnyBitPattern + Pod> {
 
 impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
     #[must_use]
-    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, copy_back_to_gpu: SupportUpdateFrom, marker: &str) -> Self {
+    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, copy_back_to_gpu: SupportUpdateFromCpu, marker: &str) -> Self {
         Self {
             gpu_located_part: FrameBufferLayer::<T>::new(device, frame_buffer_size, copy_back_to_gpu, marker),
             last_read: Vec::new(),

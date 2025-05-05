@@ -3,7 +3,7 @@ use crate::gpu::output::duplex_layer::DuplexLayer;
 use crate::serialization::pod_vector::PodVector;
 use std::rc::Rc;
 use wgpu::Buffer;
-use crate::gpu::output::frame_buffer_layer::SupportUpdateFrom;
+use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
 
 pub(crate) struct FrameBuffer {
     object_id: DuplexLayer<u32>,
@@ -18,12 +18,12 @@ impl FrameBuffer {
     #[must_use]
     pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize) -> Self {
         Self {
-            object_id: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "object id"),
+            object_id: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "object id"),
             
-            albedo: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "albedo"),
-            normal: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::NO, "normal"),
+            albedo: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "albedo"),
+            normal: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "normal"),
 
-            noisy_pixel_color: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFrom::YES, "noisy pixel color"),
+            noisy_pixel_color: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::YES, "noisy pixel color"),
         }
     }
 

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use wgpu::{BufferAddress, BufferUsages, CommandEncoder};
 
 #[derive(PartialEq)]
-pub(crate) enum SupportUpdateFrom {
+pub(crate) enum SupportUpdateFromCpu {
     YES,
     NO,
 }
@@ -25,9 +25,9 @@ impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
     const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = " cpu mappable mediator";
 
     #[must_use]
-    pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, cpu_updatable: SupportUpdateFrom, marker: &str) -> Self {
+    pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, cpu_updatable: SupportUpdateFromCpu, marker: &str) -> Self {
         let mut render_target_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
-        if cpu_updatable == SupportUpdateFrom::YES { render_target_usage |= BufferUsages::COPY_DST }
+        if cpu_updatable == SupportUpdateFromCpu::YES { render_target_usage |= BufferUsages::COPY_DST }
         let render_target_label = format!("{} {}", marker, Self::LABEL_GPU_LOCATED_RENDER_TARGET);
         let parameters_gpu_located_render_target = Self::parameters(frame_buffer_size, render_target_usage, render_target_label.as_str());
         let gpu_located_copy = create_frame_buffer_layer(device, &parameters_gpu_located_render_target);
@@ -88,7 +88,7 @@ impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
                 let object_ids: &[T] = bytemuck::cast_slice(&raw_data);
                 consume(object_ids);
             }
-
+            
             self.cpu_mappable_mediator.unmap();
         }
     }
@@ -122,7 +122,7 @@ mod tests {
     fn test_construction() {
         let context = create_headless_wgpu_context();
 
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), SupportUpdateFrom::NO, "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), SupportUpdateFromCpu::NO, "test layer");
 
         let actual_gpu_original_usage = system_under_test.gpu_render_target().usage();
         let expected_gpu_original_usage = BufferUsages::STORAGE | BufferUsages::COPY_SRC;
@@ -133,7 +133,7 @@ mod tests {
     fn test_read_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFrom::NO, "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFromCpu::NO, "test layer");
         let callback_spy_call_counter = Rc::new(RefCell::new(0_u32));
 
         let read_callback = system_under_test.read_cpu_mediator(|data| {
@@ -156,7 +156,7 @@ mod tests {
     fn test_issue_copy_to_staging() {
         let context = create_headless_wgpu_context();
         let buffer_size = test_buffer_size();
-        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFrom::NO, "test layer");
+        let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFromCpu::NO, "test layer");
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
         system_under_test.issue_copy_to_cpu_mediator(&mut encoder);
