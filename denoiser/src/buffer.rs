@@ -1,21 +1,18 @@
 use crate::Device;
-use crate::sys::{
-    OIDNBuffer, oidnGetBufferSize, oidnNewBuffer, oidnReadBuffer, oidnReleaseBuffer,
-    oidnWriteBuffer,
-};
+use crate::sys::{OIDNBuffer, oidnGetBufferSize, oidnNewBuffer, oidnReadBuffer, oidnReleaseBuffer, oidnWriteBuffer, oidnWriteBufferAsync};
 use std::mem;
 use std::sync::Arc;
 
 pub struct Buffer {
     pub(crate) buf: OIDNBuffer,
-    pub(crate) size: usize,
+    pub(crate) f32_content_size: usize,
     pub(crate) device_arc: Arc<u8>,
 }
 
 impl Device {
     /// Creates a new buffer from a slice, returns None if buffer creation
     /// failed
-    pub fn create_buffer(&self, contents: &[f32]) -> Option<Buffer> {
+    pub fn create_buffer_filled(&self, contents: &[f32]) -> Option<Buffer> {
         let byte_size = mem::size_of_val(contents);
         let buffer = unsafe {
             let buf = oidnNewBuffer(self.0, byte_size);
@@ -28,10 +25,30 @@ impl Device {
         };
         Some(Buffer {
             buf: buffer,
-            size: contents.len(),
+            f32_content_size: contents.len(),
             device_arc: self.1.clone(),
         })
     }
+
+    /// Creates a new buffer of requested size
+    /// failed
+    pub fn create_buffer(&self, f32_count: usize) -> Option<Buffer> {
+        assert!(f32_count > 0);
+        let buffer = unsafe {
+            let buf = oidnNewBuffer(self.0, f32_count * size_of::<f32>());
+            if buf.is_null() {
+                return None;
+            } else {
+                buf
+            }
+        };
+        Some(Buffer {
+            buf: buffer,
+            f32_content_size: f32_count,
+            device_arc: self.1.clone(),
+        })
+    }
+    
     /// # Safety
     /// Raw buffer must not be invalid (e.g. destroyed, null ect.)
     ///
@@ -40,7 +57,7 @@ impl Device {
         let size = unsafe { oidnGetBufferSize(buffer) } / mem::size_of::<f32>();
         Buffer {
             buf: buffer,
-            size,
+            f32_content_size: size,
             device_arc: self.1.clone(),
         }
     }
@@ -53,7 +70,7 @@ impl Device {
 impl Buffer {
     /// Writes to the buffer, returns [None] if the sizes mismatch
     pub fn write(&self, contents: &[f32]) -> Option<()> {
-        if self.size != contents.len() {
+        if self.f32_content_size < contents.len() {
             None
         } else {
             let byte_size = mem::size_of_val(contents);
@@ -64,9 +81,34 @@ impl Buffer {
         }
     }
 
+    pub fn write_async(&self, contents: &[f32]) -> Option<()> {
+        if self.f32_content_size < contents.len() {
+            None
+        } else {
+            let byte_size = mem::size_of_val(contents);
+            unsafe {
+                oidnWriteBufferAsync(self.buf, 0, byte_size, contents.as_ptr() as *const _);
+            }
+            Some(())
+        }
+    }
+
     /// Reads from the buffer to the array, returns [None] if the sizes mismatch
-    pub fn read_to_slice(&self, contents: &mut [f32]) -> Option<()> {
-        if self.size != contents.len() {
+    pub fn read_slice_into(&self, f32_count_to_read: usize, target: &mut [f32]) -> Option<()> {
+        if self.f32_content_size < f32_count_to_read || f32_count_to_read > target.len() {
+            None
+        } else {
+            let byte_size = f32_count_to_read * size_of::<f32>();
+            unsafe {
+                oidnReadBuffer(self.buf, 0, byte_size, target.as_ptr() as *mut _);
+            }
+            Some(())
+        }
+    }
+    
+    /// Reads from the buffer to the array, returns [None] if the sizes mismatch
+    pub fn read_to_full_slice(&self, contents: &mut [f32]) -> Option<()> {
+        if self.f32_content_size < contents.len() {
             None
         } else {
             let byte_size = mem::size_of_val(contents);
@@ -79,12 +121,12 @@ impl Buffer {
 
     /// Reads from the buffer
     pub fn read(&self) -> Vec<f32> {
-        let contents = vec![0.0; self.size];
+        let contents = vec![0.0; self.f32_content_size];
         unsafe {
             oidnReadBuffer(
                 self.buf,
                 0,
-                self.size * mem::size_of::<f32>(),
+                self.f32_content_size * mem::size_of::<f32>(),
                 contents.as_ptr() as *mut _,
             );
         }
@@ -96,7 +138,7 @@ impl Buffer {
         self.buf
     }
     pub fn size(&self) -> usize {
-        self.size
+        self.f32_content_size
     }
 }
 

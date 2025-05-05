@@ -403,7 +403,12 @@ impl Renderer {
             let beauty_floats: &mut [f32] = bytemuck::cast_slice_mut(beauty);
             let albedo_floats: &[f32] = bytemuck::cast_slice(albedo);
             let normal_floats: &[f32] = bytemuck::cast_slice(normal);
-            self.denoiser.denoise_inplace(beauty_floats, albedo_floats, normal_floats, frame_buffer_width, frame_buffer_height);
+            
+            let mut executor = self.denoiser.begin_denoise(frame_buffer_width, frame_buffer_height);
+            executor.issue_albedo_write(albedo_floats);
+            executor.issue_normal_write(normal_floats);
+            executor.issue_noisy_beauty_write(beauty_floats);
+            executor.filter(beauty_floats);
 
             self.buffers.denoised_beauty_image.fill_render_target(self.context.queue(), beauty);
             self.context.queue().submit([]);

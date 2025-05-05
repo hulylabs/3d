@@ -3,56 +3,31 @@
 //!
 //! Open Image Denoise documentation can be found
 //! [here](https://openimagedenoise.github.io/documentation.html).
-//!
-//! ## Example
-//!
-//! The crate provides a lightweight wrapper over the Open Image Denoise
-//! library, along with raw C bindings exposed under [`oidn::sys`](sys). Below
-//! is an example of using the [`RayTracing`] filter to denoise an image.
-//!
-//! ```ignore
-//! // Load scene, render image, etc.
-//!
-//! let input_img: Vec<f32> = // A float3 RGB image produced by your renderer.
-//! let mut filter_output = vec![0.0f32; input_img.len()];
-//!
-//! let device = oidn::Device::new();
-//! oidn::RayTracing::new(&device)
-//!     // Optionally add float3 normal and albedo buffers as well.
-//!     .srgb(true)
-//!     .image_dimensions(input.width() as usize, input.height() as usize);
-//!     .filter(&input_img[..], &mut filter_output[..])
-//!     .expect("Filter config error!");
-//!
-//! if let Err(e) = device.get_error() {
-//!     println!("Error denosing image: {}", e.1);
-//! }
-//!
-//! // Save out or display filter_output image.
-//! ```
 
 use std::rc::Rc;
 use num_enum::TryFromPrimitive;
 
 use log::error;
 
-pub mod buffer;
-pub mod device;
-pub mod filter;
+pub(crate) mod buffer;
+pub(crate) mod device;
+pub(crate) mod filter;
 
 #[allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
-pub mod sys;
+pub(crate) mod sys;
+
+mod buffer_io_tests;
 
 #[doc(inline)]
-pub use buffer::Buffer;
+use buffer::Buffer;
 #[doc(inline)]
-pub use device::Device;
+use device::Device;
 #[doc(inline)]
-pub use filter::RayTracing;
+use filter::RayTracing;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive)]
-pub enum Error {
+pub(crate) enum Error {
     None = sys::OIDNError_OIDN_ERROR_NONE,
     Unknown = sys::OIDNError_OIDN_ERROR_UNKNOWN,
     InvalidArgument = sys::OIDNError_OIDN_ERROR_INVALID_ARGUMENT,
@@ -65,7 +40,7 @@ pub enum Error {
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive, Default)]
-pub enum Quality {
+pub(crate) enum Quality {
     #[default]
     Default = sys::OIDNQuality_OIDN_QUALITY_DEFAULT,
     Balanced = sys::OIDNQuality_OIDN_QUALITY_BALANCED,
@@ -84,50 +59,186 @@ impl Quality {
     }
 }
 
+const CHANNELS_PER_PIXEL: usize = 4;
+
+#[must_use]
+fn image_f32_size(width: usize, height: usize) -> usize {
+    width * height * CHANNELS_PER_PIXEL
+}
+
+struct Storage { // TODO: is it faster to use single huge buffer with offsets?
+    beauty_io_image: Rc<Buffer>,
+    aux_input_albedo: Rc<Buffer>,
+    aux_input_normals: Rc<Buffer>,
+}
+
+impl Storage {
+    #[must_use]
+    fn new(device: Rc<Device>, width: usize, height: usize) -> Option<Self> {
+        assert!(width > 0);
+        assert!(height > 0);
+        
+        let f32_count = image_f32_size(width, height);
+        
+        let beauty_io_image = device.create_buffer(f32_count)?;
+        let aux_input_albedo = device.create_buffer(f32_count)?;
+        let aux_input_normals = device.create_buffer(f32_count)?;
+        
+        Some(Self {
+            beauty_io_image: Rc::new(beauty_io_image), 
+            aux_input_albedo: Rc::new(aux_input_albedo), 
+            aux_input_normals: Rc::new(aux_input_normals), 
+        })
+    }
+    
+    #[must_use]
+    fn pixel_count(&self) -> usize {
+        self.beauty_io_image.f32_content_size / CHANNELS_PER_PIXEL
+    }
+}
+
+pub struct DenoiserExecutor<'a> {
+    device: Rc<Device>,
+    filter: &'a mut RayTracing,
+    
+    storage: Rc<Storage>,
+    image_width: usize,
+    image_height: usize,
+    
+    albedo_write_issued: bool,
+    normal_write_issued: bool,
+    noisy_beauty_write_issued: bool,
+}
+
+impl DenoiserExecutor<'_> {
+    pub fn issue_albedo_write(&mut self, albedo: &[f32]) {
+        assert!(!self.albedo_write_issued);
+        self.albedo_write_issued = true;
+        self.issue_write(self.storage.aux_input_albedo.clone(), albedo, "albedo");
+    }
+    pub fn issue_normal_write(&mut self, normal: &[f32]) {
+        assert!(!self.normal_write_issued);
+        self.normal_write_issued = true;
+        self.issue_write(self.storage.aux_input_normals.clone(), normal, "normal");
+    }
+    pub fn issue_noisy_beauty_write(&mut self, noisy_pixels: &[f32]) {
+        assert!(!self.noisy_beauty_write_issued);
+        self.noisy_beauty_write_issued = true;
+        self.issue_write(self.storage.beauty_io_image.clone(), noisy_pixels, "noisy beauty");
+    }
+
+    fn issue_write(&self, buffer: Rc<Buffer>, data: &[f32], what: &str) {
+        let f32_image_size = image_f32_size(self.image_width, self.image_height);
+        assert!(data.len() >= f32_image_size);
+        buffer.write_async(&data[..f32_image_size]).expect(format!("failed to issue {} write", what).as_str())
+    }
+    
+    pub fn filter(&mut self, denoised_pixels: &mut [f32]) {
+        let image_f32_size = image_f32_size(self.image_width, self.image_height);
+        assert!(denoised_pixels.len() >= image_f32_size);
+        assert!(self.noisy_beauty_write_issued);
+        
+        self.filter
+            .filter_in_place_buffer(self.storage.beauty_io_image.as_ref())
+            .expect("denoise execution failure");
+
+        if let Err(e) = self.device.get_error() {
+            error!("error denosing image: {:?}, {}", e.0, e.1);
+        }
+        
+        self.storage.beauty_io_image.read_slice_into(image_f32_size, denoised_pixels).expect("failed to read denoised data back");
+    }
+}
+
 pub struct Denoiser {
     device: Rc<Device>,
     filter: RayTracing,
+    
+    storage: Option<Rc<Storage>>,
 }
 
 impl Denoiser {
-    const CHANNELS_PER_PIXEL: usize = 4;
     
     #[must_use]
     pub fn new() -> Self {
         let device = Rc::new(Device::new());
-        let filter = RayTracing::new(device.clone(), Self::CHANNELS_PER_PIXEL);
+        let filter = RayTracing::new(device.clone(), CHANNELS_PER_PIXEL);
                 
         let mut result = Self { 
-            device: device.clone(), filter,
+            device: device.clone(), 
+            filter,
+            storage: None,
         };
         
         result.filter
             .clean_aux(true)
             .hdr(true)
             .filter_quality(Quality::High);
-        
+
         result
     }
     
-    pub fn denoise_inplace(&mut self, noisy_beauty_image: &mut [f32], albedo: &[f32], normal: &[f32], width: usize, height: usize) {
-        let expected_elements = width * height * Self::CHANNELS_PER_PIXEL;
-        assert!(expected_elements > 0);
-        assert!(noisy_beauty_image.len() >= expected_elements);
-        assert_eq!(albedo.len(), noisy_beauty_image.len());
-        assert_eq!(normal.len(), noisy_beauty_image.len());
-        
-        let noisy_beauty_image: &mut [f32] = &mut noisy_beauty_image[..expected_elements];
-        let albedo: &[f32] = &albedo[..expected_elements];
-        let normal: &[f32] = &normal[..expected_elements];
+    #[must_use]
+    pub fn begin_denoise(&mut self, width: usize, height: usize) -> DenoiserExecutor {
+        assert!(width > 0);
+        assert!(height > 0);
+
+        let storage: Rc<Storage> = self.get_storage(width, height);
 
         self.filter
             .image_dimensions(width, height)
-            .albedo_normal(albedo, normal)
-            .filter_in_place(noisy_beauty_image)
-            .expect("denoise filter configuration error!");
-
-        if let Err(e) = self.device.get_error() {
-            error!("error denosing image: {:?}, {}", e.0, e.1);
+            .expect("denoise filter dimensions setup error")
+        ;
+        
+        DenoiserExecutor {
+            device: self.device.clone(),
+            filter: &mut self.filter,
+            storage: storage.clone(),
+            image_width: width,
+            image_height: height,
+            
+            albedo_write_issued: false,
+            normal_write_issued: false,
+            noisy_beauty_write_issued: false,
         }
+    }
+
+    #[must_use]
+    fn get_storage(&mut self, width: usize, height: usize) -> Rc<Storage> {
+        assert!(width > 0);
+        assert!(height > 0);
+        let desired_pixel_count = width * height;
+        match self.storage.as_ref() {
+            Some(storage) => {
+                if storage.pixel_count() < desired_pixel_count {
+                    self.realloc_storage(width, height)
+                } else {
+                    storage.clone()
+                }
+            },
+            None => {
+                self.realloc_storage(width, height)
+            }
+        }
+    }
+
+    #[must_use]
+    fn realloc_storage(&mut self, width: usize, height: usize) -> Rc<Storage> {
+        assert!(width > 0);
+        assert!(height > 0);
+        
+        let storage 
+            = Storage::new(self.device.clone(), width, height)
+                .expect("failed to allocate denoiser storage");
+        let result = Rc::new(storage);
+        
+        self.storage = Some(result.clone());
+
+        self.filter
+            .albedo_normal_buffer(result.aux_input_albedo.clone(), result.aux_input_normals.clone())
+            .expect("denoise aux buffers configuration error")
+        ;
+        
+        result
     }
 }

@@ -2,13 +2,14 @@ use std::mem;
 
 #[cfg(test)]
 mod tests {
-    use denoiser::{sys, Device};
+    use crate::device::Device;
+    use crate::sys::oidnNewBuffer;
     use super::*;
     
     #[test]
     fn buffer_read_write() {
         let device = Device::new();
-        let buffer = match device.create_buffer(&[0.0]) {
+        let buffer = match device.create_buffer_filled(&[0.0]) {
             Some(buffer) => buffer,
             // resources failing to be created is not the fault of this library
             None => {
@@ -19,7 +20,7 @@ mod tests {
         buffer.write(&[1.0]).unwrap();
         assert_eq!(buffer.read(), vec![1.0]);
         let mut slice = vec![0.0];
-        buffer.read_to_slice(&mut slice).unwrap();
+        buffer.read_to_full_slice(&mut slice).unwrap();
         assert_eq!(slice, vec![1.0]);
         if let Err((err, str)) = device.get_error() {
             panic!("test failed with {err:?}: {str}")
@@ -30,7 +31,7 @@ mod tests {
     #[test]
     fn buffer_import_read_write() {
         let device = Device::new();
-        let raw_buffer = unsafe { sys::oidnNewBuffer(device.raw(), mem::size_of::<f32>()) };
+        let raw_buffer = unsafe { oidnNewBuffer(device.raw(), mem::size_of::<f32>()) };
         if raw_buffer.is_null() {
             eprintln!("Test skipped due to buffer creation failing");
             return;
@@ -39,7 +40,7 @@ mod tests {
         buffer.write(&[1.0]).unwrap();
         assert_eq!(buffer.read(), vec![1.0]);
         let mut slice = vec![0.0];
-        buffer.read_to_slice(&mut slice).unwrap();
+        buffer.read_to_full_slice(&mut slice).unwrap();
         assert_eq!(slice, vec![1.0]);
         if let Err((err, str)) = device.get_error() {
             panic!("test failed with {err:?}: {str}")
