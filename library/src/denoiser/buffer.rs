@@ -2,7 +2,7 @@ use crate::denoiser::sys::{oidnNewBuffer, oidnReadBuffer, oidnReleaseBuffer, oid
 use std::sync::Arc;
 use crate::denoiser::device::Device;
 
-pub struct Buffer {
+pub(super) struct Buffer {
     pub(crate) buffer: OIDNBuffer,
     pub(crate) f32_content_size: usize,
     pub(crate) device_arc: Arc<u8>,
@@ -12,7 +12,7 @@ impl Device {
     /// Creates a new buffer of requested size, returns None if buffer creation
     /// failed
     #[must_use]
-    pub fn create_buffer(&self, f32_count: usize) -> Option<Buffer> {
+    pub(super) fn create_buffer(&self, f32_count: usize) -> Option<Buffer> {
         assert!(f32_count > 0);
         let buffer = unsafe {
             let buffer = oidnNewBuffer(self.0, f32_count * size_of::<f32>());
@@ -30,7 +30,7 @@ impl Device {
     }
 
     #[must_use]
-    pub(crate) fn same_device_as(&self, buffer: &Buffer) -> bool {
+    pub(super) fn same_device_as(&self, buffer: &Buffer) -> bool {
         self.1.as_ref() as *const _ as isize == buffer.device_arc.as_ref() as *const _ as isize
     }
 }
@@ -42,7 +42,7 @@ impl Device {
     ///
     /// Raw buffer must have been created by this device
     #[must_use]
-    pub unsafe fn create_buffer_from_raw(&self, buffer: OIDNBuffer) -> Buffer {
+    pub(super) unsafe fn create_buffer_from_raw(&self, buffer: OIDNBuffer) -> Buffer {
         let size_bytes = unsafe { crate::denoiser::sys::oidnGetBufferSize(buffer) };
         assert_eq!(size_bytes % size_of::<f32>(), 0);
 
@@ -55,7 +55,7 @@ impl Device {
 }
 
 impl Buffer {
-    pub fn write_async(&self, contents: &[f32]) -> Option<()> {
+    pub(super) fn write_async(&self, contents: &[f32]) -> Option<()> {
         if self.f32_content_size < contents.len() {
             None
         } else {
@@ -68,7 +68,7 @@ impl Buffer {
     }
 
     /// Reads from the buffer to the array, returns [None] if the sizes mismatch
-    pub fn read_slice_into(&self, f32_count_to_read: usize, target: &mut [f32]) -> Option<()> {
+    pub(super) fn read_slice_into(&self, f32_count_to_read: usize, target: &mut [f32]) -> Option<()> {
         assert!(f32_count_to_read > 0);
         if self.f32_content_size < f32_count_to_read || f32_count_to_read > target.len() {
             None

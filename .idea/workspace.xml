@@ -15,62 +15,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1f82dab6-e1be-4615-95d0-28d0ae89466e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/library/src/denoiser/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/LanguageServersSettings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/RustTracer.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/Cargo.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/build/src/lib.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/Cargo.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/LICENSE.md" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/LICENSE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/build.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise.2.3.3.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise.2.3.3.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise.2.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise.2.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise_core.2.3.3.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise_core.2.3.3.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise_device_cpu.2.3.3.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise_device_cpu.2.3.3.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libOpenImageDenoise_device_metal.2.3.3.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libOpenImageDenoise_device_metal.2.3.3.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libtbb.12.12.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libtbb.12.12.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libtbb.12.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libtbb.12.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/mac_arm/libtbb.dylib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/mac_arm/libtbb.dylib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise.lib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise.lib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_core.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_core.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_core.lib" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_core.lib" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_device_cpu.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_device_cpu.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_device_cuda.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_device_cuda.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_device_hip.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_device_hip.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/OpenImageDenoise_device_sycl.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/OpenImageDenoise_device_sycl.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/sycl8.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/sycl8.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/tbb12.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/tbb12.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/tbbbind.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/tbbbind.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/tbbbind_2_0.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/tbbbind_2_0.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/tbbbind_2_5.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/tbbbind_2_5.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/ur_adapter_level_zero.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/ur_adapter_level_zero.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/ur_loader.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/ur_loader.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/lib/windows/ur_win_proxy_loader.dll" beforeDir="false" afterPath="$PROJECT_DIR$/library/lib/windows/ur_win_proxy_loader.dll" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/buffer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/buffer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/device.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/device.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/error.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/filter.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/filter.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/entry.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/denoiser/src/sys.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/sys.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/library/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/library/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library/src/denoiser/buffer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/buffer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library/src/denoiser/device.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/device.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library/src/denoiser/entry.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/entry.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library/src/denoiser/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/library/src/denoiser/filter.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/denoiser/filter.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/library/src/gpu/render.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/gpu/render.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/library/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/library/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sandbox/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/sandbox/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sandbox/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/sandbox/build.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:test" />
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
       <list>
@@ -111,7 +70,12 @@
     "settings.editor.selected.configurable": "database.data.csv.formats"
   }
 }]]></component>
-  <component name="RunManager" selected="Cargo.Run sandbox">
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="K:\Code\Huly\3d" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Cargo.Tests in 'library'">
     <configuration name="Run sandbox" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="buildProfileId" value="dev" />
       <option name="command" value="run --package sandbox --bin sandbox" />
@@ -166,7 +130,7 @@
       <updated>1732001883717</updated>
       <workItem from="1746502739143" duration="33000" />
       <workItem from="1746502773483" duration="24000" />
-      <workItem from="1746502816570" duration="3405000" />
+      <workItem from="1746502816570" duration="4687000" />
     </task>
     <servers />
   </component>

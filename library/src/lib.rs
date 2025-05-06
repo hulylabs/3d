@@ -2,12 +2,12 @@
 
 pub mod geometry;
 pub mod objects;
-mod gpu;
 pub mod scene;
-mod serialization;
-mod bvh;
 pub mod utils;
 mod denoiser;
+mod bvh;
+mod serialization;
+mod gpu;
 
 use std::cmp::max;
 use std::rc::Rc;

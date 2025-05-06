@@ -3,7 +3,7 @@ use crate::denoiser::sys;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive)]
-pub(crate) enum Error {
+pub(super) enum Error {
     None = sys::OIDNError_OIDN_ERROR_NONE,
     Unknown = sys::OIDNError_OIDN_ERROR_UNKNOWN,
     InvalidArgument = sys::OIDNError_OIDN_ERROR_INVALID_ARGUMENT,

@@ -414,6 +414,7 @@ impl Renderer {
         }
     }
     
+    #[allow(dead_code)]
     pub(crate) fn denoise_and_save(&mut self) {
         let divider = self.uniforms.frame_number as f32;
         fn save(name: &str, width: usize, height: usize, data: &Vec<PodVector>, divider: f32,) {

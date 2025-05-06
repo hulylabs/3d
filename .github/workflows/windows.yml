@@ -46,9 +46,9 @@ jobs:
       - name: Build (${{ matrix.build-type }})
         run: |
           if ("${{ matrix.build-type }}" -eq "release") {
-          cargo build --workspace --release --verbose
+            cargo build --workspace --release --verbose
           } else {
-          cargo build --workspace --verbose
+            cargo build --workspace --verbose
           }
 
       - name: Run Tests (${{ matrix.build-type }})
@@ -56,5 +56,5 @@ jobs:
           if ("${{ matrix.build-type }}" -eq "release") {
             cargo test -p library --release --verbose
           } else {
-            cargo test -p library --verbose
+            cargo test -p library --verbose --lib -- --nocapture
           }

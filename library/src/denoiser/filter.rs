@@ -5,7 +5,7 @@ use crate::denoiser::error::Error;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive, Default)]
-pub(crate) enum Quality {
+pub(super) enum Quality {
     #[default]
     Default = OIDNQuality_OIDN_QUALITY_DEFAULT,
     Balanced = OIDNQuality_OIDN_QUALITY_BALANCED,
@@ -14,7 +14,7 @@ pub(crate) enum Quality {
 }
 
 impl Quality {
-    pub fn as_raw_oidn_quality(&self) -> OIDNQuality {
+    pub(super) fn as_raw_oidn_quality(&self) -> OIDNQuality {
         match self {
             Quality::Default => OIDNQuality_OIDN_QUALITY_DEFAULT,
             Quality::Balanced => OIDNQuality_OIDN_QUALITY_BALANCED,
@@ -27,7 +27,7 @@ impl Quality {
 /// A generic ray tracing denoising filter for denoising
 /// images produces with Monte Carlo ray tracing methods
 /// such as path tracing.
-pub struct RayTracing {
+pub(super) struct RayTracing {
     handle: OIDNFilter,
     device: Rc<Device>,
     albedo: Option<Rc<Buffer>>,
@@ -43,7 +43,7 @@ pub struct RayTracing {
 
 impl RayTracing {
     #[must_use]
-    pub fn new(device: Rc<Device>, image_channel_per_pixel: usize,) -> Self {
+    pub(super) fn new(device: Rc<Device>, image_channel_per_pixel: usize,) -> Self {
         assert!(image_channel_per_pixel > 0);
         unsafe {
             oidnRetainDevice(device.0);
@@ -70,7 +70,7 @@ impl RayTracing {
     /// some devices will not support this and so
     /// the result (and performance) will stay the same as high.
     /// Balanced is recommended for realtime usages.
-    pub fn filter_quality(&mut self, quality: Quality) -> &mut Self {
+    pub(super) fn filter_quality(&mut self, quality: Quality) -> &mut Self {
         self.filter_quality = quality.as_raw_oidn_quality();
         self
     }
@@ -86,7 +86,7 @@ impl RayTracing {
     /// buffers instead
     ///
     /// Returns [None] if either buffer was not created by this device
-    pub fn albedo_normal_buffer(
+    pub(super) fn albedo_normal_buffer(
         &mut self,
         albedo: Rc<Buffer>,
         normal: Rc<Buffer>,
@@ -100,7 +100,7 @@ impl RayTracing {
     }
 
     /// Set whether the color is HDR.
-    pub fn hdr(&mut self, hdr: bool) -> &mut Self {
+    pub(super) fn hdr(&mut self, hdr: bool) -> &mut Self {
         self.hdr = hdr;
         self
     }
@@ -110,14 +110,14 @@ impl RayTracing {
     ///
     /// Recommended for highest quality but should not be enabled for noisy
     /// auxiliary images to avoid residual noise.
-    pub fn clean_aux(&mut self, clean_aux: bool) -> &mut Self {
+    pub(super) fn clean_aux(&mut self, clean_aux: bool) -> &mut Self {
         self.clean_aux = clean_aux;
         self
     }
 
     /// sets the dimensions of the denoising image, if new width * new height
     /// does not equal old width * old height
-    pub fn image_dimensions(&mut self, width: usize, height: usize) -> Option<&mut Self> {
+    pub(super) fn image_dimensions(&mut self, width: usize, height: usize) -> Option<&mut Self> {
         let buffer_dims = self.image_channel_per_pixel * width * height;
         let mut setup_failure = false;
         match &self.albedo {
@@ -145,8 +145,8 @@ impl RayTracing {
             Some(self) 
         }
     }
-    
-    pub fn filter_buffer_in_place(&self, color: &Buffer) -> Result<(), Error> {
+
+    pub(super) fn filter_buffer_in_place(&self, color: &Buffer) -> Result<(), Error> {
         self.execute_filter_buffer(None, color)
     }
 

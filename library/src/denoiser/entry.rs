@@ -50,7 +50,7 @@ impl Storage {
     }
 }
 
-pub struct DenoiserExecutor<'a> {
+pub(crate) struct DenoiserExecutor<'a> {
     device: Rc<Device>,
     filter: &'a mut RayTracing,
     
@@ -64,19 +64,19 @@ pub struct DenoiserExecutor<'a> {
 }
 
 impl DenoiserExecutor<'_> {
-    pub fn issue_albedo_write(&mut self, albedo: &[f32]) {
+    pub(crate) fn issue_albedo_write(&mut self, albedo: &[f32]) {
         assert!(!self.albedo_write_issued);
         self.albedo_write_issued = true;
         self.issue_write(self.storage.aux_input_albedo.clone(), albedo, "albedo");
     }
-    
-    pub fn issue_normal_write(&mut self, normal: &[f32]) {
+
+    pub(crate) fn issue_normal_write(&mut self, normal: &[f32]) {
         assert!(!self.normal_write_issued);
         self.normal_write_issued = true;
         self.issue_write(self.storage.aux_input_normals.clone(), normal, "normal");
     }
-    
-    pub fn issue_noisy_beauty_write(&mut self, noisy_pixels: &[f32]) {
+
+    pub(crate) fn issue_noisy_beauty_write(&mut self, noisy_pixels: &[f32]) {
         assert!(!self.noisy_beauty_write_issued);
         self.noisy_beauty_write_issued = true;
         self.issue_write(self.storage.beauty_io_image.clone(), noisy_pixels, "noisy beauty");
@@ -87,8 +87,8 @@ impl DenoiserExecutor<'_> {
         assert!(data.len() >= f32_image_size);
         buffer.write_async(&data[..f32_image_size]).expect(format!("failed to issue {} write", what).as_str())
     }
-    
-    pub fn filter(&mut self, denoised_pixels: &mut [f32]) {
+
+    pub(crate) fn filter(&mut self, denoised_pixels: &mut [f32]) {
         let image_f32_size = image_f32_size(self.image_width, self.image_height);
         assert!(denoised_pixels.len() >= image_f32_size);
         assert!(self.noisy_beauty_write_issued);
@@ -105,7 +105,7 @@ impl DenoiserExecutor<'_> {
     }
 }
 
-pub struct Denoiser {
+pub(crate) struct Denoiser {
     device: Rc<Device>,
     filter: RayTracing,
     
@@ -115,7 +115,7 @@ pub struct Denoiser {
 impl Denoiser {
     
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let device = Rc::new(Device::new());
         let filter = RayTracing::new(device.clone(), CHANNELS_PER_PIXEL);
                 
@@ -134,7 +134,7 @@ impl Denoiser {
     }
     
     #[must_use]
-    pub fn begin_denoise(&mut self, width: usize, height: usize) -> DenoiserExecutor {
+    pub(crate) fn begin_denoise(&mut self, width: usize, height: usize) -> DenoiserExecutor {
         assert!(width > 0);
         assert!(height > 0);
 

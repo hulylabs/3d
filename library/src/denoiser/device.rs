@@ -16,7 +16,7 @@ pub struct Device(pub(crate) OIDNDevice, pub(crate) Arc<u8>);
 
 #[cfg(test)]
 impl Device {
-    pub(crate) fn sync(&self) {
+    pub(super) fn sync(&self) {
         unsafe {
             oidnSyncDevice(self.0);
         }
@@ -24,7 +24,7 @@ impl Device {
 
     /// # Safety
     /// Raw device must not be made invalid (e.g. by destroying it).
-    pub(crate) unsafe fn raw(&self) -> OIDNDevice {
+    pub(super) unsafe fn raw(&self) -> OIDNDevice {
         self.0
     }
 }
@@ -32,7 +32,7 @@ impl Device {
 impl Device {
     /// Create a device using the fastest device available to run denoising
     #[must_use]
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self::create(OIDNDeviceType_OIDN_DEVICE_TYPE_DEFAULT)
     }
 
@@ -44,8 +44,8 @@ impl Device {
         }
         Self(handle, Arc::new(0))
     }
-    
-    pub fn get_error(&self) -> Result<(), (Error, String)> {
+
+    pub(super) fn get_error(&self) -> Result<(), (Error, String)> {
         let mut err_msg = ptr::null();
         let err = unsafe { oidnGetDeviceError(self.0, &mut err_msg as *mut *const c_char) };
         if OIDNError_OIDN_ERROR_NONE == err {
