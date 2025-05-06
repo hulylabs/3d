@@ -67,6 +67,7 @@ impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
         );
     }
 
+    #[cfg(feature = "denoiser")]
     pub(crate) fn fill_render_target(&self, queue: &wgpu::Queue, data: &[T]) {
         assert!(data.len() * size_of::<T>() <= self.buffer_size_bytes as usize);
         queue.write_buffer(&self.gpu_located_render_target, Self::ZERO_DESTINATION_OFFSET, bytemuck::cast_slice(data));

@@ -42,15 +42,17 @@ jobs:
       - name: Build (${{ matrix.build-type }})
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
-          cargo build --workspace --release --verbose
+            cargo build --workspace --release --verbose
+            cargo build --workspace --release --verbose --features denoiser
           else
-          cargo build --workspace --verbose
+            cargo build --workspace --verbose
+            cargo build --workspace --verbose --features denoiser
           fi
 
       - name: Run Tests (${{ matrix.build-type }})
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
-            cargo test -p library --release --verbose
+            cargo test -p library --release --verbose -- --nocapture
           else
-            cargo test -p library --verbose
+            cargo test -p library --verbose -- --nocapture
           fi

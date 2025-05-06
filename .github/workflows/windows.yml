@@ -1,9 +1,11 @@
 ﻿name: Build & Test @ Windows
 
 on:
+
   push:
     branches:
       - '*'
+
   pull_request:
     branches:
       - '*'
@@ -47,14 +49,16 @@ jobs:
         run: |
           if ("${{ matrix.build-type }}" -eq "release") {
             cargo build --workspace --release --verbose
+            cargo build --workspace --release --verbose --features denoiser
           } else {
             cargo build --workspace --verbose
+            cargo build --workspace --verbose --features denoiser
           }
 
       - name: Run Tests (${{ matrix.build-type }})
         run: |
           if ("${{ matrix.build-type }}" -eq "release") {
-            cargo test -p library --release --verbose
+            cargo test -p library --release --verbose -- --nocapture
           } else {
             cargo test -p library --verbose --lib -- --nocapture
           }

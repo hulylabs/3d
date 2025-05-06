@@ -4,6 +4,7 @@ pub mod geometry;
 pub mod objects;
 pub mod scene;
 pub mod utils;
+#[cfg(feature = "denoiser")]
 mod denoiser;
 mod bvh;
 mod serialization;
@@ -33,7 +34,10 @@ const DEVICE_LABEL: &str = "Rust Tracer Library";
 const FPS_MEASUREMENT_SAMPLES: usize = 15;
 const FPS_WRITE_INTERVAL: Duration = Duration::from_secs(2);
 
-const RAYS_ACCUMULATIONS_PER_FRAME: usize = 10;
+#[cfg(feature = "denoiser")]
+pub const RAYS_ACCUMULATIONS_PER_FRAME: usize = 10;
+#[cfg(not(feature = "denoiser"))]
+pub const RAYS_ACCUMULATIONS_PER_FRAME: usize = 1;
 
 pub struct Engine {
     /*Actually, we do not need any synchronization stuff; our code is
@@ -224,11 +228,14 @@ impl Engine {
             self.renderer.accumulate_more_rays();
         }
 
-        //self.renderer.denoise_and_save();
-        self.denosing_measurer.start();
-        self.renderer.denoise_accumulated_image();
-        self.denosing_measurer.stop();
-        
+        #[cfg(feature = "denoiser")]
+        {
+            //self.renderer.denoise_and_save();
+            self.denosing_measurer.start();
+            self.renderer.denoise_accumulated_image();
+            self.denosing_measurer.stop();
+        }
+
         self.renderer.present(&surface_texture);
 
         pre_present_notify();
@@ -243,13 +250,19 @@ impl Engine {
         let average_frame_time = self.fps_measurer.average_delta();
         let fps = 1.0 / average_frame_time.as_secs_f32();
 
-        let performance_report = format!(
-            "CPU observed FPS: {}; Denoising (ms): min={}, max={}, current={}",
-            fps,
-            self.denosing_measurer.min_time().as_millis(),
-            self.denosing_measurer.max_time().as_millis(),
-            self.denosing_measurer.last_time().as_millis(),
-        );
+        let performance_report = 
+            if cfg!(feature = "denoiser") {
+                format!(
+                    "CPU observed FPS: {}; Denoising (ms): min={}, max={}, current={}",
+                    fps,
+                    self.denosing_measurer.min_time().as_millis(),
+                    self.denosing_measurer.max_time().as_millis(),
+                    self.denosing_measurer.last_time().as_millis(),
+                )
+            } else {
+                format!("CPU observed FPS: {}", fps)
+            };
+        
         self.performance_reporter.do_write(performance_report);
     }
 

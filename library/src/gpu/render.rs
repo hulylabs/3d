@@ -21,15 +21,19 @@ use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
 use cgmath::Vector2;
-use exr::prelude::write_rgba_file;
-use pxm::PFMBuilder;
-use std::fs::File;
-use std::path::Path;
 use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::denoiser::entry::Denoiser;
+
+#[cfg(feature = "denoiser")]
+mod denoiser {
+    pub(super) use exr::prelude::write_rgba_file;
+    pub(super) use pxm::PFMBuilder;
+    pub(super) use std::fs::File;
+    pub(super) use std::path::Path;
+    pub(super) use crate::denoiser::entry::Denoiser;
+}
 
 pub(crate) struct Renderer {
     context: Rc<Context>,
@@ -40,7 +44,9 @@ pub(crate) struct Renderer {
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
     scene: Container,
-    denoiser: Denoiser,
+    
+    #[cfg(feature = "denoiser")]
+    denoiser: denoiser::Denoiser,
 }
 
 impl Renderer {
@@ -89,7 +95,9 @@ impl Renderer {
             pipeline_surface_attributes: object_id,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
-            denoiser: Denoiser::new(),
+            
+            #[cfg(feature = "denoiser")]
+            denoiser: denoiser::Denoiser::new(),
         })
     }
 
@@ -296,10 +304,17 @@ impl Renderer {
         let bind_group_layout = rasterization_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
 
         let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
-        bind_group_builder
-            .add_entry(0, buffers.denoised_beauty_image.gpu_render_target())
-        ;
-
+        
+        if cfg!(feature = "denoiser") {
+            bind_group_builder
+                .add_entry(0, buffers.denoised_beauty_image.gpu_render_target())
+            ;    
+        } else {
+            bind_group_builder
+                .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+            ;
+        }
+        
         rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
     }
 
@@ -386,7 +401,8 @@ impl Renderer {
             }
         }
     }
-    
+
+    #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_accumulated_image(&mut self)
     {
         {
@@ -413,12 +429,13 @@ impl Renderer {
             self.context.queue().submit([]);
         }
     }
-    
-    #[allow(dead_code)]
+
+    #[allow(dead_code)] 
+    #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_and_save(&mut self) {
         let divider = self.uniforms.frame_number as f32;
         fn save(name: &str, width: usize, height: usize, data: &Vec<PodVector>, divider: f32,) {
-            write_rgba_file(Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
+            denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
             |x,y| {
                 let element = data[y * width + x];
                 (
@@ -438,14 +455,14 @@ impl Renderer {
                     data_cast[index * 3 + 2] = data[index].z / divider;
                 }
             }
-            let pfm = PFMBuilder::new()
+            let pfm = denoiser::PFMBuilder::new()
                 .size(width, height)
                 .color(true)
                 .scale(-1.0)
                 .data(data_cast)
                 .build()
                 .unwrap();
-            let mut file = File::create(format!("_pfm_{}.pfm", name).as_str()).unwrap();
+            let mut file = denoiser::File::create(format!("_pfm_{}.pfm", name).as_str()).unwrap();
             pfm.write_into(&mut file).unwrap();
         }
 
@@ -619,7 +636,7 @@ mod tests {
     const DEFAULT_BVH_LENGTH: u32 = 8;
 
     #[must_use]
-    fn make_system_under_test() -> Uniforms {
+    fn make_test_uniforms_instance() -> Uniforms {
         let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
         let camera = Camera::new_perspective_camera(1.0, Point::origin());
 
@@ -649,8 +666,8 @@ mod tests {
     const SLOT_BVH_LENGTH: usize = 40;
 
     #[test]
-    fn test_reset_frame_accumulation() {
-        let mut system_under_test = make_system_under_test();
+    fn test_uniforms_reset_frame_accumulation() {
+        let mut system_under_test = make_test_uniforms_instance();
 
         system_under_test.next_frame();
         system_under_test.reset_frame_accumulation();
@@ -663,8 +680,8 @@ mod tests {
     }
 
     #[test]
-    fn test_drop_reset_flag() {
-        let mut system_under_test = make_system_under_test();
+    fn test_uniforms_drop_reset_flag() {
+        let mut system_under_test = make_test_uniforms_instance();
 
         system_under_test.reset_frame_accumulation();
         system_under_test.drop_reset_flag();
@@ -676,11 +693,11 @@ mod tests {
     }
 
     #[test]
-    fn test_set_frame_size() {
+    fn test_uniforms_set_frame_size() {
         let expected_width = 1024;
         let expected_height = 768;
         let new_size = PhysicalSize::new(expected_width, expected_height);
-        let mut system_under_test = make_system_under_test();
+        let mut system_under_test = make_test_uniforms_instance();
 
         system_under_test.set_frame_size(new_size);
 
@@ -692,8 +709,8 @@ mod tests {
     }
 
     #[test]
-    fn test_next_frame() {
-        let mut system_under_test = make_system_under_test();
+    fn test_uniforms_next_frame() {
+        let mut system_under_test = make_test_uniforms_instance();
 
         system_under_test.next_frame();
         let actual_state = system_under_test.serialize();
@@ -707,16 +724,16 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_buffer_area() {
-        let system_under_test = make_system_under_test();
+    fn test_uniforms_frame_buffer_area() {
+        let system_under_test = make_test_uniforms_instance();
 
         let expected_area = DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT;
         assert_eq!(system_under_test.frame_buffer_area(), expected_area);
     }
 
     #[test]
-    fn test_serialize() {
-        let system_under_test = make_system_under_test();
+    fn test_uniforms_serialize() {
+        let system_under_test = make_test_uniforms_instance();
 
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
@@ -760,10 +777,15 @@ mod tests {
         system_under_test.accumulate_more_rays();
 
         assert_parallelogram_ids_in_center(&mut system_under_test);
-        assert_parallelogram_normals_in_center(&mut system_under_test);
-        assert_parallelogram_colors_in_center(&mut system_under_test);
+        
+        #[cfg(feature = "denoiser")] 
+        {
+            assert_parallelogram_normals_in_center(&mut system_under_test);
+            assert_parallelogram_colors_in_center(&mut system_under_test);   
+        }
     }
 
+    #[cfg(feature = "denoiser")]
     fn assert_parallelogram_vector_data_in_center(data: &Vec<PodVector>, expected: PodVector, data_name: &str) {
         assert_eq!(data.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
 
@@ -784,12 +806,14 @@ mod tests {
         ).unwrap();
     }
 
+    #[cfg(feature = "denoiser")]
     fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer) {
         let (_, albedo, _) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
         let expected_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
         assert_parallelogram_vector_data_in_center(albedo, expected_color, "single_parallelogram_colors");
     }
 
+    #[cfg(feature = "denoiser")]
     fn assert_parallelogram_normals_in_center(system_under_test: &mut Renderer) {
         let (_, _, normal_map) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
         let expected_normal = PodVector { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };

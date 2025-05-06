@@ -33,7 +33,7 @@ impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
         &self.last_read
     }
 
-    #[must_use]
+    #[must_use] #[cfg(feature = "denoiser")]
     pub(super) fn mutable_cpu_copy(&mut self) -> &mut Vec<T> {
         &mut self.last_read
     }

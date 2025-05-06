@@ -53,7 +53,7 @@ impl FrameBuffer {
         }
     }
 
-    #[must_use]
+    #[must_use] #[cfg(feature = "denoiser")]
     pub(crate) fn copy_pixel_colors_from_gpu(&mut self) -> impl Future<Output = ()> {
         self.noisy_pixel_color.read_cpu_copy()
     }
