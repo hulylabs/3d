@@ -1,6 +1,6 @@
-use crate::sys::{oidnNewBuffer, oidnReadBuffer, oidnReleaseBuffer, oidnWriteBufferAsync, OIDNBuffer};
-use crate::Device;
+use crate::denoiser::sys::{oidnNewBuffer, oidnReadBuffer, oidnReleaseBuffer, oidnWriteBufferAsync, OIDNBuffer};
 use std::sync::Arc;
+use crate::denoiser::device::Device;
 
 pub struct Buffer {
     pub(crate) buffer: OIDNBuffer,
@@ -43,8 +43,8 @@ impl Device {
     /// Raw buffer must have been created by this device
     #[must_use]
     pub unsafe fn create_buffer_from_raw(&self, buffer: OIDNBuffer) -> Buffer {
-        let size_bytes = unsafe { crate::sys::oidnGetBufferSize(buffer) };
-        assert!(size_bytes % size_of::<f32>() == 0);
+        let size_bytes = unsafe { crate::denoiser::sys::oidnGetBufferSize(buffer) };
+        assert_eq!(size_bytes % size_of::<f32>(), 0);
 
         Buffer {
             buffer,

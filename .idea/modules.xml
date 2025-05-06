@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/RustTracer.iml" filepath="$PROJECT_DIR$/.idea/RustTracer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/3d.iml" filepath="$PROJECT_DIR$/.idea/3d.iml" />
     </modules>
   </component>
 </project>

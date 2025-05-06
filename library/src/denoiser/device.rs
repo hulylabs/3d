@@ -1,5 +1,6 @@
-use crate::error::Error;
-use crate::sys::*;
+use crate::denoiser::error::Error;
+use crate::denoiser::sys::OIDNDevice;
+use crate::denoiser::sys::*;
 use std::sync::Arc;
 use std::{ffi::CStr, os::raw::c_char, ptr};
 
@@ -43,8 +44,7 @@ impl Device {
         }
         Self(handle, Arc::new(0))
     }
-
-    #[must_use]
+    
     pub fn get_error(&self) -> Result<(), (Error, String)> {
         let mut err_msg = ptr::null();
         let err = unsafe { oidnGetDeviceError(self.0, &mut err_msg as *mut *const c_char) };

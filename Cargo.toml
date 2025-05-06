@@ -1,8 +1,6 @@
 ﻿[workspace]
 resolver = "2"
-members = [ 
-    "build",
-    "denoiser",
+members = [
     "library",
     "sandbox",
 ]

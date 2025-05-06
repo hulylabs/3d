@@ -4,20 +4,13 @@
 //! Open Image Denoise documentation can be found
 //! [here](https://openimagedenoise.github.io/documentation.html).
 
-use crate::filter::Quality;
-use buffer::Buffer;
-use device::Device;
-use filter::RayTracing;
+use crate::denoiser::filter::Quality;
+use crate::denoiser::buffer::Buffer;
+use crate::denoiser::device::Device;
+use crate::denoiser::filter::RayTracing;
 use log::error;
 use std::rc::Rc;
 
-pub(crate) mod buffer;
-pub(crate) mod device;
-pub(crate) mod filter;
-
-#[allow(non_upper_case_globals, non_camel_case_types, non_snake_case, dead_code)]
-pub(crate) mod sys;
-mod error;
 
 const CHANNELS_PER_PIXEL: usize = 4;
 

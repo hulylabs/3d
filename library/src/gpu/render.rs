@@ -1,5 +1,4 @@
-﻿use std::fs::File;
-use super::resources::{ComputeRoutine, Resources};
+﻿use super::resources::{ComputeRoutine, Resources};
 use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
@@ -7,6 +6,7 @@ use crate::gpu::compute_pipeline::ComputePipeline;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::frame_buffer::FrameBuffer;
+use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
 use crate::gpu::rasterization_pipeline::RasterizationPipeline;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
@@ -21,16 +21,15 @@ use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
 use cgmath::Vector2;
-use denoiser::Denoiser;
 use exr::prelude::write_rgba_file;
+use pxm::PFMBuilder;
+use std::fs::File;
 use std::path::Path;
 use std::rc::Rc;
-use pxm::PFMBuilder;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
-// TODO: work in progress
+use crate::denoiser::entry::Denoiser;
 
 pub(crate) struct Renderer {
     context: Rc<Context>,

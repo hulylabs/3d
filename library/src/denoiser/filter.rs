@@ -1,7 +1,7 @@
-use crate::{buffer::Buffer, device::Device, sys::*};
+use crate::denoiser::{buffer::Buffer, device::Device, sys::*};
 use std::rc::Rc;
 use num_enum::TryFromPrimitive;
-use crate::error::Error;
+use crate::denoiser::error::Error;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive, Default)]

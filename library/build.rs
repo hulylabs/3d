@@ -1,8 +1,62 @@
-﻿use std::{env, fs};
+use std::{env, fs};
 use std::fs::DirEntry;
 use std::path::{Path, PathBuf};
-
 use glob::Pattern;
+
+fn main() {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+
+    match (target_os.as_str(), target_arch.as_str()) {
+        ("windows", _) => link_with_windows_dll(),
+        ("macos", "aarch64") => link_with_macos_arm_dylib(),
+        _ => {
+            panic!("unsupported target OS: {}, {}", target_os, target_arch);
+        }
+    }
+}
+
+const OUT_DIRECTORY_UP_LEVEL: usize = 3;
+
+const OPEN_IMAGE_DENOISE_LIBRARY_NAME: &str = "OpenImageDenoise";
+
+const LIBRARIES_FOLDER_NAME: &str = "lib";
+
+#[must_use]
+fn libraries_windows_folder() -> PathBuf {
+    Path::new(LIBRARIES_FOLDER_NAME).join("windows")
+}
+
+#[must_use]
+fn libraries_macos_arm_folder() -> PathBuf {
+    Path::new(LIBRARIES_FOLDER_NAME).join("mac_arm")
+}
+
+fn cargo_info(text: &str) {
+    println!("cargo:info={}", text);
+}
+
+fn link_with_macos_arm_dylib() {
+    cargo_info("current OS is macOS on ARM (Apple Silicon)");
+    link_with_oidn_library(&libraries_macos_arm_folder(), "**/*.dylib");
+}
+
+fn link_with_windows_dll() {
+    cargo_info("current OS is Windows: using oidn's DLLs");
+    link_with_oidn_library(&libraries_windows_folder(), "**/*.dll");
+}
+
+fn link_with_oidn_library(libraries_local_path: &PathBuf, dylib_filter: &str) {
+    cargo_emit::rustc_link_lib!(OPEN_IMAGE_DENOISE_LIBRARY_NAME);
+    
+    let project_directory = env::current_dir().expect("failed to get current directory");
+    let compiler_libraries_search_path = project_directory.join(libraries_local_path.clone());
+
+    cargo_emit::rustc_link_search!(compiler_libraries_search_path.to_str().expect("project lib path is not valid UTF-8") => "native");
+    
+    let libraries_folder = libraries_local_path.to_str().expect("windows lib path is not valid UTF-8");
+    copy_directory_content_to_output(libraries_folder, OUT_DIRECTORY_UP_LEVEL, dylib_filter).unwrap();
+}
 
 pub fn copy_directory_content_to_output(local_path: &str, out_directory_up_level: usize, filter: &str) -> std::io::Result<()> {
     let out_directory = env::var("OUT_DIR")
@@ -13,11 +67,11 @@ pub fn copy_directory_content_to_output(local_path: &str, out_directory_up_level
         .nth(out_directory_up_level)
         .unwrap()
         .to_path_buf();
-    
-    println!("cargo:info=destination = {:?}", target_directory);
+
+    cargo_info(format!("destination = {:?}", target_directory).as_str());
 
     {let absolute_path = fs::canonicalize(Path::new(local_path))?;
-        println!("cargo:info=source = {:?}", absolute_path);}
+        cargo_info(format!("source = {:?}", absolute_path).as_str());}
 
     copy_directory(local_path, &target_directory, &Some(PathPattern::new(filter)))?;
 
@@ -39,10 +93,10 @@ pub fn copy_directory_to_output(local_path: &str, out_directory_up_level: usize)
     if destination.exists() {
         fs::remove_dir_all(&destination)?;
     }
-    println!("cargo:info=destination {} = {:?}", local_path, destination);
+    cargo_info(format!("destination {} = {:?}", local_path, destination).as_str());
 
     {let absolute_path = fs::canonicalize(Path::new(local_path))?;
-        println!("cargo:info=source {} = {:?}", local_path, absolute_path);}
+        cargo_info(format!("source {} = {:?}", local_path, absolute_path).as_str());}
 
     copy_directory(local_path, &destination, &None)?;
 
@@ -75,7 +129,7 @@ impl PathPattern {
     fn new(pattern: &str) -> Self {
         Self { pattern: Pattern::new(pattern).unwrap(), }
     }
-    
+
     #[must_use]
     fn matches(&self, entry: &DirEntry) -> bool {
         let unix_style_path = entry.path().to_string_lossy().replace('\\', "/");

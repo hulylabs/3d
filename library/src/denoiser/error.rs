@@ -1,5 +1,5 @@
 ﻿use num_enum::TryFromPrimitive;
-use crate::sys;
+use crate::denoiser::sys;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, TryFromPrimitive)]

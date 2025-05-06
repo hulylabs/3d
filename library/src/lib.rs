@@ -7,6 +7,7 @@ pub mod scene;
 mod serialization;
 mod bvh;
 pub mod utils;
+mod denoiser;
 
 use std::cmp::max;
 use std::rc::Rc;
