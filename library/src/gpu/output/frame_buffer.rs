@@ -31,7 +31,7 @@ impl FrameBuffer {
         self.noisy_pixel_color.prepare_cpu_read(encoder);
     }
     
-    pub(crate) fn prepare_noiseless_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn prepare_aux_buffers_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
         self.object_id.prepare_cpu_read(encoder);
         self.normal.prepare_cpu_read(encoder);
         self.albedo.prepare_cpu_read(encoder);
@@ -42,7 +42,7 @@ impl FrameBuffer {
     }
 
     #[must_use]
-    pub(crate) fn copy_noiseless_from_gpu(&mut self) -> impl Future<Output = ()> {
+    pub(crate) fn copy_aux_buffers_from_gpu(&mut self) -> impl Future<Output = ()> {
         let object_id_read = self.object_id.read_cpu_copy();
         let normals_read = self.normal.read_cpu_copy();
         let albedo_read = self.albedo.read_cpu_copy();
@@ -88,7 +88,7 @@ impl FrameBuffer {
         self.object_id.cpu_copy()
     }
     
-    #[must_use]
+    #[must_use] #[cfg(feature = "denoiser")]
     pub(crate) fn denoiser_input(&mut self) -> (&mut Vec<PodVector>, &Vec<PodVector>, &Vec<PodVector>) {
         (self.noisy_pixel_color.mutable_cpu_copy(), self.albedo.cpu_copy(), self.normal.cpu_copy())
     }
@@ -129,23 +129,34 @@ mod tests {
 
     #[test]
     fn test_object_id_acquiring() {
+        let system_under_test = test_aux_buffers_reading();
+        
+        assert_eq!(system_under_test.object_id_at_cpu().len(), test_buffer_size().area() as usize);
+    }
+
+    #[test] #[cfg(feature = "denoiser")]
+    fn test_denoiser_input_acquiring() {
+        let mut system_under_test = test_aux_buffers_reading();
+        
+        let (_, albedo_at_cpu, normal_at_cpu,) = system_under_test.denoiser_input();
+        assert_eq!(albedo_at_cpu.len(), test_buffer_size().area() as usize);
+        assert_eq!(normal_at_cpu.len(), test_buffer_size().area() as usize);
+    }
+
+    #[must_use]
+    fn test_aux_buffers_reading() -> FrameBuffer {
         let context = create_headless_wgpu_context();
 
         let mut system_under_test = FrameBuffer::new(context.device(), test_buffer_size());
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
-        system_under_test.prepare_noiseless_copy_from_gpu(&mut encoder);
+        system_under_test.prepare_aux_buffers_copy_from_gpu(&mut encoder);
         context.queue().submit(Some(encoder.finish()));
 
-        let gpu_to_cpu_copy = system_under_test.copy_noiseless_from_gpu();
+        let gpu_to_cpu_copy = system_under_test.copy_aux_buffers_from_gpu();
         context.device().poll(PollType::Wait).expect("failed to poll the device");
         pollster::block_on(gpu_to_cpu_copy);
 
-        {
-            let (_, albedo_at_cpu, normal_at_cpu,) = system_under_test.denoiser_input();
-            assert_eq!(albedo_at_cpu.len(), test_buffer_size().area() as usize);
-            assert_eq!(normal_at_cpu.len(), test_buffer_size().area() as usize);
-        }
-        assert_eq!(system_under_test.object_id_at_cpu().len(), test_buffer_size().area() as usize);
+        system_under_test
     }
 }

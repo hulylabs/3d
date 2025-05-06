@@ -384,14 +384,14 @@ impl Renderer {
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
             self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
                 if rebuild_geometry_buffers {
-                    self.buffers.ray_tracing_frame_buffer.prepare_noiseless_copy_from_gpu(after_pass);
+                    self.buffers.ray_tracing_frame_buffer.prepare_aux_buffers_copy_from_gpu(after_pass);
                 } else if rebuild_albedo_buffer {
                     self.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
                 }
             });
             
             if rebuild_geometry_buffers {
-                let copy_operation = self.buffers.ray_tracing_frame_buffer.copy_noiseless_from_gpu();
+                let copy_operation = self.buffers.ray_tracing_frame_buffer.copy_aux_buffers_from_gpu();
                 self.context.device().poll(PollType::Wait).expect("failed to poll the device");
                 pollster::block_on(copy_operation);
             } else if rebuild_albedo_buffer {
