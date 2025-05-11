@@ -8,3 +8,4 @@ mod monolithic;
 mod scene_object;
 mod statistics;
 mod triangulated;
+mod sdf;

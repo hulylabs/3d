@@ -618,13 +618,16 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use crate::serialization::pod_vector::PodVector;
     use cgmath::EuclideanSpace;
-    use exr::prelude::write_rgba_file;
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
     use wgpu::TextureFormat;
+
+    #[cfg(feature = "denoiser")]
+    use exr::prelude::write_rgba_file;
+    #[cfg(feature = "denoiser")]
+    use crate::serialization::pod_vector::PodVector;
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
