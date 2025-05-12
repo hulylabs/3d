@@ -90,7 +90,7 @@ impl SdfRegistrator {
             let (this, descendant_bodies, target_name) = context;
             
             let body = candidate.produce_body(descendant_bodies);
-            let body_seen_first_time = false == this.sdf_bodies.try_increment_occurrence(&body, candidate.clone());
+            let body_seen_first_time = false == this.sdf_bodies.try_account_occurrence(&body, candidate.clone());
             
             if body_seen_first_time {
                 let function = FunctionName(format!("sdf_{}_{}", target_name, this.uid_generator.next().0));
@@ -249,13 +249,16 @@ mod tests {
     #[test]
     fn test_tree_with_multiple_levels_of_duplications() {
         let tree = SdfUnion::new(
+            SdfSphere::new(17.0),
             SdfUnion::new(
-                SdfSphere::new(17.0),
-                SdfSphere::new(17.0),
-            ),
-            SdfUnion::new(
-                SdfSphere::new(17.0),
-                SdfSphere::new(17.0),
+                SdfUnion::new(
+                    SdfSphere::new(17.0),
+                    SdfSphere::new(17.0),
+                ),
+                SdfUnion::new(
+                    SdfSphere::new(17.0),
+                    SdfSphere::new(17.0),
+                ),
             ),
         );
 
@@ -267,7 +270,7 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { let left = { sdf_test_2(point) }; let right = { sdf_test_2(point) }; return min(left,right); }";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 { let left = { sdf_test_1(point) }; let right = { let left = { sdf_test_2(point) }; let right = { sdf_test_2(point) };  min(left,right) }; return min(left,right); }";
         let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { let left = { sdf_test_1(point) }; let right = { sdf_test_1(point) }; return min(left,right); }\n";
 
         assert_eq!(actual_name, expected_name);

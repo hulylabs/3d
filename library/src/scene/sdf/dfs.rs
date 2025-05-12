@@ -41,13 +41,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::DummySdf;
+    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use crate::scene::sdf::sdf_sphere::SdfSphere;
     use crate::scene::sdf::sdf_union::SdfUnion;
 
     #[test]
     fn test_zero_levels_below() {
-        let levels_blow = evaluate_levels_below(Rc::new(DummySdf::default()));
+        let levels_blow = evaluate_levels_below(make_dummy_sdf());
         assert_eq!(levels_blow, 0);
     }
 

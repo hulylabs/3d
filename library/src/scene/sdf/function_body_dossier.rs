@@ -24,10 +24,10 @@ impl FunctionBodyDossier {
     }
     
     #[must_use]
-    pub(super) fn try_increment_occurrence(&mut self, shader_code: &ShaderCode<FunctionBody>, instance: Rc<dyn Sdf>) -> bool {
+    pub(super) fn try_account_occurrence(&mut self, shader_code: &ShaderCode<FunctionBody>, instance: Rc<dyn Sdf>) -> bool {
         let dossier = self.dossier_of_body.get_mut(shader_code);
         if let Some(dossier) = dossier {
-            dossier.increment(instance);
+            dossier.write_another_usage(instance);
             true
         } else {
             false
@@ -53,7 +53,31 @@ impl FunctionBodyDossier {
         result
     }
     
-    pub(super) fn format_occurred_multiple_times(&self, buffer: &mut String) {
+    pub(super) fn format_occurred_multiple_times(&self, buffer: &mut String) { 
+    
+    /*
+    Reminder: We have an SDF tree. The leaves contain the SDFs of specific primitives (spheres, 
+    boxes, etc.). The intermediate nodes contain set-theoretic operations (union, difference, etc.).
+
+    What's going on here? We have a bunch of functions (or rather, function bodies) generated for 
+    the SDF tree. Some function bodies appear inside others. These occurrences need to be replaced 
+    with calls to the corresponding functions.
+
+    We visit the functions in order from the “leaf” ones to the higher-level ones. Leaf functions 
+    are those whose bodies don’t contain other functions. Nothing needs to be replaced in them. In 
+    functions that contain only leaf function bodies, we need to insert calls to what we’ve already 
+    processed in the previous step. And so on, moving upward.
+
+    What are “EqualitySets”? Our SDF tree contains nodes that are physically different objects, 
+    even if they’re geometrically identical. For such objects—identical in practice but differing 
+    by their physical memory addresses—we need to determine equality in terms of their code (SDF 
+    code). The task is: given a node from the SDF tree, we need to get the code of its children. 
+    We've already generated that code (since we're going bottom-up). But the issue is that this 
+    code might have been generated for a physically different object, even if its identical to any
+    of the child. To find that other object, we use a disjoint set under the hood of the 
+    EqualitySets object.
+    */
+        
         let bottom_up_bodies = self.sort_multiple_occurrences_bottom_up();
         let equality = EqualitySets::new(&bottom_up_bodies);
         
@@ -61,18 +85,18 @@ impl FunctionBodyDossier {
         let mut children = Stack::<ShaderCode<FunctionBody>>::new();
         
         for dossier in bottom_up_bodies {
-            for child in dossier.source().children() {
+            for child in dossier.any_source().children() {
                 let reference = equality.get_equality_root(child);
                 let successor_body = formatted.get(&Rc::as_ptr(&reference)).unwrap();
                 children.push(successor_body.clone());
             }
             
-            let current_body = dossier.source().produce_body(&mut children);
+            let current_body = dossier.any_source().produce_body(&mut children);
             debug_assert_eq!(children.size(), 0);
             format_sdf_declaration(&current_body, dossier.name(), buffer);
             buffer.push('\n');
             
-            let reference = equality.get_equality_root(dossier.source());
+            let reference = equality.get_equality_root(dossier.any_source());
             formatted.insert(reference.as_ref(), format_sdf_invocation(dossier.name()));
         }
     }
@@ -81,7 +105,7 @@ impl FunctionBodyDossier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::DummySdf;
+    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use crate::scene::sdf::shader_code::conventions;
 
     #[test]
@@ -102,8 +126,8 @@ mod tests {
         let code_seven = ShaderCode::<FunctionBody>::new("return 7.0".to_string());
 
         fn test_single_occurrence(system_under_test: &mut FunctionBodyDossier, function: String, code: ShaderCode<FunctionBody>) {
-            let source = Rc::new(DummySdf::default());
-            let found = system_under_test.try_increment_occurrence(&code, source.clone());
+            let source = make_dummy_sdf();
+            let found = system_under_test.try_account_occurrence(&code, source.clone());
             assert_eq!(false, found);
             system_under_test.register(code.clone(), ShaderCodeDossier::new(FunctionName(function), source, 0));
         }
@@ -127,7 +151,7 @@ mod tests {
         let multiple_occurrences_function = "multiple";
         fn used_multiple_times() -> Rc<dyn Sdf> { Rc::new(DummySdf::new(MULTIPLE_RETURN_VALUE)) }
         system_under_test.register(code_seven.clone(), ShaderCodeDossier::new(FunctionName(multiple_occurrences_function.to_string()), used_multiple_times(), 0));
-        let _ = system_under_test.try_increment_occurrence(&code_seven, used_multiple_times());
+        let _ = system_under_test.try_account_occurrence(&code_seven, used_multiple_times());
         
         let mut buffer: String = String::new();
         system_under_test.format_occurred_multiple_times(&mut buffer);

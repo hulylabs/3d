@@ -26,12 +26,19 @@ pub(crate) mod tests {
     }
     
     impl Sdf for DummySdf {
+        #[must_use]
         fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>) -> ShaderCode<FunctionBody> {
             ShaderCode::<FunctionBody>::new(self.payload.clone())
         }
 
+        #[must_use]
         fn children(&self) -> Vec<Rc<dyn Sdf>> {
             vec![]
         }
+    }
+    
+    #[must_use]
+    pub(crate) fn make_dummy_sdf() -> Rc<dyn Sdf> {
+        Rc::new(DummySdf::default())
     }
 }

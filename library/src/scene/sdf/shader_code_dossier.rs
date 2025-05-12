@@ -19,7 +19,7 @@ impl ShaderCodeDossier {
         &self.name
     }
 
-    pub(super) fn increment(&mut self, source: Rc<dyn Sdf>) {
+    pub(super) fn write_another_usage(&mut self, source: Rc<dyn Sdf>) {
         self.sources.push(source);
     }
 
@@ -34,7 +34,7 @@ impl ShaderCodeDossier {
     }
 
     #[must_use]
-    pub(super) fn source(&self) -> Rc<dyn Sdf> {
+    pub(super) fn any_source(&self) -> Rc<dyn Sdf> {
         self.sources[0].clone()
     }
     
@@ -46,7 +46,7 @@ impl ShaderCodeDossier {
 
 #[cfg(test)]
 mod tests {
-    use crate::scene::sdf::dummy_sdf::tests::DummySdf;
+    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use super::*;
 
     #[test]
@@ -58,7 +58,7 @@ mod tests {
     fn test_construction() {
         let expected_name = FunctionName("name".to_string());
         let expected_levels_below = 17;
-        let system_under_test = ShaderCodeDossier::new(expected_name.clone(), Rc::new(DummySdf::default()), expected_levels_below);
+        let system_under_test = ShaderCodeDossier::new(expected_name.clone(), make_dummy_sdf(), expected_levels_below);
         
         assert_eq!(system_under_test.occurrences(), 1);
         assert_eq!(system_under_test.name(), &expected_name);
@@ -66,15 +66,15 @@ mod tests {
     }
     
     #[test]
-    fn test_increment() {
+    fn test_write_another_usage() {
         let expected_levels_below = 17;
-        let mut system_under_test = ShaderCodeDossier::new(FunctionName("name".to_string()), Rc::new(DummySdf::default()), expected_levels_below);
+        let mut system_under_test = ShaderCodeDossier::new(FunctionName("name".to_string()), make_dummy_sdf(), expected_levels_below);
         
-        system_under_test.increment(Rc::new(DummySdf::default()));
+        system_under_test.write_another_usage(make_dummy_sdf());
         assert_eq!(system_under_test.occurrences(), 2);
         assert_eq!(system_under_test.children_levels_below(), expected_levels_below);
         
-        system_under_test.increment(Rc::new(DummySdf::default()));
+        system_under_test.write_another_usage(make_dummy_sdf());
         assert_eq!(system_under_test.occurrences(), 3);
         assert_eq!(system_under_test.children_levels_below(), expected_levels_below);
     }

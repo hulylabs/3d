@@ -46,13 +46,13 @@ impl Sdf for SdfUnion {
 
 #[cfg(test)]
 mod tests {
-    use crate::scene::sdf::dummy_sdf::tests::DummySdf;
+    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use super::*;
     
     #[test]
     fn test_children() {
-        let left: Rc<dyn Sdf> = Rc::new(DummySdf::default());
-        let right: Rc<dyn Sdf> = Rc::new(DummySdf::default());
+        let left: Rc<dyn Sdf> = make_dummy_sdf();
+        let right: Rc<dyn Sdf> = make_dummy_sdf();
         let system_under_test = SdfUnion::new(left.clone(), right.clone());
 
         let children = system_under_test.children();
