@@ -30,12 +30,11 @@ const MAX_SDF_RAY_MARCH_STEPS = 20;
 @group(1) @binding( 2) var<storage, read_write> normal_buffer: array<vec4f>;
 @group(1) @binding( 3) var<storage, read_write> albedo_buffer: array<vec4f>;
 
-@group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
-@group(2) @binding( 1) var<storage, read> quad_objs: array<Parallelogram>;
-@group(2) @binding( 2) var<storage, read> sdf: array<Sdf>;
-@group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
-@group(2) @binding( 4) var<storage, read> materials: array<Material>;
-@group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
+@group(2) @binding( 0) var<storage, read> quad_objs: array<Parallelogram>;
+@group(2) @binding( 1) var<storage, read> sdf: array<Sdf>;
+@group(2) @binding( 2) var<storage, read> triangles: array<Triangle>;
+@group(2) @binding( 3) var<storage, read> materials: array<Material>;
+@group(2) @binding( 4) var<storage, read> bvh: array<AABB>;
 
 var<private> randState : u32 = 0u;
 var<private> pixelCoords : vec3f;
@@ -59,7 +58,6 @@ struct Uniforms {
     For an orthographic camera, the origin lies on the camera plane and varies per pixel. */
 	view_ray_origin_matrix : mat4x4f,
 
-	spheres_count: u32,
 	parallelograms_count: u32,
 	sdf_count: u32,
 	triangles_count: u32,
@@ -79,13 +77,6 @@ struct Material {
 	roughness : f32,		// diffuse strength
 	eta : f32,				// refractive index
 	material_type : f32,
-}
-
-struct Sphere {
-	center : vec3f,
-	r : f32,
-	object_uid : u32,
-	material_id : f32,
 }
 
 struct Parallelogram {
@@ -243,114 +234,6 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
     }
 
     return false;
-}
-
-fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
-	let oc = ray.origin - sphere.center;
-	let a = dot(ray.dir, ray.dir);
-	let half_b = dot(ray.dir, oc);
-	let c = dot(oc, oc) - sphere.r * sphere.r;
-	let discriminant = half_b*half_b - a*c;
-
-	if(discriminant < 0) {
-		return false;
-	}
-
-	let sqrtd = sqrt(discriminant);
-	var root = (-half_b - sqrtd) / a;
-	if(root <= tmin || root >= tmax)
-	{
-		root = (-half_b + sqrtd) / a;
-		if(root <= tmin || root >= tmax)
-		{
-			return false;
-		}
-	}
-
-	hitRec.t = root;
-	hitRec.p = at(ray, root);
-
-	hitRec.normal = normalize(hitRec.p - sphere.center);
-
-	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
-	if(hitRec.front_face == false)
-	{
-		hitRec.normal = -hitRec.normal;
-	}
-
-	hitRec.material = materials[i32(sphere.material_id)];
-	return true;
-}
-
-fn hit_sphere_local(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> f32 {
-	let oc = ray.origin - sphere.center;
-	let a = dot(ray.dir, ray.dir);
-	let half_b = dot(ray.dir, oc);
-	let c = dot(oc, oc) - sphere.r * sphere.r;
-	let discriminant = half_b*half_b - a*c;
-
-	if(discriminant < 0) {
-		return MAX_FLOAT + 1;
-	}
-
-	let sqrtd = sqrt(discriminant);
-	var root = (-half_b - sqrtd) / a;
-	if(root <= tmin || root >= tmax)
-	{
-		root = (-half_b + sqrtd) / a;
-		if(root <= tmin || root >= tmax)
-		{
-			return MAX_FLOAT + 1;
-		}
-	}
-
-	return root;
-}
-
-fn hit_volume(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
-
-	var rec1 = hit_sphere_local(sphere, -MAX_FLOAT, MAX_FLOAT, ray);
-	if(rec1 == MAX_FLOAT + 1) {
-		return false;
-	}
-
-	var rec2 = hit_sphere_local(sphere, rec1 + 0.0001, MAX_FLOAT, ray);
-	if(rec2 == MAX_FLOAT + 1) {
-		return false;
-	}
-
-	if(rec1 < tmin) {
-		rec1 = tmin;
-	}
-
-	if(rec2 > tmax) {
-		rec2 = tmax;
-	}
-
-	if(rec1 >= rec2) {
-		return false;
-	}
-
-	if(rec1 < 0) {
-		rec1 = 0;
-	}
-
-	hitRec.material = materials[i32(sphere.material_id)];
-
-	let ray_length = length(ray.dir);
-	let dist_inside = (rec2 - rec1) * ray_length;
-	let hit_dist = hitRec.material.roughness * log(rand2D());
-
-	if(hit_dist > dist_inside) {
-		return false;
-	}
-
-	hitRec.t = rec1 + (hit_dist / ray_length);
-	hitRec.p = at(ray, hitRec.t);
-	hitRec.normal = normalize(hitRec.p - sphere.center);
-	hitRec.front_face = true;
-
-	return true;
 }
 
 fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
@@ -606,16 +489,6 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var hit_albedo: vec3f = vec3f(0.0f, 0.0f, 0.0f);
     var hit_normal: vec3f = vec3f(0.0f, 0.0f, 0.0f);
 
-    for(var i = u32(0); i < uniforms.spheres_count; i++){
-        let sphere = sphere_objs[i];
-        if(hit_sphere(sphere, ray_tmin, closest_so_far, ray)){
-            hit_uid = sphere.object_uid;
-            hit_albedo = materials[u32(sphere.material_id)].color;
-            hit_normal = hitRec.normal;
-            closest_so_far = hitRec.t;
-        }
-    }
-
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
@@ -711,27 +584,6 @@ fn hitScene(ray : Ray) -> bool
 {
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
-
-	for(var i = u32(0); i < uniforms.spheres_count; i++)
-	{
-		let medium = materials[i32(sphere_objs[i].material_id)].material_type;
-		if(medium < ISOTROPIC)
-		{
-			if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-			{
-				hit_anything = true;
-				closest_so_far = hitRec.t;
-			}
-		}
-		else
-		{
-			if(hit_volume(sphere_objs[i], ray_tmin, closest_so_far, ray))
-			{
-				hit_anything = true;
-				closest_so_far = hitRec.t;
-			}
-		}
-	}
 
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++)
 	{
@@ -856,15 +708,6 @@ fn hitScene(ray : Ray) -> bool
 // 		else
 // 		{
 // 			i = i32(bvh[i].skip_link);
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.spheres_count; i++)
-// 	{
-// 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
 // 		}
 // 	}
 

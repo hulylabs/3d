@@ -12,7 +12,6 @@ use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
-use crate::objects::sphere::Sphere;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::container::{Container, DataKind};
@@ -67,7 +66,6 @@ impl Renderer {
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
-            spheres_count: 0,
             parallelograms_count: 0,
             sdf_count: 0,
             triangles_count: 0,
@@ -118,7 +116,6 @@ impl Renderer {
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
         let mut composite_status = BuffersUpdateStatus::new();
 
-        composite_status.merge_geometry(Self::update_buffer::<Sphere>(&DataKind::Sphere, &mut self.buffers.spheres, &self.resources, &self.scene, self.context.queue()));
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
         composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
 
@@ -150,8 +147,7 @@ impl Renderer {
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
         }
-
-        self.uniforms.spheres_count = self.scene.count_of_a_kind(DataKind::Sphere) as u32;
+        
         self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
         
@@ -188,7 +184,6 @@ impl Renderer {
         let materials = if scene.materials().count() > 0
             { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
-        uniforms.spheres_count = scene.count_of_a_kind(DataKind::Sphere) as u32;
         uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
         uniforms.triangles_count = triangles.total_slots_count() as u32;
@@ -199,8 +194,7 @@ impl Renderer {
 
             ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
             denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels"),
-
-            spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
+            
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
@@ -251,12 +245,11 @@ impl Renderer {
     fn create_geometry_buffers_bindings(device: &wgpu::Device, buffers: &Buffers, pipeline: &mut ComputePipeline) {
         pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), device, |bind_group| {
             bind_group
-                .add_entry(0, buffers.spheres.backend().clone())
-                .add_entry(1, buffers.parallelograms.backend().clone())
-                .add_entry(2, buffers.sdf.backend().clone())
-                .add_entry(3, buffers.triangles.backend().clone())
-                .add_entry(4, buffers.materials.backend().clone())
-                .add_entry(5, buffers.bvh.backend().clone())
+                .add_entry(0, buffers.parallelograms.backend().clone())
+                .add_entry(1, buffers.sdf.backend().clone())
+                .add_entry(2, buffers.triangles.backend().clone())
+                .add_entry(3, buffers.materials.backend().clone())
+                .add_entry(4, buffers.bvh.backend().clone())
             ;
         });
     }
@@ -542,8 +535,7 @@ struct Buffers {
 
     ray_tracing_frame_buffer: FrameBuffer,
     denoised_beauty_image: FrameBufferLayer<PodVector>,
-
-    spheres: VersionedBuffer,
+    
     parallelograms: VersionedBuffer,
     sdf: VersionedBuffer,
     triangles: VersionedBuffer,
@@ -556,8 +548,7 @@ struct Uniforms {
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
-
-    spheres_count: u32,
+    
     parallelograms_count: u32,
     sdf_count: u32,
     triangles_count: u32,
@@ -588,7 +579,7 @@ impl Uniforms {
         self.frame_buffer_size.area()
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 2 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -603,11 +594,7 @@ impl Uniforms {
         
         self.camera.serialize_into(&mut result);
 
-        result.write_quartet_u32(self.spheres_count, self.parallelograms_count, self.sdf_count, self.triangles_count);
-
-        result.write_quartet(|writer| {
-            writer.write_integer(self.bvh_length);
-        });
+        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.triangles_count, self.bvh_length);
 
         debug_assert!(result.object_fully_written());
         result
@@ -651,7 +638,6 @@ mod tests {
             if_reset_framebuffer: false,
             camera,
             
-            spheres_count: DEFAULT_SPHERES_COUNT,
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
             sdf_count: DEFAULT_SDF_COUNT,
             triangles_count: DEFAULT_TRIANGLES_COUNT,
@@ -664,11 +650,10 @@ mod tests {
     const SLOT_FRAME_NUMBER: usize = 2;
     const SLOT_RESET_FRAME_BUFFER: usize = 3;
 
-    const SLOT_SPHERES_COUNT: usize = 36;
-    const SLOT_PARALLELOGRAMS_COUNT: usize = 37;
-    const SLOT_SDF_COUNT: usize = 38;
-    const SLOT_TRIANGLES_COUNT: usize = 39;
-    const SLOT_BVH_LENGTH: usize = 40;
+    const SLOT_PARALLELOGRAMS_COUNT: usize = 36;
+    const SLOT_SDF_COUNT: usize = 37;
+    const SLOT_TRIANGLES_COUNT: usize = 38;
+    const SLOT_BVH_LENGTH: usize = 39;
 
     #[test]
     fn test_uniforms_reset_frame_accumulation() {
@@ -748,7 +733,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
         assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
         
-        assert_eq!(actual_state_floats[SLOT_SPHERES_COUNT].to_bits(), DEFAULT_SPHERES_COUNT);
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
         assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
         assert_eq!(actual_state_floats[SLOT_TRIANGLES_COUNT].to_bits(), DEFAULT_TRIANGLES_COUNT);

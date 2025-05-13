@@ -91,7 +91,8 @@ impl Resources {
 pub(crate) enum ComputeRoutine {
     ShaderRayTracingEntryPoint,
     ShaderObjectIdEntryPoint,
-    Default,
+    
+    #[cfg(test)] Default,
 }
 
 impl ComputeRoutine {
@@ -99,7 +100,7 @@ impl ComputeRoutine {
         match self {
             ComputeRoutine::ShaderObjectIdEntryPoint { .. } => Some("compute_object_id_buffer"),
             ComputeRoutine::ShaderRayTracingEntryPoint { .. } => Some("compute_color_buffer"),
-            ComputeRoutine::Default { .. } => None,
+            #[cfg(test)] ComputeRoutine::Default { .. } => None,
         }
     }
 }
