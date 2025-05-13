@@ -1,7 +1,8 @@
 ﻿use std::rc::Rc;
 use std::fmt::{Display, Formatter};
-use crate::scene::sdf::sdf::Sdf;
+use crate::sdf::sdf::Sdf;
 
+#[derive(Clone)]
 pub(crate) struct NamedSdf {
     sdf: Rc<dyn Sdf>, 
     name: UniqueName,

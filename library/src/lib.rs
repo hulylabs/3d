@@ -10,6 +10,7 @@ mod bvh;
 mod serialization;
 mod gpu;
 mod tests;
+pub mod sdf;
 
 use std::cmp::max;
 use std::rc::Rc;

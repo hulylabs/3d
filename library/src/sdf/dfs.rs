@@ -1,9 +1,9 @@
-﻿use crate::scene::sdf::sdf::Sdf;
+﻿use crate::sdf::sdf::Sdf;
 use std::cmp::max;
 use std::collections::HashSet;
 use std::rc::Rc;
 
-pub(super) fn depth_first_search<T, F>(root: Rc<dyn Sdf>, context: &mut T, mut visit: F)
+pub(crate) fn depth_first_search<T, F>(root: Rc<dyn Sdf>, context: &mut T, mut visit: F)
 where
     F: FnMut(Rc<dyn Sdf>, &mut T, usize),
 {
@@ -41,9 +41,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
-    use crate::scene::sdf::sdf_sphere::SdfSphere;
-    use crate::scene::sdf::sdf_union::SdfUnion;
+    use crate::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
+    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::sdf_union::SdfUnion;
 
     #[test]
     fn test_zero_levels_below() {

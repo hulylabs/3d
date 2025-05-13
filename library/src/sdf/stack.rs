@@ -4,11 +4,11 @@ pub struct Stack<T> {
 
 impl<T> Stack<T> {
     #[must_use]
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Stack { backend: Vec::new() }
     }
 
-    pub(super) fn push(&mut self, item: T) {
+    pub(crate) fn push(&mut self, item: T) {
         self.backend.push(item);
     }
 

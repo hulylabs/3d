@@ -1,10 +1,10 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::scene::sdf::sdf::Sdf;
-use crate::scene::sdf::shader_code::{conventions, FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
-use crate::scene::sdf::shader_formatting_utils::{format_point, format_vector};
+use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_code::{conventions, FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
+use crate::sdf::shader_formatting_utils::{format_point, format_vector};
 use cgmath::{EuclideanSpace, Zero};
 use std::rc::Rc;
-use crate::scene::sdf::stack::Stack;
+use crate::sdf::stack::Stack;
 
 pub struct SdfBox {
     half_size: Vector,
@@ -31,7 +31,7 @@ impl Sdf for SdfBox {
         if self.center.to_vec().is_zero() {
             ShaderCode::<FunctionBody>::new(format!(
                 "let q = abs({parameter})-{extent}; {return} {value}",
-                parameter = conventions::THE_POINT_PARAMETER_NAME,
+                parameter = conventions::PARAMETER_NAME_THE_POINT,
                 extent = format_vector(self.half_size),
                 return = SHADER_RETURN_KEYWORD,
                 value = RETURN_VALUE,
@@ -39,7 +39,7 @@ impl Sdf for SdfBox {
         } else {
             ShaderCode::<FunctionBody>::new(format!(
                 "let q = abs({parameter}-{center})-{extent}; {return} {value}",
-                parameter = conventions::THE_POINT_PARAMETER_NAME,
+                parameter = conventions::PARAMETER_NAME_THE_POINT,
                 center = format_point(self.center),
                 extent = format_vector(self.half_size),
                 return = SHADER_RETURN_KEYWORD,

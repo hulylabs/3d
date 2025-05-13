@@ -1,6 +1,6 @@
-﻿use crate::scene::sdf::shader_code::{FunctionBody, ShaderCode};
+﻿use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use std::rc::Rc;
-use crate::scene::sdf::stack::Stack;
+use crate::sdf::stack::Stack;
 
 pub trait Sdf {
     #[must_use]

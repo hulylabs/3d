@@ -7,3 +7,4 @@ pub(crate) mod triangle;
 pub(crate) mod triangle_mesh;
 pub(crate) mod sdf;
 pub(crate) mod ray_traceable;
+pub(crate) mod sdf_class_index;

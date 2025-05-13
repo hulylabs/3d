@@ -1,8 +1,8 @@
-﻿use crate::scene::sdf::sdf::Sdf;
-use crate::scene::sdf::shader_function_name::FunctionName;
+﻿use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_function_name::FunctionName;
 use std::rc::Rc;
 
-pub(super) struct ShaderCodeDossier {
+pub(crate) struct ShaderCodeDossier {
     name: FunctionName,
     sources: Vec<Rc<dyn Sdf>>,
     children_levels_below: usize,
@@ -10,36 +10,36 @@ pub(super) struct ShaderCodeDossier {
 
 impl ShaderCodeDossier {
     #[must_use]
-    pub(super) fn new(host: FunctionName, source: Rc<dyn Sdf>, children_levels_below: usize) -> Self {
+    pub(crate) fn new(host: FunctionName, source: Rc<dyn Sdf>, children_levels_below: usize) -> Self {
         Self { name: host, sources: vec![source], children_levels_below }
     }
 
     #[must_use]
-    pub(super) const fn name(&self) -> &FunctionName {
+    pub(crate) const fn name(&self) -> &FunctionName {
         &self.name
     }
 
-    pub(super) fn write_another_usage(&mut self, source: Rc<dyn Sdf>) {
+    pub(crate) fn write_another_usage(&mut self, source: Rc<dyn Sdf>) {
         self.sources.push(source);
     }
 
     #[must_use]
-    pub(super) fn occurrences(&self) -> usize {
+    pub(crate) fn occurrences(&self) -> usize {
         self.sources.len()
     }
 
     #[must_use]
-    pub(super) fn children_levels_below(&self) -> usize {
+    pub(crate) fn children_levels_below(&self) -> usize {
         self.children_levels_below
     }
 
     #[must_use]
-    pub(super) fn any_source(&self) -> Rc<dyn Sdf> {
+    pub(crate) fn any_source(&self) -> Rc<dyn Sdf> {
         self.sources[0].clone()
     }
 
     #[must_use]
-    pub(super) fn sources(&self) -> &Vec<Rc<dyn Sdf>> {
+    pub(crate) fn sources(&self) -> &Vec<Rc<dyn Sdf>> {
         &self.sources
     }
 }
@@ -47,7 +47,7 @@ impl ShaderCodeDossier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::make_dummy_sdf;
+    use crate::sdf::dummy_sdf::tests::make_dummy_sdf;
 
     #[test]
     fn test_disjoint_set() {

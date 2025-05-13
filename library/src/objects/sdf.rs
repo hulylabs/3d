@@ -1,5 +1,4 @@
-﻿use crate::geometry::alias::Vector;
-use crate::geometry::transform::Affine;
+﻿use crate::geometry::transform::Affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -7,44 +6,36 @@ use crate::serialization::serialize_matrix::serialize_matrix;
 use crate::objects::ray_traceable::RayTraceable;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
+use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 
-pub(crate) struct SdfBox {
+pub(crate) struct SdfInstance {
     location: Affine,
-    half_size: Vector,
-    corners_radius: f64,
+    class: SdfClassIndex,
     links: Linkage,
 }
 
-impl SdfBox {
+impl SdfInstance {
     #[must_use]
-    pub(crate) fn new(location: Affine, half_size: Vector, corners_radius: f64, links: Linkage) -> Self {
-        assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0);
-        assert!(corners_radius >= 0.0);
+    pub(crate) fn new(location: Affine, class: SdfClassIndex, links: Linkage) -> Self {
         assert!(abs(location.determinant()) > 0.0);
-        Self { location, half_size, corners_radius, links }
+        Self { location, class, links }
     }
 }
 
-impl GpuSerializationSize for SdfBox {
-    const SERIALIZED_QUARTET_COUNT: usize = 10;
+impl GpuSerializationSize for SdfInstance {
+    const SERIALIZED_QUARTET_COUNT: usize = 9;
 }
 
-impl GpuSerializable for SdfBox {
+impl GpuSerializable for SdfInstance {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
         serialize_matrix(container, &self.location);
         serialize_matrix(container, &self.location.invert().unwrap());
 
-        container.write_quartet_f64(
-            self.half_size.x,
-            self.half_size.y,
-            self.half_size.z,
-            self.corners_radius,
-        );
-
         container.write_quartet(|writer| {
+            writer.write_float(self.class.as_f64() as f32);
             writer.write_float(self.links.material_index().0 as f32);
             writer.write_integer(self.links.uid().0);
         });
@@ -53,7 +44,7 @@ impl GpuSerializable for SdfBox {
     }
 }
 
-impl RayTraceable for SdfBox {
+impl RayTraceable for SdfInstance {
     #[must_use]
     fn material(&self) -> MaterialIndex {
         self.links.material_index()
@@ -65,7 +56,7 @@ impl RayTraceable for SdfBox {
 
     #[must_use]
     fn serialized_quartet_count(&self) -> usize {
-        SdfBox::SERIALIZED_QUARTET_COUNT
+        SdfInstance::SERIALIZED_QUARTET_COUNT
     }
 }
 
@@ -89,14 +80,13 @@ mod tests {
     #[test]
     fn test_sdf_box_serialize_into() {
         let expected_location = Affine::from_nonuniform_scale(0.5, 0.6, 0.7);
-        let expected_half_size = Vector { x: 1.0, y: 2.0, z: 3.0 };
-        let expected_corners_radius = 0.9;
+        let expected_class = SdfClassIndex(17);
         let expected_material_index = MaterialIndex(4);
         let expected_object_uid = ObjectUid(7);
         
-        let system_under_test = SdfBox::new(expected_location, expected_half_size, expected_corners_radius, Linkage::new(expected_object_uid, expected_material_index));
+        let system_under_test = SdfInstance::new(expected_location, expected_class, Linkage::new(expected_object_uid, expected_material_index));
 
-        let mut container = GpuReadySerializationBuffer::new(1, SdfBox::SERIALIZED_QUARTET_COUNT);
+        let mut container = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
         let location_serialized = {
@@ -123,24 +113,15 @@ mod tests {
         assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[MATRIX_FLOATS_COUNT..MATRIX_FLOATS_COUNT * 2]);
         values_checked += MATRIX_FLOATS_COUNT;
 
-        assert_eq!(serialized[values_checked], expected_half_size.x as f32);
+        assert_eq!(serialized[values_checked], expected_class.as_f64() as f32);
         values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_half_size.y as f32);
-        values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_half_size.z as f32);
-        values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_corners_radius as f32);
-        values_checked += 1;
-
         assert_eq!(serialized[values_checked], expected_material_index.as_f64() as f32);
         values_checked += 1;
         assert_eq!(serialized[values_checked].to_bits(), expected_object_uid.0);
         values_checked += 1;
         assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
         values_checked += 1;
-        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
-        values_checked += 1;
-
-        assert_eq!(values_checked, SdfBox::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);
+        
+        assert_eq!(values_checked, SdfInstance::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);
     }
 }

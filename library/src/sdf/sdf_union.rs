@@ -1,7 +1,7 @@
-﻿use crate::scene::sdf::sdf::Sdf;
-use crate::scene::sdf::shader_code::{FunctionBody, SHADER_RETURN_KEYWORD, ShaderCode};
+﻿use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_code::{FunctionBody, SHADER_RETURN_KEYWORD, ShaderCode};
 use std::rc::Rc;
-use crate::scene::sdf::stack::Stack;
+use crate::sdf::stack::Stack;
 
 pub struct SdfUnion {
     left: Rc<dyn Sdf>,
@@ -57,7 +57,7 @@ fn make_name_unique(name: &str, level: Option<usize>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
+    use crate::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use super::*;
     
     #[test]

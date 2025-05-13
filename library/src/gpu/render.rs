@@ -11,7 +11,7 @@ use crate::gpu::rasterization_pipeline::RasterizationPipeline;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfBox;
+use crate::objects::sdf::SdfInstance;
 use crate::objects::sphere::Sphere;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
@@ -119,7 +119,7 @@ impl Renderer {
 
         composite_status.merge_geometry(Self::update_buffer::<Sphere>(&DataKind::Sphere, &mut self.buffers.spheres, &self.resources, &self.scene, self.context.queue()));
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
-        composite_status.merge_geometry(Self::update_buffer::<SdfBox>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
+        composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
 
         composite_status.merger_material(self.buffers.materials.try_update_and_resize(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
         
@@ -201,7 +201,7 @@ impl Renderer {
 
             spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
-            sdf: Self::make_buffer::<SdfBox>(scene, resources, &DataKind::Sdf),
+            sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || triangles),
             bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
@@ -626,6 +626,7 @@ mod tests {
 
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
+    use crate::sdf::code_generator::SdfRegistrator;
     #[cfg(feature = "denoiser")]
     use crate::serialization::pod_vector::PodVector;
 
@@ -765,7 +766,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = Container::new();
+        let mut scene = Container::new(SdfRegistrator::new());
         let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);

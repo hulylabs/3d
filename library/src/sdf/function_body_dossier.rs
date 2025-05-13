@@ -1,30 +1,30 @@
-﻿use crate::scene::sdf::equality_sets::EqualitySets;
-use crate::scene::sdf::shader_code_dossier::ShaderCodeDossier;
-use crate::scene::sdf::sdf::Sdf;
-use crate::scene::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
-use crate::scene::sdf::shader_function_name::FunctionName;
-use crate::scene::sdf::stack::Stack;
+﻿use crate::sdf::equality_sets::EqualitySets;
+use crate::sdf::shader_code_dossier::ShaderCodeDossier;
+use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
+use crate::sdf::shader_function_name::FunctionName;
+use crate::sdf::stack::Stack;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-pub(super) struct FunctionBodyDossier {
+pub(crate) struct FunctionBodyDossier {
     dossier_of_body: HashMap<ShaderCode<FunctionBody>, ShaderCodeDossier>,
     used_names: HashSet<FunctionName>,
 }
 
 impl FunctionBodyDossier {
     #[must_use]
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { dossier_of_body: HashMap::new(), used_names: HashSet::new(), }
     }
     
     #[must_use]
-    pub(super) fn try_find(&self, shader_code: &ShaderCode<FunctionBody>) -> Option<&ShaderCodeDossier> {
+    pub(crate) fn try_find(&self, shader_code: &ShaderCode<FunctionBody>) -> Option<&ShaderCodeDossier> {
         self.dossier_of_body.get(shader_code)
     }
     
     #[must_use]
-    pub(super) fn try_account_occurrence(&mut self, shader_code: &ShaderCode<FunctionBody>, instance: Rc<dyn Sdf>) -> bool {
+    pub(crate) fn try_account_occurrence(&mut self, shader_code: &ShaderCode<FunctionBody>, instance: Rc<dyn Sdf>) -> bool {
         let dossier = self.dossier_of_body.get_mut(shader_code);
         if let Some(dossier) = dossier {
             dossier.write_another_usage(instance);
@@ -34,7 +34,7 @@ impl FunctionBodyDossier {
         }
     }
     
-    pub(super) fn register(&mut self, shader_code: ShaderCode<FunctionBody>, shader_dossier: ShaderCodeDossier) {
+    pub(crate) fn register(&mut self, shader_code: ShaderCode<FunctionBody>, shader_dossier: ShaderCodeDossier) {
         assert!(self.used_names.insert(shader_dossier.name().clone()), "non-unique function name");
 
         let previous = self.dossier_of_body.insert(shader_code, shader_dossier);
@@ -53,7 +53,7 @@ impl FunctionBodyDossier {
         result
     }
     
-    pub(super) fn format_occurred_multiple_times(&self, buffer: &mut String) { 
+    pub(crate) fn format_occurred_multiple_times(&self, buffer: &mut String) { 
     
     /*
     Reminder: We have an SDF tree. The leaves contain the SDFs of specific primitives (spheres, 
@@ -104,8 +104,8 @@ impl FunctionBodyDossier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
-    use crate::scene::sdf::shader_code::conventions;
+    use crate::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
+    use crate::sdf::shader_code::conventions;
 
     #[test]
     fn test_construction() {
@@ -154,7 +154,7 @@ mod tests {
         
         let mut buffer: String = String::new();
         system_under_test.format_occurred_multiple_times(&mut buffer);
-        let expected_buffer = format!("fn {}({}: vec3f) -> f32 {{ {}; }}\n", multiple_occurrences_function, conventions::THE_POINT_PARAMETER_NAME, code_seven);
+        let expected_buffer = format!("fn {}({}: vec3f) -> f32 {{ {}; }}\n", multiple_occurrences_function, conventions::PARAMETER_NAME_THE_POINT, code_seven);
         assert_eq!(buffer, expected_buffer);
     }
 

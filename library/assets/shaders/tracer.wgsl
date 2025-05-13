@@ -32,7 +32,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 20;
 
 @group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
 @group(2) @binding( 1) var<storage, read> quad_objs: array<Parallelogram>;
-@group(2) @binding( 2) var<storage, read> sdf: array<SdfBox>;
+@group(2) @binding( 2) var<storage, read> sdf: array<Sdf>;
 @group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
 @group(2) @binding( 4) var<storage, read> materials: array<Material>;
 @group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
@@ -123,11 +123,10 @@ struct AABB {
 	axis : f32,
 }
 
-struct SdfBox {
+struct Sdf {
     location : mat4x4f,
     inverse_location : mat4x4f,
-    half_size : vec3f,
-    corners_radius : f32,
+    class_index : f32,
     material_id : f32,
     object_uid : u32,
 }
@@ -182,24 +181,19 @@ fn near_zero(v : vec3f) -> bool {
 	return (abs(v[0]) < 0 && abs(v[1]) < 0 && abs(v[2]) < 0);
 }
 
-fn signed_distance_to_box(point: vec3f, box: SdfBox) -> f32 {
-    let d = abs(point) - box.half_size + box.corners_radius;
-    return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, vec3f(0.0))) - box.corners_radius;
-}
-
-fn signed_distance_normal(point: vec3f, box: SdfBox) -> vec3f {
+fn signed_distance_normal(point: vec3f, sdf: Sdf) -> vec3f {
     let e = vec2f(1.0,-1.0)*0.5773*0.0005;
-    return normalize( e.xyy * signed_distance_to_box( point + e.xyy, box ) +
-					  e.yyx * signed_distance_to_box( point + e.yyx, box ) +
-					  e.yxy * signed_distance_to_box( point + e.yxy, box ) +
-					  e.xxx * signed_distance_to_box( point + e.xxx, box ) );
+    return normalize( e.xyy * sdf_select( sdf.class_index, point + e.xyy ) +
+					  e.yyx * sdf_select( sdf.class_index, point + e.yyx ) +
+					  e.yxy * sdf_select( sdf.class_index, point + e.yxy ) +
+					  e.xxx * sdf_select( sdf.class_index, point + e.xxx ) );
 }
 
-fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
+fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
     var t = tmin;
     var i: i32 = 0;
     let local_ray = Ray( (sdf.inverse_location * vec4f(ray.origin, 1.0f)).xyz , (sdf.inverse_location * vec4f(ray.dir, 0.0f)).xyz );
-    let outside = signed_distance_to_box(local_ray.origin, sdf) >= 0;
+    let outside = sdf_select(sdf.class_index, local_ray.origin) >= 0;
     loop {
         if (i >= MAX_SDF_RAY_MARCH_STEPS) {
             break;
@@ -208,7 +202,7 @@ fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
             break;
         }
         let candidate = at(local_ray, t);
-        let signed_distance = signed_distance_to_box(candidate, sdf);
+        let signed_distance = sdf_select(sdf.class_index, candidate);
         let t_scaled = 0.0001 * t;
         if(abs(signed_distance)<t_scaled) {
             hitRec.t = t;

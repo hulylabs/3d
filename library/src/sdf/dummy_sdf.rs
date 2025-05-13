@@ -1,9 +1,9 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
     use std::rc::Rc;
-    use crate::scene::sdf::sdf::Sdf;
-    use crate::scene::sdf::shader_code::{FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
-    use crate::scene::sdf::stack::Stack;
+    use crate::sdf::sdf::Sdf;
+    use crate::sdf::shader_code::{FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
+    use crate::sdf::stack::Stack;
 
     pub(crate) struct DummySdf {
         payload: String,

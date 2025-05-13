@@ -2,7 +2,7 @@
 use float_pretty_print::PrettyPrintFloat;
 use crate::geometry::alias::{Point, Vector};
 
-pub(super) struct ShaderReadyFloat {
+pub(crate) struct ShaderReadyFloat {
     value: f32,
 }
 
@@ -11,14 +11,14 @@ impl ShaderReadyFloat {
     const SCALER: f64 = 10usize.pow(ShaderReadyFloat::FLOAT_DECIMAL_DIGITS_TO_KEEP) as f64;
     
     #[must_use]
-    pub(super) const fn new(value: f64) -> Self {
+    pub(crate) const fn new(value: f64) -> Self {
         let scaled = (value * ShaderReadyFloat::SCALER) as i64;
         let truncated = (scaled as f64 / ShaderReadyFloat::SCALER) as f32;
         Self { value: truncated }
     }
 
     #[must_use]
-    pub(super) fn format(&self) -> String {
+    pub(crate) fn format(&self) -> String {
         PrettyPrintFloat(self.value as f64).to_string()
     }
 }
@@ -30,12 +30,12 @@ impl Display for ShaderReadyFloat {
 }
 
 #[must_use]
-pub(super) fn format_vector(target: Vector) -> String {
+pub(crate) fn format_vector(target: Vector) -> String {
     format_three_dee_vector(ShaderReadyFloat::new(target.x), ShaderReadyFloat::new(target.y), ShaderReadyFloat::new(target.z), )
 }
 
 #[must_use]
-pub(super) fn format_point(target: Point) -> String {
+pub(crate) fn format_point(target: Point) -> String {
     format_three_dee_vector(ShaderReadyFloat::new(target.x), ShaderReadyFloat::new(target.y), ShaderReadyFloat::new(target.z), )
 }
 

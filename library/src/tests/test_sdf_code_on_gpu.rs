@@ -1,26 +1,21 @@
 ﻿#[cfg(test)]
 mod tests {
+    use crate::geometry::alias::{Point, Vector};
+    use crate::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
+    use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+    use crate::sdf::sdf::Sdf;
+    use crate::sdf::sdf_box::SdfBox;
+    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::sdf_union::SdfUnion;
+    use crate::sdf::shader_function_name::FunctionName;
+    use crate::serialization::pod_vector::PodVector;
     use std::fmt::Write;
     use std::rc::Rc;
-    use wgpu::wgt::PollType;
-    use crate::geometry::alias::{Point, Vector};
-    use crate::gpu::compute_pipeline::ComputePipeline;
-    use crate::gpu::frame_buffer_size::FrameBufferSize;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use crate::gpu::output::duplex_layer::DuplexLayer;
-    use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
-    use crate::gpu::resources::{ComputeRoutine, Resources};
-    use crate::scene::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
-    use crate::scene::sdf::named_sdf::{NamedSdf, UniqueName};
-    use crate::scene::sdf::sdf::Sdf;
-    use crate::scene::sdf::sdf_box::SdfBox;
-    use crate::scene::sdf::sdf_sphere::SdfSphere;
-    use crate::scene::sdf::sdf_union::SdfUnion;
-    use crate::scene::sdf::shader_function_name::FunctionName;
-    use crate::serialization::pod_vector::PodVector;
+    use crate::tests::assert_utils::tests::assert_eq;
+    use crate::tests::gpu_code_execution::tests::execute_code;
 
     #[test]
-    fn test_spheres_union_sdf_execution() {
+    fn test_sdf_union_spheres() {
         let union = SdfUnion::new(
             SdfSphere::new_offset(2.0, Point::new(0.0,  7.0, 0.0)),
             SdfSphere::new_offset(2.0, Point::new(0.0, -7.0, 0.0)),
@@ -54,7 +49,7 @@ mod tests {
     }
     
     #[test]
-    fn test_single_sphere_sdf_execution() {
+    fn test_sdf_sphere() {
         let sphere = SdfSphere::new(17.0);
 
         let input_points = [
@@ -71,7 +66,7 @@ mod tests {
     }
 
     #[test]
-    fn test_single_box_sdf_execution() {
+    fn test_sdf_box() {
         let a_box = SdfBox::new(Vector::new(1.0, 2.0, 3.0));
 
         let input_points = [
@@ -121,53 +116,12 @@ mod tests {
         assert_eq(&actual_distances, expected_distances, epsilon);
     }
     
-    fn assert_eq(left: &[f32], right: &[f32], epsilon: f32) {
-        assert_eq!(left.len(), right.len(), "ranges have different lengths");
-
-        for (i, (x, y)) in left.iter().zip(right.iter()).enumerate() {
-            assert!(
-                (x - y).abs() < epsilon,
-                "Values at index {} differ: {} vs {}",
-                i, x, y
-            );
-        }
-    }
-    
     #[must_use]
     fn execute_function(input: &[PodVector], function_name: FunctionName, function_code: String) -> Vec<f32> {
-        let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone(), wgpu::TextureFormat::Rgba8Unorm);
-
         let mut function_execution = make_function_execution(function_name);
         function_execution.write_str(function_code.as_str()).expect("shader code concatenation has failed");
 
-        let module = resources.create_shader_module("test GPU function execution", function_execution.as_str());
-
-        let input_buffer = resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
-        let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
-        let mut output_buffer = DuplexLayer::<f32>::new(context.device(), buffer_size, SupportUpdateFromCpu::YES, "output");
-
-        let mut pipeline = ComputePipeline::new(resources.create_compute_pipeline(ComputeRoutine::Default, &module));
-        pipeline.setup_bind_group(0, None, context.device(), |bind_group|{
-            bind_group.add_entry(0, input_buffer.clone());
-            bind_group.add_entry(1, output_buffer.gpu_copy());
-        });
-
-        let mut encoder = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-            pipeline.set_into_pass(&mut pass);
-            let workgroup_count = input.len().div_ceil(64);
-            pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
-        }
-        output_buffer.prepare_cpu_read(&mut encoder);
-        context.queue().submit(Some(encoder.finish()));
-
-        let copy_wait = output_buffer.read_cpu_copy();
-        context.device().poll(PollType::Wait).expect("failed to poll the device");
-        pollster::block_on(copy_wait);
-
-        output_buffer.cpu_copy().clone()
+        execute_code(input, function_execution.as_str())
     }
 
     const FUNCTION_EXECUTOR: &str = include_str!("point_function_executor.wgsl");

@@ -1,22 +1,24 @@
-﻿use crate::scene::sdf::function_body_dossier::FunctionBodyDossier;
-use crate::scene::sdf::named_sdf::{NamedSdf, UniqueName};
-use crate::scene::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
-use crate::scene::sdf::shader_function_name::FunctionName;
+﻿use crate::sdf::dfs;
+use crate::sdf::function_body_dossier::FunctionBodyDossier;
+use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
+use crate::sdf::shader_code_dossier::ShaderCodeDossier;
+use crate::sdf::shader_function_name::FunctionName;
+use crate::sdf::stack::Stack;
 use crate::utils::uid_generator::UidGenerator;
-use std::collections::HashSet;
-use crate::scene::sdf::dfs;
-use crate::scene::sdf::shader_code_dossier::ShaderCodeDossier;
-use crate::scene::sdf::stack::Stack;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 pub(crate) struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
     uid_generator: UidGenerator,
-    registered: HashSet<UniqueName>,
+    registered: HashMap<UniqueName, NamedSdf>,
 }
 
 pub(crate) struct SdfCodeGenerator {
     sdf_bodies: FunctionBodyDossier,
-    registered: HashSet<UniqueName>,
+    registered: HashMap<UniqueName, NamedSdf>,
 }
 
 impl SdfCodeGenerator {
@@ -28,12 +30,17 @@ impl SdfCodeGenerator {
         }
     }
 
+    #[must_use]
+    pub(crate) fn registrations(&self) -> &HashMap<UniqueName, NamedSdf> {
+        &self.registered
+    }
+    
     pub(crate) fn generate_shared_code(self, buffer: &mut String) {
         self.sdf_bodies.format_occurred_multiple_times(buffer);
     }
     
     pub(crate) fn generate_unique_code_for(&self, target: &NamedSdf, buffer: &mut String) -> FunctionName {
-        assert!(self.registered.contains(target.name()));
+        assert!(self.registered.contains_key(target.name()));
         
         struct Context<'a> {
             descendant_bodies: Stack<ShaderCode<FunctionBody>>,
@@ -81,8 +88,8 @@ impl SdfCodeGenerator {
 
 impl SdfRegistrator {
     pub(crate) fn add(&mut self, target: &NamedSdf) {
-        let unique = self.registered.insert(target.name().clone());
-        assert!(unique);
+        let unique = self.registered.insert(target.name().clone(), target.clone());
+        assert!(unique.is_none());
         
         let mut context = (self, Stack::<ShaderCode<FunctionBody>>::new(), target.name().0.as_str());
         
@@ -110,21 +117,21 @@ impl SdfRegistrator {
         Self {
             sdf_bodies: FunctionBodyDossier::new(),
             uid_generator: UidGenerator::new(),
-            registered: HashSet::new(),
+            registered: HashMap::new(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-    use crate::geometry::alias::{Point, Vector};
     use super::*;
-    use crate::scene::sdf::named_sdf::UniqueName;
-    use crate::scene::sdf::sdf::Sdf;
-    use crate::scene::sdf::sdf_box::SdfBox;
-    use crate::scene::sdf::sdf_sphere::SdfSphere;
-    use crate::scene::sdf::sdf_union::SdfUnion;
+    use crate::geometry::alias::{Point, Vector};
+    use crate::sdf::named_sdf::UniqueName;
+    use crate::sdf::sdf::Sdf;
+    use crate::sdf::sdf_box::SdfBox;
+    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::sdf_union::SdfUnion;
+    use std::rc::Rc;
 
     #[test]
     #[should_panic]

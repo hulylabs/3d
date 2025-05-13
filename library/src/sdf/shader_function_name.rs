@@ -1,5 +1,5 @@
 ﻿use derive_more::Display;
-use crate::scene::sdf::named_sdf::UniqueName;
+use crate::sdf::named_sdf::UniqueName;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Display)]
 #[display("{}", _0)]

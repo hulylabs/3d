@@ -1,17 +1,17 @@
-﻿use crate::scene::sdf::sdf::Sdf;
-use crate::scene::sdf::shader_code_dossier::ShaderCodeDossier;
+﻿use crate::sdf::sdf::Sdf;
+use crate::sdf::shader_code_dossier::ShaderCodeDossier;
 use disjoint::DisjointSetVec;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub(super) struct EqualitySets {
+pub(crate) struct EqualitySets {
     equality: DisjointSetVec<Rc<dyn Sdf>>, 
     index_of: HashMap<*const dyn Sdf, usize>,
 }
 
 impl EqualitySets {
     #[must_use]
-    pub(super) fn new(support: &Vec<&ShaderCodeDossier>) -> Self {
+    pub(crate) fn new(support: &Vec<&ShaderCodeDossier>) -> Self {
         let capacity = support.iter().map(|item| item.occurrences()).sum();
         let mut equality = DisjointSetVec::<Rc<dyn Sdf>>::with_capacity(capacity);
         let mut index_of = HashMap::<*const dyn Sdf, usize>::with_capacity(capacity);
@@ -31,7 +31,7 @@ impl EqualitySets {
     }
     
     #[must_use]
-    pub(super) fn get_equality_root(&self, representative: Rc<dyn Sdf>) -> Rc<dyn Sdf> {
+    pub(crate) fn get_equality_root(&self, representative: Rc<dyn Sdf>) -> Rc<dyn Sdf> {
         let representative_index = self.index_of.get(&Rc::as_ptr(&representative)).unwrap();
         let root_index = self.equality.root_of(*representative_index);
         self.equality[root_index].clone()
@@ -41,8 +41,8 @@ impl EqualitySets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scene::sdf::dummy_sdf::tests::make_dummy_sdf;
-    use crate::scene::sdf::shader_function_name::FunctionName;
+    use crate::sdf::dummy_sdf::tests::make_dummy_sdf;
+    use crate::sdf::shader_function_name::FunctionName;
 
     #[test]
     fn test_get_equality_root() {

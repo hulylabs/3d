@@ -2,7 +2,8 @@
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::fmt::Write;
-use crate::scene::sdf::shader_function_name::FunctionName;
+use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::sdf::shader_function_name::FunctionName;
 
 #[derive(Clone)]
 pub struct FunctionBody;
@@ -15,7 +16,7 @@ pub trait NoReturn {}
 impl NoReturn for VariableAssignment {}
 impl NoReturn for Generic {}
 
-pub const SHADER_RETURN_KEYWORD: &str = "return";
+pub(crate) const SHADER_RETURN_KEYWORD: &str = "return";
 
 #[derive(Clone)]
 pub struct ShaderCode<Kind = Generic> {
@@ -68,7 +69,7 @@ impl ShaderCode<FunctionBody> {
     }
 
     #[must_use]
-    pub(super) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
+    pub(crate) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
         let evaluation = self.value.replace(SHADER_RETURN_KEYWORD, format!("{} =", variable_name).as_str());
         let assignment = format!("var {name}: f32;\n {{ {assignment} }}", name=variable_name, assignment=evaluation.trim());
         ShaderCode::<VariableAssignment>::new(assignment.to_string())
@@ -76,7 +77,31 @@ impl ShaderCode<FunctionBody> {
 }
 
 pub(crate) mod conventions {
-    pub(crate) const THE_POINT_PARAMETER_NAME: &'static str = "point";
+    pub(crate) const PARAMETER_NAME_THE_POINT: &'static str = "point";
+    pub(crate) const PARAMETER_NAME_SDF_INDEX: &'static str = "sdf_index";
+    
+    pub(crate) const FUNCTION_NAME_THE_SDF_SELECTION: &'static str = "sdf_select";
+}
+
+pub(crate) fn format_sdf_selection(function_to_select: &FunctionName, class_index: SdfClassIndex, buffer: &mut String) {
+    write!(
+        buffer,
+        "if (sdf_index == {sdf_index_parameter}.0) {{ {return_word} {sdf_function_name}({point_parameter}); }}\n",
+        sdf_index_parameter = class_index,
+        return_word = SHADER_RETURN_KEYWORD,
+        sdf_function_name = function_to_select,
+        point_parameter = conventions::PARAMETER_NAME_THE_POINT,
+    ).expect("failed to format sdf selection");
+}
+
+#[must_use]
+pub(crate) fn format_sdf_selection_function_opening() -> String {
+    format!(
+        "fn {selection_function_name}({parameter_sdf_index}: f32, {parameter_point}: vec3f) -> f32 {{ \n",
+        selection_function_name = conventions::FUNCTION_NAME_THE_SDF_SELECTION,
+        parameter_sdf_index = conventions::PARAMETER_NAME_SDF_INDEX,
+        parameter_point = conventions::PARAMETER_NAME_THE_POINT,
+    )
 }
 
 #[must_use]
@@ -85,7 +110,7 @@ pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode:
         "{return} {name}({parameter});",
         return = SHADER_RETURN_KEYWORD,
         name = function_name,
-        parameter = conventions::THE_POINT_PARAMETER_NAME,
+        parameter = conventions::PARAMETER_NAME_THE_POINT,
     );
     ShaderCode::<FunctionBody>::new(code)
 }
@@ -95,7 +120,7 @@ pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_n
         buffer,
         "fn {name}({parameter}: vec3f) -> f32 {{ {body} }}\n",
         name = function_name,
-        parameter = conventions::THE_POINT_PARAMETER_NAME,
+        parameter = conventions::PARAMETER_NAME_THE_POINT,
         body = body
     )
     .expect("failed to format sdf declaration");
@@ -116,7 +141,7 @@ mod tests {
         let expected = format!(
             "fn {function}({parameter}: vec3f) -> f32 {{ return -7.0; }}\n",
             function = function_name,
-            parameter = conventions::THE_POINT_PARAMETER_NAME
+            parameter = conventions::PARAMETER_NAME_THE_POINT
         );
         assert_eq!(formatted, expected);
     }
