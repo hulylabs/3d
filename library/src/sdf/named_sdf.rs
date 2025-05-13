@@ -3,14 +3,14 @@ use std::fmt::{Display, Formatter};
 use crate::sdf::sdf::Sdf;
 
 #[derive(Clone)]
-pub(crate) struct NamedSdf {
+pub struct NamedSdf {
     sdf: Rc<dyn Sdf>, 
     name: UniqueName,
 }
 
 impl NamedSdf {
     #[must_use]
-    pub(crate) const fn new(sdf: Rc<dyn Sdf>, name: UniqueName) -> Self {
+    pub const fn new(sdf: Rc<dyn Sdf>, name: UniqueName) -> Self {
         Self { sdf, name }
     }
 
@@ -20,7 +20,7 @@ impl NamedSdf {
     }
 
     #[must_use]
-    pub(crate) const fn name(&self) -> &UniqueName {
+    pub const fn name(&self) -> &UniqueName {
         &self.name
     }
 }

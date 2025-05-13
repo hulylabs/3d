@@ -15,6 +15,10 @@ use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
 use library::objects::material_index::MaterialIndex;
+use library::sdf::code_generator::SdfRegistrator;
+use library::sdf::named_sdf::{NamedSdf, UniqueName};
+use library::sdf::sdf_box::SdfBox;
+use library::sdf::sdf_sphere::SdfSphere;
 use library::utils::object_uid::ObjectUid;
 
 #[must_use]
@@ -140,7 +144,14 @@ impl Sandbox {
 
         let camera = make_default_camera();
         
-        let mut scene = Container::new();
+        let sdf_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.02)), UniqueName("button".to_string()));
+        let sdf_sphere = NamedSdf::new(SdfSphere::new(0.2), UniqueName("bubble".to_string()));
+        
+        let mut sdf_registrator = SdfRegistrator::new();
+        sdf_registrator.add(&sdf_box);
+        sdf_registrator.add(&sdf_sphere);
+        
+        let mut scene = Container::new(sdf_registrator);
 
         let gold_metal = scene.materials().add(&Material::new()
             .with_class(MaterialClass::Mirror)
@@ -215,17 +226,15 @@ impl Sandbox {
             .with_specular_strength(0.15)
             .with_roughness(0.45));
 
-        scene.add_sdf_box(
+        scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.7, 0.2, -0.7))*Affine::from_angle_z(Deg(-30.0))),
-            Vector::new(0.24, 0.1, 0.02),
-            0.03,
-            silver_material);
+            sdf_box.name(),
+            silver_material).expect("failed to add an sdf box to the scene");
 
-        scene.add_sdf_box(
+        scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
-            Vector::new(0.24, 0.1, 0.02),
-            0.03,
-            bright_red_material);
+            sdf_box.name(),
+            bright_red_material).expect("failed to add an sdf box to the scene");
 
         scene.add_sphere(Point::new(1.5, 0.6, -1.0), 0.25, gold_metal);
         scene.add_sphere(Point::new(0.5, 0.0, -1.0), 0.25, blue_glass);

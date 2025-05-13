@@ -784,10 +784,8 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = u32(0); i < uniforms.sdf_count; i++)
-    {
-        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray))
-        {
+	for(var i = u32(0); i < uniforms.sdf_count; i++) {
+        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)) {
             hit_anything = true;
             closest_so_far = hitRec.t;
         }
@@ -796,18 +794,7 @@ fn hitScene(ray : Ray) -> bool
 	return hit_anything;
 }
 
-
-
-
-
-
 // ============== Other BVH traversal methods (brute force and using skip pointers) =================
-
-
-
-
-
-
 
 // fn hit_skipPointers(ray : Ray) -> bool
 // {
@@ -843,43 +830,6 @@ fn hitScene(ray : Ray) -> bool
 // 		else
 // 		{
 // 			i = i32(bvh[i].skip_link);
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.spheres_count; i++)
-// 	{
-// 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.parallelograms_count; i++)
-// 	{
-// 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	return hit_anything;
-// }
-
-
-
-// fn hit_bruteForce(ray : Ray) -> bool
-// {
-// 	var closest_so_far = MAX_FLOAT;
-// 	var hit_anything = false;
-
-// 	for(var i = 0; i < uniforms.triangles_count; i++)
-// 	{
-// 		if(hit_triangle(triangles[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
 // 		}
 // 	}
 

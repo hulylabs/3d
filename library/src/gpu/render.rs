@@ -79,7 +79,8 @@ impl Renderer {
         let resources = Resources::new(context.clone(), presentation_format);
         let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
         
-        let shader_module = resources.create_shader_module("ray tracer shader", CODE_FOR_GPU);
+        let shader_code = scene.append_sdf_handling_code(CODE_FOR_GPU);
+        let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
         
         let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module);
         let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);

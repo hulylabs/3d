@@ -4,7 +4,7 @@ pub mod sdf_box;
 pub mod sdf_union;
 pub mod stack;
 pub mod named_sdf;
-pub(crate) mod code_generator;
+pub mod code_generator;
 pub(crate) mod shader_function_name;
 pub(crate) mod dummy_sdf;
 mod function_body_dossier;

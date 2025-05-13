@@ -1,16 +1,14 @@
 ﻿use crate::sdf::dfs;
 use crate::sdf::function_body_dossier::FunctionBodyDossier;
 use crate::sdf::named_sdf::{NamedSdf, UniqueName};
-use crate::sdf::sdf::Sdf;
 use crate::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
 use crate::sdf::shader_code_dossier::ShaderCodeDossier;
 use crate::sdf::shader_function_name::FunctionName;
 use crate::sdf::stack::Stack;
 use crate::utils::uid_generator::UidGenerator;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-pub(crate) struct SdfRegistrator {
+pub struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
     uid_generator: UidGenerator,
     registered: HashMap<UniqueName, NamedSdf>,
@@ -87,7 +85,7 @@ impl SdfCodeGenerator {
 }
 
 impl SdfRegistrator {
-    pub(crate) fn add(&mut self, target: &NamedSdf) {
+    pub fn add(&mut self, target: &NamedSdf) {
         let unique = self.registered.insert(target.name().clone(), target.clone());
         assert!(unique.is_none());
         
@@ -113,7 +111,7 @@ impl SdfRegistrator {
     }
 
     #[must_use]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             sdf_bodies: FunctionBodyDossier::new(),
             uid_generator: UidGenerator::new(),

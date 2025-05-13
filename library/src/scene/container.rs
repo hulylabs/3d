@@ -62,6 +62,11 @@ impl Container {
     }
 
     #[must_use]
+    pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
+        format!("{}\n{}", base_code, self.sdfs.sdf_classes_code())
+    }
+    
+    #[must_use]
     pub fn materials(&mut self) -> &mut MaterialsWarehouse {
         &mut self.materials
     }
