@@ -65,7 +65,7 @@ impl Container {
     pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
         format!("{}\n{}", base_code, self.sdfs.sdf_classes_code())
     }
-    
+
     #[must_use]
     pub fn materials(&mut self) -> &mut MaterialsWarehouse {
         &mut self.materials
@@ -122,7 +122,7 @@ impl Container {
                 ))
             });
             Ok(added)
-        } else { 
+        } else {
             Err(())
         }
     }
@@ -258,7 +258,7 @@ mod tests {
         let slot = warehouse.load(&dummy_mesh_path).unwrap();
         (warehouse, slot)
     }
-    
+
     #[must_use]
     fn make_single_sdf_sphere() -> (UniqueName, SdfRegistrator) {
         let mut sdf_classes = SdfRegistrator::new();
@@ -329,7 +329,7 @@ mod tests {
         
         let expected_material = system_under_test.materials().add(&material);
         let expected_transform = Affine::identity();
-        
+
         let mut expected_serialized = GpuReadySerializationBuffer::new(SDF_TO_ADD as usize, <SdfInstance as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT);
         for i in 0_u32..SDF_TO_ADD
         {
@@ -384,18 +384,18 @@ mod tests {
 
         assert_eq!(actual_serialized.backend(), expected_serialized.backend());
     }
-    
+
     #[test]
     fn test_add_sphere() {
         let mut system_under_test = Container::new(SdfRegistrator::new());
 
         let material = system_under_test.materials().add(&Material::default().with_albedo(1.0, 0.0, 0.0));
-        
+
         let expected_sphere_center = Point::new(1.0, 2.0, 3.0);
         let expected_sphere_radius = 1.5;
 
         const SPHERES_TO_ADD: u32 = 3;
-        
+
         let mut expected_serialized = GpuReadySerializationBuffer::new(SPHERES_TO_ADD as usize, Sphere::SERIALIZED_QUARTET_COUNT);
         for i in 0_u32..SPHERES_TO_ADD
         {

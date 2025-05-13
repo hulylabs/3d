@@ -177,10 +177,12 @@ fn random_double(min : f32, max : f32) -> f32 {
 	return min + (max - min) * rand2D();
 }
 
+@must_use
 fn near_zero(v : vec3f) -> bool {
 	return (abs(v[0]) < 0 && abs(v[1]) < 0 && abs(v[2]) < 0);
 }
 
+@must_use
 fn signed_distance_normal(point: vec3f, sdf: Sdf) -> vec3f {
     let e = vec2f(1.0,-1.0)*0.5773*0.0005;
     return normalize( e.xyy * sdf_select( sdf.class_index, point + e.xyy ) +
@@ -189,33 +191,57 @@ fn signed_distance_normal(point: vec3f, sdf: Sdf) -> vec3f {
 					  e.xxx * sdf_select( sdf.class_index, point + e.xxx ) );
 }
 
+@must_use
+fn transform_point(transformation: mat4x4f, point: vec3f) -> vec3f {
+    return (transformation * vec4f(point, 1.0f)).xyz;
+}
+
+@must_use
+fn transform_vector(transformation: mat4x4f, vector: vec3f) -> vec3f {
+    return (transformation * vec4f(vector, 0.0f)).xyz;
+}
+
+@must_use
+fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
+    let point = transform_point(transformation, at(ray, parameter));
+    return length(point - transformed_origin);
+}
+
 fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
-    var t = tmin;
+    let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
+    let local_ray_direction = transform_vector(sdf.inverse_location, ray.dir);
+    let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
+
+    var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
+    var local_t_max = transform_ray_parameter(sdf.inverse_location, ray, tmax, local_ray_origin);
+
     var i: i32 = 0;
-    let local_ray = Ray( (sdf.inverse_location * vec4f(ray.origin, 1.0f)).xyz , (sdf.inverse_location * vec4f(ray.dir, 0.0f)).xyz );
-    let outside = sdf_select(sdf.class_index, local_ray.origin) >= 0;
     loop {
         if (i >= MAX_SDF_RAY_MARCH_STEPS) {
             break;
         }
-        if (t>tmax) {
+        if (local_t>local_t_max) {
             break;
         }
-        let candidate = at(local_ray, t);
+        let candidate = at(local_ray, local_t);
         let signed_distance = sdf_select(sdf.class_index, candidate);
-        let t_scaled = 0.0001 * t;
+        let t_scaled = 0.0001 * local_t;
         if(abs(signed_distance)<t_scaled) {
-            hitRec.t = t;
-            hitRec.p = at(ray, t);
-            hitRec.normal = (sdf.location * vec4f(signed_distance_normal(candidate, sdf), 0.0f)).xyz; // assume transform is orthogonal
-            hitRec.front_face = outside;
+            hitRec.p = transform_point(sdf.location, at(local_ray, local_t));
+            hitRec.t = length(hitRec.p - ray.origin);
+            hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(candidate, sdf)));
+            hitRec.front_face = sdf_select(sdf.class_index, local_ray.origin) >= 0;
+            if(hitRec.front_face == false){
+                hitRec.normal = -hitRec.normal;
+            }
             hitRec.material = materials[i32(sdf.material_id)];
             return true;
         }
         let step_size = max(abs(signed_distance), t_scaled);
-        t += step_size;
+        local_t += step_size;
         i = i + 1;
     }
+
     return false;
 }
 

@@ -143,14 +143,14 @@ impl Sandbox {
     pub(super) fn new(window: Arc<Window>) -> anyhow::Result<Self> {
 
         let camera = make_default_camera();
-        
+
         let sdf_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.02)), UniqueName("button".to_string()));
-        let sdf_sphere = NamedSdf::new(SdfSphere::new(0.2), UniqueName("bubble".to_string()));
-        
+        let sdf_sphere = NamedSdf::new(SdfSphere::new(1.0), UniqueName("bubble".to_string()));
+
         let mut sdf_registrator = SdfRegistrator::new();
         sdf_registrator.add(&sdf_box);
         sdf_registrator.add(&sdf_sphere);
-        
+
         let mut scene = Container::new(sdf_registrator);
 
         let gold_metal = scene.materials().add(&Material::new()
@@ -236,10 +236,30 @@ impl Sandbox {
             sdf_box.name(),
             bright_red_material).expect("failed to add an sdf box to the scene");
 
-        scene.add_sphere(Point::new(1.5, 0.6, -1.0), 0.25, gold_metal);
-        scene.add_sphere(Point::new(0.5, 0.0, -1.0), 0.25, blue_glass);
-        scene.add_sphere(Point::new(1.5, 0.0, -1.0), 0.25, green_mirror);
-        scene.add_sphere(Point::new(0.0, 0.0, -1.0), 0.25, coral_material);
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.5, 0.6, -1.0)) *Affine::from_scale(0.25) ),
+            sdf_sphere.name(),
+            gold_metal).expect("failed to add an sphere to the scene");
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.5, 0.0, 2.0)) *Affine::from_scale(0.25) ),
+            sdf_sphere.name(),
+            blue_glass).expect("failed to add an sphere to the scene");
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.5, 0.0, -1.0)) *Affine::from_scale(0.25) ),
+            sdf_sphere.name(),
+            blue_glass).expect("failed to add an sphere to the scene");
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0)) *Affine::from_scale(0.25) ),
+            sdf_sphere.name(),
+            green_mirror).expect("failed to add an sphere to the scene");
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.0, 0.0, -1.0)) *Affine::from_scale(0.25) ),
+            sdf_sphere.name(),
+            coral_material).expect("failed to add an sphere to the scene");
 
         scene.add_parallelogram(Point::new(-1.0, 1.0, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), light_material);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), black_material);
