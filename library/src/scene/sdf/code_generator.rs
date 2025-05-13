@@ -8,13 +8,13 @@ use crate::scene::sdf::dfs;
 use crate::scene::sdf::shader_code_dossier::ShaderCodeDossier;
 use crate::scene::sdf::stack::Stack;
 
-struct SdfRegistrator {
+pub(crate) struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
     uid_generator: UidGenerator,
     registered: HashSet<UniqueName>,
 }
 
-struct SdfCodeGenerator {
+pub(crate) struct SdfCodeGenerator {
     sdf_bodies: FunctionBodyDossier,
     registered: HashSet<UniqueName>,
 }
@@ -48,7 +48,7 @@ impl SdfCodeGenerator {
         };
 
         dfs::depth_first_search(target.sdf(), &mut context, |candidate, context, levels_below| {
-            let body = candidate.produce_body(&mut context.descendant_bodies);
+            let body = candidate.produce_body(&mut context.descendant_bodies, None);
             
             let occurrences = self.sdf_bodies.try_find(&body);
             if let Some(occurrences) = occurrences.filter(|o| o.occurrences() > 1) {
@@ -58,7 +58,7 @@ impl SdfCodeGenerator {
                 context.descendant_bodies_deduplicated.push(format_sdf_invocation(occurrences.name()));
                 context.last_body_name = Some(occurrences.name());
             } else {
-                let body = candidate.produce_body(&mut context.descendant_bodies_deduplicated);
+                let body = candidate.produce_body(&mut context.descendant_bodies_deduplicated, Some(levels_below));
                 context.descendant_bodies_deduplicated.push(body);
                 context.last_body_name = None;
             }
@@ -89,7 +89,7 @@ impl SdfRegistrator {
         dfs::depth_first_search(target.sdf(), &mut context, |candidate, context, levels_below| {
             let (this, descendant_bodies, target_name) = context;
             
-            let body = candidate.produce_body(descendant_bodies);
+            let body = candidate.produce_body(descendant_bodies, None);
             let body_seen_first_time = false == this.sdf_bodies.try_account_occurrence(&body, candidate.clone());
             
             if body_seen_first_time {
@@ -181,11 +181,7 @@ mod tests {
         assert_eq!(actual_first_name, actual_second_name);
 
         generator_under_test.generate_shared_code(&mut actual_code);
-        let expected_code = {
-            let mut code = make_single_function_declaration(geometry.clone(), &actual_first_name);
-            code.push('\n');
-            code
-        };
+        let expected_code = make_single_function_declaration(geometry.clone(), &actual_first_name);
         assert_eq!(actual_code, expected_code);
     }
     
@@ -208,15 +204,21 @@ mod tests {
 
         let expected_name = FunctionName::from(&name);
         let expected_code = "fn sdf_the_name(point: vec3f) -> f32 { \
-        let left = { \
-        let left = { \
-        let left = { let q = abs(point)-vec3f(1.0,2.0,3.0);  length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) }; \
-        let right = { let q = abs(point)-vec3f(5.0,7.0,11.0);  length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) };  \
-        min(left,right) }; \
-        let right = { length(point-vec3f(-17.0,-19.0,-23.0))-13.0 };  \
-        min(left,right) }; \
-        let right = { length(point-vec3f(31.0,37.0,41.0))-29.0 }; \
-        return min(left,right); }";
+        var left_3: f32;\n { \
+        var left_2: f32;\n { \
+        var left_1: f32;\n { \
+        let q = abs(point)-vec3f(1.0,2.0,3.0); \
+        left_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
+        var right_1: f32;\n { \
+        let q = abs(point)-vec3f(5.0,7.0,11.0); \
+        right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
+        left_2 = min(left_1,right_1); } \
+        var right_2: f32;\n { \
+        right_2 = length(point-vec3f(-17.0,-19.0,-23.0))-13.0; } \
+        left_3 = min(left_2,right_2); } \
+        var right_3: f32;\n { \
+        right_3 = length(point-vec3f(31.0,37.0,41.0))-29.0; } \
+        return min(left_3,right_3); }\n";
 
         assert_no_shared_code(generator_under_test);
         assert_eq!(actual_name, expected_name);
@@ -238,7 +240,7 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
         
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { let left = { sdf_test_1(point) }; let right = { sdf_test_1(point) }; return min(left,right); }";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_1: f32;\n { left_1 = sdf_test_1(point); } var right_1: f32;\n { right_1 = sdf_test_1(point); } return min(left_1,right_1); }\n";
         let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\n";
         
         assert_eq!(actual_name, expected_name);
@@ -270,8 +272,8 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { let left = { sdf_test_1(point) }; let right = { let left = { sdf_test_2(point) }; let right = { sdf_test_2(point) };  min(left,right) }; return min(left,right); }";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { let left = { sdf_test_1(point) }; let right = { sdf_test_1(point) }; return min(left,right); }\n";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_3: f32;\n { left_3 = sdf_test_1(point); } var right_3: f32;\n { var left_2: f32;\n { left_2 = sdf_test_2(point); } var right_2: f32;\n { right_2 = sdf_test_2(point); } right_3 = min(left_2,right_2); } return min(left_3,right_3); }\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { var left: f32;\n { left = sdf_test_1(point); } var right: f32;\n { right = sdf_test_1(point); } return min(left,right); }\n";
 
         assert_eq!(actual_name, expected_name);
         assert_eq!(actual_shared_code, expected_shared_code);
@@ -295,7 +297,7 @@ mod tests {
     #[must_use]
     fn make_single_function_declaration(geometry: Rc<dyn Sdf>, expected_name: &FunctionName) -> String {
         let mut result: String = String::new();
-        format_sdf_declaration(&geometry.produce_body(&mut Stack::new()), &expected_name, &mut result);
+        format_sdf_declaration(&geometry.produce_body(&mut Stack::new(), None), &expected_name, &mut result);
         result
     }
 

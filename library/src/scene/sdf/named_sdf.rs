@@ -41,12 +41,12 @@ mod tests {
     fn test_display() {
         let expected_display = "display_name";
         let system_under_test = UniqueName(expected_display.to_string());
-        
+
         let actual_display = format!("{}", system_under_test);
-        
+
         assert_eq!(actual_display, expected_display);
     }
-    
+
     #[test]
     fn test_equality_and_hash() {
         use std::collections::HashSet;

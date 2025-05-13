@@ -17,30 +17,41 @@ impl SdfUnion {
 
 impl Sdf for SdfUnion {
     #[must_use]
-    fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         assert!(children_bodies.size() >= 2);
 
+        let right_name = make_name_unique("right", level);
         let right_sdf = children_bodies
             .pop()
-            .to_block_expression()
-            .assign_to_variable("right");
-        
+            .to_scalar_assignment(&right_name);
+
+        let left_name = make_name_unique("left", level);
         let left_sdf = children_bodies
             .pop()
-            .to_block_expression()
-            .assign_to_variable("left");
+            .to_scalar_assignment(&left_name);
 
         ShaderCode::<FunctionBody>::new(format!(
-            "{left} {right} {return} min(left,right);",
+            "{left} {right} {return} min({left_name},{right_name});",
             left = left_sdf,
             right = right_sdf,
-            return = SHADER_RETURN_KEYWORD
+            return = SHADER_RETURN_KEYWORD,
+            left_name = left_name,
+            right_name = right_name,
         ))
     }
 
     #[must_use]
     fn children(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.left.clone(), self.right.clone()]
+    }
+}
+
+#[must_use]
+fn make_name_unique(name: &str, level: Option<usize>) -> String {
+    if let Some(level) = level {
+        format!("{}_{}", name, level)
+    } else {
+        name.to_string()
     }
 }
 
@@ -69,12 +80,12 @@ mod tests {
         let system_under_test = SdfUnion::new(left.clone(), right.clone());
 
         let mut children_bodies = Stack::<ShaderCode::<FunctionBody>>::new();
-        children_bodies.push(ShaderCode::<FunctionBody>::new(format!("{} ?_left", SHADER_RETURN_KEYWORD)),);
-        children_bodies.push(ShaderCode::<FunctionBody>::new(format!("{} !_right", SHADER_RETURN_KEYWORD)),);
+        children_bodies.push(ShaderCode::<FunctionBody>::new(format!("{} ?_left;", SHADER_RETURN_KEYWORD)),);
+        children_bodies.push(ShaderCode::<FunctionBody>::new(format!("{} !_right;", SHADER_RETURN_KEYWORD)),);
 
-        let actual_body = system_under_test.produce_body(&mut children_bodies);
+        let actual_body = system_under_test.produce_body(&mut children_bodies, Some(0));
 
-        let expected_body = "let left = { ?_left }; let right = { !_right }; return min(left,right);";
+        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; } return min(left_0,right_0);";
         assert_eq!(actual_body.to_string(), expected_body.to_string());
     }
 }

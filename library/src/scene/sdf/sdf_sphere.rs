@@ -27,7 +27,7 @@ impl SdfSphere {
 
 impl Sdf for SdfSphere {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         let radius = ShaderReadyFloat::new(self.radius);
         let center = format_point(self.center);
 
@@ -69,7 +69,7 @@ mod tests {
     fn test_construction() {
         let expected_radius = 7.0;
         let system_under_test = SdfSphere::new(expected_radius);
-        let actual_body = system_under_test.produce_body(&mut Stack::new());
+        let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         let expected_body = format!("{} length({})-{:.1};", SHADER_RETURN_KEYWORD, conventions::THE_POINT_PARAMETER_NAME, expected_radius);
         assert_eq!(String::from(actual_body).as_str(), expected_body);
     }
@@ -78,7 +78,7 @@ mod tests {
     fn test_offset_construction() {
         let expected_radius = 7.0;
         let system_under_test = SdfSphere::new_offset(expected_radius, Point::new(3.0, 5.0, -1.0));
-        let actual_body = system_under_test.produce_body(&mut Stack::new());
+        let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         let expected_body = format!("{} length({}-vec3f(3.0,5.0,-1.0))-{:.1};", SHADER_RETURN_KEYWORD, conventions::THE_POINT_PARAMETER_NAME, expected_radius);
         assert_eq!(String::from(actual_body).as_str(), expected_body);
     }

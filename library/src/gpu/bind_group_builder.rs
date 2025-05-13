@@ -2,7 +2,7 @@
 use std::rc::Rc;
 use wgpu::{BindGroup, Buffer};
 
-pub(super) struct BindGroupBuilder<'a> {
+pub(crate) struct BindGroupBuilder<'a> {
     index: u32,
     label: Option<&'a str>,
     layout: wgpu::BindGroupLayout,
@@ -15,7 +15,7 @@ impl<'a> BindGroupBuilder<'a> {
         Self { index, label, layout, accumulated_entries: HashMap::new() }
     }
 
-    pub(super) fn add_entry(&mut self, slot: u32, buffer: Rc<Buffer>) -> &mut Self {
+    pub(crate) fn add_entry(&mut self, slot: u32, buffer: Rc<Buffer>) -> &mut Self {
         self.accumulated_entries.insert(slot, buffer);
         self
     }
@@ -41,7 +41,7 @@ impl<'a> BindGroupBuilder<'a> {
     }
 
     #[must_use]
-    pub fn index(&self) -> u32 {
+    pub(super) fn index(&self) -> u32 {
         self.index
     }
 }

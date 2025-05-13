@@ -9,6 +9,7 @@ mod denoiser;
 mod bvh;
 mod serialization;
 mod gpu;
+mod tests;
 
 use std::cmp::max;
 use std::rc::Rc;

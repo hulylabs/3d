@@ -13,17 +13,13 @@ impl<T> Stack<T> {
     }
 
     pub fn pop(&mut self) -> T {
-        assert!(self.backend.len() > 0);
+        assert!(self.backend.len() > 0, "can't pop from empty stack");
         self.backend.pop().unwrap()
     }
 
     #[must_use]
     pub fn size(&self) -> usize {
         self.backend.len()
-    }
-    
-    pub(super) fn clear(&mut self) {
-        self.backend.clear();
     }
 }
 

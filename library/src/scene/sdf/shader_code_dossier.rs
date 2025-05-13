@@ -1,6 +1,6 @@
-﻿use std::rc::Rc;
-use crate::scene::sdf::sdf::Sdf;
+﻿use crate::scene::sdf::sdf::Sdf;
 use crate::scene::sdf::shader_function_name::FunctionName;
+use std::rc::Rc;
 
 pub(super) struct ShaderCodeDossier {
     name: FunctionName,
@@ -37,7 +37,7 @@ impl ShaderCodeDossier {
     pub(super) fn any_source(&self) -> Rc<dyn Sdf> {
         self.sources[0].clone()
     }
-    
+
     #[must_use]
     pub(super) fn sources(&self) -> &Vec<Rc<dyn Sdf>> {
         &self.sources
@@ -46,14 +46,14 @@ impl ShaderCodeDossier {
 
 #[cfg(test)]
 mod tests {
-    use crate::scene::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use super::*;
+    use crate::scene::sdf::dummy_sdf::tests::make_dummy_sdf;
 
     #[test]
     fn test_disjoint_set() {
-        
+
     }
-    
+
     #[test]
     fn test_construction() {
         let expected_name = FunctionName("name".to_string());

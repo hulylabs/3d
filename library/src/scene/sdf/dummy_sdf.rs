@@ -27,7 +27,7 @@ pub(crate) mod tests {
     
     impl Sdf for DummySdf {
         #[must_use]
-        fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>) -> ShaderCode<FunctionBody> {
+        fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
             ShaderCode::<FunctionBody>::new(self.payload.clone())
         }
 

@@ -91,10 +91,9 @@ impl FunctionBodyDossier {
                 children.push(successor_body.clone());
             }
             
-            let current_body = dossier.any_source().produce_body(&mut children);
+            let current_body = dossier.any_source().produce_body(&mut children, None);
             debug_assert_eq!(children.size(), 0);
             format_sdf_declaration(&current_body, dossier.name(), buffer);
-            buffer.push('\n');
             
             let reference = equality.get_equality_root(dossier.any_source());
             formatted.insert(reference.as_ref(), format_sdf_invocation(dossier.name()));

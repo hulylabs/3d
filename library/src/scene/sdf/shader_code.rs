@@ -7,12 +7,12 @@ use crate::scene::sdf::shader_function_name::FunctionName;
 #[derive(Clone)]
 pub struct FunctionBody;
 #[derive(Clone)]
-pub struct BlockExpression;
+pub struct VariableAssignment;
 #[derive(Clone)]
 pub struct Generic;
 
 pub trait NoReturn {}
-impl NoReturn for BlockExpression {}
+impl NoReturn for VariableAssignment {}
 impl NoReturn for Generic {}
 
 pub const SHADER_RETURN_KEYWORD: &str = "return";
@@ -60,13 +60,6 @@ impl<Kind: NoReturn> ShaderCode<Kind> {
     }
 }
 
-impl ShaderCode<BlockExpression> {
-    #[must_use]
-    pub(super) fn assign_to_variable(&self, variable_name: &str) -> ShaderCode<Generic> {
-        ShaderCode::<Generic>::new(format!("let {variable} = {{ {value} }};", variable = variable_name, value = self.value))
-    }
-}
-
 impl ShaderCode<FunctionBody> {
     #[must_use]
     pub fn new(value: String) -> Self {
@@ -75,15 +68,10 @@ impl ShaderCode<FunctionBody> {
     }
 
     #[must_use]
-    pub(super) fn to_block_expression(&self) -> ShaderCode<BlockExpression> {
-        let expression = self.value.replace(SHADER_RETURN_KEYWORD, "");
-        let trimmed = expression.trim();
-        
-        if trimmed.ends_with(";") {
-            ShaderCode::<BlockExpression>::new(trimmed[0..trimmed.len() - 1].to_string())
-        } else {
-            ShaderCode::<BlockExpression>::new(trimmed.to_string())
-        }
+    pub(super) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
+        let evaluation = self.value.replace(SHADER_RETURN_KEYWORD, format!("{} =", variable_name).as_str());
+        let assignment = format!("var {name}: f32;\n {{ {assignment} }}", name=variable_name, assignment=evaluation.trim());
+        ShaderCode::<VariableAssignment>::new(assignment.to_string())
     }
 }
 
@@ -105,7 +93,7 @@ pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode:
 pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_name: &FunctionName, buffer: &mut String) {
     write!(
         buffer,
-        "fn {name}({parameter}: vec3f) -> f32 {{ {body} }}",
+        "fn {name}({parameter}: vec3f) -> f32 {{ {body} }}\n",
         name = function_name,
         parameter = conventions::THE_POINT_PARAMETER_NAME,
         body = body
@@ -126,7 +114,7 @@ mod tests {
         format_sdf_declaration(&function_body, &function_name, &mut formatted);
 
         let expected = format!(
-            "fn {function}({parameter}: vec3f) -> f32 {{ return -7.0; }}",
+            "fn {function}({parameter}: vec3f) -> f32 {{ return -7.0; }}\n",
             function = function_name,
             parameter = conventions::THE_POINT_PARAMETER_NAME
         );
@@ -136,21 +124,13 @@ mod tests {
     #[test]
     fn test_function_body_conversion_to_block_expression() {
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_block_expression()),
-            String::from("13"),
+            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_scalar_assignment(&"foo".to_string())),
+            String::from("var foo: f32;\n { foo = 13; }"),
         );
 
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new(" return 17 ".to_string()).to_block_expression()),
-            String::from("17"),
-        );
-    }
-
-    #[test]
-    fn test_block_expression_assign_to_variable() {
-        assert_eq!(
-            String::from(ShaderCode::<BlockExpression>::new("value".to_string()).assign_to_variable("zag")),
-            String::from("let zag = { value };"),
+            String::from(ShaderCode::<FunctionBody>::new(" return 17; ".to_string()).to_scalar_assignment(&"zig".to_string())),
+            String::from("var zig: f32;\n { zig = 17; }"),
         );
     }
 }

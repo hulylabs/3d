@@ -26,8 +26,8 @@ impl SdfBox {
 
 impl Sdf for SdfBox {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>) -> ShaderCode::<FunctionBody> {
-        const RETURN_VALUE: &str = "length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);";
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode::<FunctionBody> {
+        const RETURN_VALUE: &str = "length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
         if self.center.to_vec().is_zero() {
             ShaderCode::<FunctionBody>::new(format!(
                 "let q = abs({parameter})-{extent}; {return} {value}",
@@ -67,9 +67,9 @@ mod tests {
     #[test]
     fn test_construction() {
         let system_under_test = SdfBox::new(Vector::new(1.0,3.0,5.0));
-        let actual_body = system_under_test.produce_body(&mut Stack::new());
+        let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         let expected_body = "let q = abs(point)-vec3f(1.0,3.0,5.0); \
-        return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);";
+        return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
         assert_eq!(String::from(actual_body).as_str(), expected_body);
     }
 
@@ -78,9 +78,9 @@ mod tests {
         let half_size = Vector::new(1.0, 3.0, 5.0);
         let center = Point::new(-7.0, 13.0, -17.0);
         let system_under_test = SdfBox::new_offset(half_size, center);
-        let actual_body = system_under_test.produce_body(&mut Stack::new());
+        let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         let expected_body = "let q = abs(point-vec3f(-7.0,13.0,-17.0))-vec3f(1.0,3.0,5.0); \
-        return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);";
+        return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
         assert_eq!(String::from(actual_body).as_str(), expected_body);
     }
 }
