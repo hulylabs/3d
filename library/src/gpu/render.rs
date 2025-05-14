@@ -621,7 +621,6 @@ mod tests {
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
 
-    const DEFAULT_SPHERES_COUNT: u32 = 4;
     const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
     const DEFAULT_SDF_COUNT: u32 = 6;
     const DEFAULT_TRIANGLES_COUNT: u32 = 7;

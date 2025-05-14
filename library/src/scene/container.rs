@@ -100,18 +100,17 @@ impl Container {
         })
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueName, material: MaterialIndex) -> Result<ObjectUid, ()> {
+    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueName, material: MaterialIndex) -> ObjectUid{
         let index_or_none = self.sdfs.index_for_name(class_uid);
         if let Some(index) = index_or_none {
-            let added = Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
+            Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
                 Box::new(Monolithic::new(
                     DataKind::Sdf as usize,
                     Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
                 ))
-            });
-            Ok(added)
+            })
         } else {
-            Err(())
+            panic!("registration for the '{}' sdf has not been found", class_uid);
         }
     }
 
@@ -144,6 +143,9 @@ impl Container {
         self.triangles.clear();
         for object in self.objects.keys() {
             self.uid_generator.put_back(*object);
+        }
+        for statistics in self.per_object_kind_statistics.iter_mut() {
+            statistics.clear_objects();
         }
         self.objects.clear();
     }
@@ -257,7 +259,7 @@ mod tests {
     #[must_use]
     fn make_single_sdf_sphere() -> (UniqueName, SdfRegistrator) {
         let mut sdf_classes = SdfRegistrator::new();
-        let sphere_sdf_name = UniqueName("identity_sphere".to_string());
+        let sphere_sdf_name = UniqueName::new("identity_sphere".to_string());
         sdf_classes.add(&NamedSdf::new(SdfSphere::new(1.0), sphere_sdf_name.clone()));
 
         (sphere_sdf_name, sdf_classes)
@@ -284,7 +286,7 @@ mod tests {
         
         assert_material_changed(material_two, material_one, parallelogram);
         
-        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), &sphere_sdf_name, material_one).unwrap();
+        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), &sphere_sdf_name, material_one);
         let version_before = system_under_test.borrow().data_version(DataKind::Sdf);
         assert_material_changed(material_one, material_two, sdf);
         assert_ne!(system_under_test.borrow().data_version(DataKind::Sdf), version_before);
@@ -329,7 +331,7 @@ mod tests {
             assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), i as usize);
             {
                 let data_version_before_addition = system_under_test.data_version(DataKind::Sdf);
-                system_under_test.add_sdf(&expected_transform, &sphere_sdf_name, expected_material).unwrap();
+                system_under_test.add_sdf(&expected_transform, &sphere_sdf_name, expected_material);
                 let data_version_after_addition = system_under_test.data_version(DataKind::Sdf);
                 assert_ne!(data_version_before_addition, data_version_after_addition);
             }
@@ -461,12 +463,9 @@ mod tests {
         let dummy_material = system_under_test.materials().add(&Material::default());
         let (mesh, meshes) = prepare_test_mesh();
         
-        let dummy_corners_radius = 0.0;
-        let dummy_size = Vector::new(1.0, 1.0, 1.0);
-        
-        let to_be_deleted = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material).unwrap();
+        let to_be_deleted = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
         let parallelogram_to_keep = system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
-        let sdf_to_keep = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material).unwrap();
+        let sdf_to_keep = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
         let mesh_to_keep = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
         
         system_under_test.delete(to_be_deleted);

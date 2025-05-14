@@ -8,7 +8,7 @@ pub(crate) struct FunctionName(pub String);
 impl From<&UniqueName> for FunctionName {
     #[must_use]
     fn from(value: &UniqueName) -> Self {
-        FunctionName(format!("sdf_{}", value.0))
+        FunctionName(format!("sdf_{}", value))
     }
 }
 
@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn test_from_unique_name() {
         let name = "my_shape";
-        let system_under_test = FunctionName::from(&UniqueName(name.to_string()));
+        let system_under_test = FunctionName::from(&UniqueName::new(name.to_string()));
         assert_eq!(system_under_test.0, "sdf_my_shape");
     }
 

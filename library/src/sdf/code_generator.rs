@@ -87,9 +87,9 @@ impl SdfCodeGenerator {
 impl SdfRegistrator {
     pub fn add(&mut self, target: &NamedSdf) {
         let unique = self.registered.insert(target.name().clone(), target.clone());
-        assert!(unique.is_none());
+        assert!(unique.is_none(), "name {} of given sdf is not unique", target.name());
         
-        let mut context = (self, Stack::<ShaderCode<FunctionBody>>::new(), target.name().0.as_str());
+        let mut context = (self, Stack::<ShaderCode<FunctionBody>>::new(), target.name().as_str());
         
         dfs::depth_first_search(target.sdf(), &mut context, |candidate, context, levels_below| {
             let (this, descendant_bodies, target_name) = context;
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_identical_names_registration_attempt() {
-        let name = UniqueName("the_name".to_string());
+        let name = UniqueName::new("the_name".to_string());
         let named = NamedSdf::new(make_dummy_sdf(), name.clone());
 
         let mut registrator_under_test = SdfRegistrator::new();
@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_single_one_node_sdf() {
         let geometry = make_dummy_sdf();
-        let name = UniqueName("the_name".to_string());
+        let name = UniqueName::new("the_name".to_string());
         let named = NamedSdf::new(geometry.clone(), name.clone());
         
         let mut registrator_under_test = SdfRegistrator::new();
@@ -167,10 +167,10 @@ mod tests {
     fn test_two_same_one_node_sdf() {
         let geometry = make_dummy_sdf();
         
-        let first_name = UniqueName("the_first".to_string());
+        let first_name = UniqueName::new("the_first".to_string());
         let first_named = NamedSdf::new(geometry.clone(), first_name.clone());
         
-        let second_name = UniqueName("the_second".to_string());
+        let second_name = UniqueName::new("the_second".to_string());
         let second_named = NamedSdf::new(geometry.clone(), second_name.clone());
 
         let mut registrator_under_test = SdfRegistrator::new();
@@ -203,7 +203,7 @@ mod tests {
             SdfSphere::new_offset(29.0, Point::new(31.0, 37.0, 41.0)),
         );
 
-        let name = UniqueName("the_name".to_string());
+        let name = UniqueName::new("the_name".to_string());
 
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
@@ -219,10 +219,10 @@ mod tests {
         right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
         left_2 = min(left_1,right_1); } \
         var right_2: f32;\n { \
-        right_2 = length(point-vec3f(-17.0,-19.0,-23.0))-13.0; } \
+        right_2 = length((point-vec3f(-17.0,-19.0,-23.0)))-13.0; } \
         left_3 = min(left_2,right_2); } \
         var right_3: f32;\n { \
-        right_3 = length(point-vec3f(31.0,37.0,41.0))-29.0; } \
+        right_3 = length((point-vec3f(31.0,37.0,41.0)))-29.0; } \
         return min(left_3,right_3); }\n";
 
         assert_no_shared_code(generator_under_test);
@@ -237,7 +237,7 @@ mod tests {
             SdfSphere::new(17.0),
         );
 
-        let name = UniqueName("test".to_string());
+        let name = UniqueName::new("test".to_string());
         
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
@@ -269,7 +269,7 @@ mod tests {
             ),
         );
 
-        let name = UniqueName("test".to_string());
+        let name = UniqueName::new("test".to_string());
 
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 

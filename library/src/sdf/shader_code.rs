@@ -1,9 +1,9 @@
-﻿use std::fmt::{Display, Formatter};
+﻿use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::sdf::shader_function_name::FunctionName;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::fmt::Write;
-use crate::objects::sdf_class_index::SdfClassIndex;
-use crate::sdf::shader_function_name::FunctionName;
 
 #[derive(Clone)]
 pub struct FunctionBody;
@@ -124,6 +124,14 @@ pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_n
         body = body
     )
     .expect("failed to format sdf declaration");
+}
+
+#[cfg(test)]
+impl<Kind> ShaderCode<Kind> {
+    #[must_use]
+    pub(crate) fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
 }
 
 #[cfg(test)]

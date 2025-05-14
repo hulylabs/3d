@@ -13,8 +13,8 @@ mod tests {
 
     #[test]
     fn test_sdf_selection_evaluation() {
-        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueName("identity_sphere".to_string()));
-        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueName("some_box".to_string()));
+        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueName::new("identity_sphere".to_string()));
+        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueName::new("some_box".to_string()));
         
         let mut registrator = SdfRegistrator::new();
         registrator.add(&sphere);

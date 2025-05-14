@@ -26,7 +26,23 @@ impl NamedSdf {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UniqueName(pub String);
+pub struct UniqueName(String);
+
+impl UniqueName {
+    #[must_use]
+    pub fn new(name: String) -> Self {
+        if name.chars().all(|c| c.is_ascii_alphabetic() || c == '_') {
+            UniqueName(name)
+        } else {
+            panic!("'{}' is invalid: names must contain only letters and underscores", name)
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl Display for UniqueName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
