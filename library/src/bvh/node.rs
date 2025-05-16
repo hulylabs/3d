@@ -91,7 +91,7 @@ impl BvhNode {
     }
 
     #[must_use]
-    pub(super) fn make_for(support: &mut Vec<Triangle>) -> Rc<RefCell<BvhNode>> {
+    pub(super) fn make_for(support: &mut [Triangle]) -> Rc<RefCell<BvhNode>> {
         if support.is_empty() {
             return Rc::new(RefCell::new(BvhNode::new()));
         }
@@ -136,14 +136,14 @@ impl BvhNode {
 
         let span = end - start;
 
-        if span <= 0 {
+        if span == 0 {
             node.content = Some(BvhNodeContent::new(start, end - start + 1));
         } else {
             let mut subarray = support[start..=end].to_vec();
             subarray.sort_by(comparator);
 
             for (index, object) in subarray.iter().enumerate() {
-                support[start + index] = object.clone();
+                support[start + index] = *object;
             }
 
             let middle = start + (span / 2);

@@ -8,27 +8,31 @@ denoiser = []
 
 [dependencies]
 cgmath = "0.18.0"
-log = "0.4.26"
+log = "0.4.27"
 wgpu = "25.0.0"
-winit = "0.30.9"
-bytemuck = { version = "1.22.0", features = ["derive"] }
+winit = "0.30.10"
+bytemuck = { version = "1.23.0", features = ["derive"] }
 pollster = "0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 thiserror = "2.0.12"
 palette = "0.7.6"
 obj-rs = { version = "0.7.4", features = ["vulkano"] }
-anyhow = "1.0.97"
+anyhow = "1.0.98"
 futures-intrusive = "0.5"
 futures = "0.3.31"
 exr = "1.73.0"
 pxm = "0.1.0"
 num_enum = "0.7.3"
+float-pretty-print = "0.1.1"
+derive_more = { version = "2.0.1", features = ["display"] }
+disjoint = "0.8.0"
 
 [dev-dependencies]
-tempfile = "3.19.1"
+tempfile = "3.20.0"
 image = "0.25.6"
 exr = "1.73.0"
+rstest = "0.25.0"
 
 [build-dependencies]
 glob = "0.3.2"

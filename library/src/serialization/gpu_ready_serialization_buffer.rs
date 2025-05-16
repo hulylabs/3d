@@ -182,7 +182,7 @@ pub(crate) struct SingleQuartetWriter<'a> {
     elements_written: usize,
 }
 
-impl<'a> Drop for SingleQuartetWriter<'a> {
+impl Drop for SingleQuartetWriter<'_> {
     fn drop(&mut self) {
         while self.elements_written < ELEMENTS_IN_QUARTET {
             self.write_float(DEFAULT_PAD_VALUE);

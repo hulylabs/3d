@@ -18,12 +18,12 @@ impl FrameBuffer {
     #[must_use]
     pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize) -> Self {
         Self {
-            object_id: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "object id"),
+            object_id: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::No, "object id"),
             
-            albedo: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "albedo"),
-            normal: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::NO, "normal"),
+            albedo: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::No, "albedo"),
+            normal: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::No, "normal"),
 
-            noisy_pixel_color: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::YES, "noisy pixel color"),
+            noisy_pixel_color: DuplexLayer::new(device, frame_buffer_size, SupportUpdateFromCpu::Yes, "noisy pixel color"),
         }
     }
 
@@ -40,8 +40,7 @@ impl FrameBuffer {
     pub(crate) fn prepare_albedo_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
         self.albedo.prepare_cpu_read(encoder);
     }
-
-    #[must_use]
+    
     pub(crate) fn copy_aux_buffers_from_gpu(&mut self) -> impl Future<Output = ()> {
         let object_id_read = self.object_id.read_cpu_copy();
         let normals_read = self.normal.read_cpu_copy();
@@ -49,16 +48,14 @@ impl FrameBuffer {
         
         async move {
             futures::join!(object_id_read, normals_read, albedo_read);
-            ()
         }
     }
 
-    #[must_use] #[cfg(feature = "denoiser")]
+    #[cfg(feature = "denoiser")]
     pub(crate) fn copy_pixel_colors_from_gpu(&mut self) -> impl Future<Output = ()> {
         self.noisy_pixel_color.read_cpu_copy()
     }
     
-    #[must_use]
     pub(crate) fn copy_albedo_from_gpu(&mut self) -> impl Future<Output = ()> {
         self.albedo.read_cpu_copy()
     }

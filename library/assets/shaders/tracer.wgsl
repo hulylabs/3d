@@ -21,7 +21,7 @@ const MAX_BOUNCES = 50;
 const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
-const MAX_SDF_RAY_MARCH_STEPS = 20;
+const MAX_SDF_RAY_MARCH_STEPS = 120;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
 
@@ -30,12 +30,11 @@ const MAX_SDF_RAY_MARCH_STEPS = 20;
 @group(1) @binding( 2) var<storage, read_write> normal_buffer: array<vec4f>;
 @group(1) @binding( 3) var<storage, read_write> albedo_buffer: array<vec4f>;
 
-@group(2) @binding( 0) var<storage, read> sphere_objs: array<Sphere>;
-@group(2) @binding( 1) var<storage, read> quad_objs: array<Parallelogram>;
-@group(2) @binding( 2) var<storage, read> sdf: array<SdfBox>;
-@group(2) @binding( 3) var<storage, read> triangles: array<Triangle>;
-@group(2) @binding( 4) var<storage, read> materials: array<Material>;
-@group(2) @binding( 5) var<storage, read> bvh: array<AABB>;
+@group(2) @binding( 0) var<storage, read> quad_objs: array<Parallelogram>;
+@group(2) @binding( 1) var<storage, read> sdf: array<Sdf>;
+@group(2) @binding( 2) var<storage, read> triangles: array<Triangle>;
+@group(2) @binding( 3) var<storage, read> materials: array<Material>;
+@group(2) @binding( 4) var<storage, read> bvh: array<AABB>;
 
 var<private> randState : u32 = 0u;
 var<private> pixelCoords : vec3f;
@@ -59,7 +58,6 @@ struct Uniforms {
     For an orthographic camera, the origin lies on the camera plane and varies per pixel. */
 	view_ray_origin_matrix : mat4x4f,
 
-	spheres_count: u32,
 	parallelograms_count: u32,
 	sdf_count: u32,
 	triangles_count: u32,
@@ -79,13 +77,6 @@ struct Material {
 	roughness : f32,		// diffuse strength
 	eta : f32,				// refractive index
 	material_type : f32,
-}
-
-struct Sphere {
-	center : vec3f,
-	r : f32,
-	object_uid : u32,
-	material_id : f32,
 }
 
 struct Parallelogram {
@@ -123,11 +114,10 @@ struct AABB {
 	axis : f32,
 }
 
-struct SdfBox {
+struct Sdf {
     location : mat4x4f,
     inverse_location : mat4x4f,
-    half_size : vec3f,
-    corners_radius : f32,
+    class_index : f32,
     material_id : f32,
     object_uid : u32,
 }
@@ -178,159 +168,72 @@ fn random_double(min : f32, max : f32) -> f32 {
 	return min + (max - min) * rand2D();
 }
 
+@must_use
 fn near_zero(v : vec3f) -> bool {
-	return (abs(v[0]) < 0 && abs(v[1]) < 0 && abs(v[2]) < 0);
+	return (abs(v[0]) < MIN_FLOAT && abs(v[1]) < MIN_FLOAT && abs(v[2]) < MIN_FLOAT);
 }
 
-fn signed_distance_to_box(point: vec3f, box: SdfBox) -> f32 {
-    let d = abs(point) - box.half_size + box.corners_radius;
-    return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, vec3f(0.0))) - box.corners_radius;
-}
-
-fn signed_distance_normal(point: vec3f, box: SdfBox) -> vec3f {
+@must_use
+fn signed_distance_normal(point: vec3f, sdf: Sdf) -> vec3f {
     let e = vec2f(1.0,-1.0)*0.5773*0.0005;
-    return normalize( e.xyy * signed_distance_to_box( point + e.xyy, box ) +
-					  e.yyx * signed_distance_to_box( point + e.yyx, box ) +
-					  e.yxy * signed_distance_to_box( point + e.yxy, box ) +
-					  e.xxx * signed_distance_to_box( point + e.xxx, box ) );
+    return normalize( e.xyy * sdf_select( sdf.class_index, point + e.xyy ) +
+					  e.yyx * sdf_select( sdf.class_index, point + e.yyx ) +
+					  e.yxy * sdf_select( sdf.class_index, point + e.yxy ) +
+					  e.xxx * sdf_select( sdf.class_index, point + e.xxx ) );
 }
 
-fn hit_sdf(sdf : SdfBox, tmin : f32, tmax : f32, ray : Ray) -> bool {
-    var t = tmin;
+@must_use
+fn transform_point(transformation: mat4x4f, point: vec3f) -> vec3f {
+    return (transformation * vec4f(point, 1.0f)).xyz;
+}
+
+@must_use
+fn transform_vector(transformation: mat4x4f, vector: vec3f) -> vec3f {
+    return (transformation * vec4f(vector, 0.0f)).xyz;
+}
+
+@must_use
+fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
+    let point = transform_point(transformation, at(ray, parameter));
+    return length(point - transformed_origin);
+}
+
+fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
+    let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
+    let local_ray_direction = transform_vector(sdf.inverse_location, ray.dir);
+    let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
+
+    var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
+    var local_t_max = transform_ray_parameter(sdf.inverse_location, ray, tmax, local_ray_origin);
+
     var i: i32 = 0;
-    let local_ray = Ray( (sdf.inverse_location * vec4f(ray.origin, 1.0f)).xyz , (sdf.inverse_location * vec4f(ray.dir, 0.0f)).xyz );
-    let outside = signed_distance_to_box(local_ray.origin, sdf) >= 0;
     loop {
         if (i >= MAX_SDF_RAY_MARCH_STEPS) {
             break;
         }
-        if (t>tmax) {
+        if (local_t>local_t_max) {
             break;
         }
-        let candidate = at(local_ray, t);
-        let signed_distance = signed_distance_to_box(candidate, sdf);
-        let t_scaled = 0.0001 * t;
+        let candidate = at(local_ray, local_t);
+        let signed_distance = sdf_select(sdf.class_index, candidate);
+        let t_scaled = 0.0001 * local_t;
         if(abs(signed_distance)<t_scaled) {
-            hitRec.t = t;
-            hitRec.p = at(ray, t);
-            hitRec.normal = (sdf.location * vec4f(signed_distance_normal(candidate, sdf), 0.0f)).xyz; // assume transform is orthogonal
-            hitRec.front_face = outside;
+            hitRec.p = transform_point(sdf.location, at(local_ray, local_t));
+            hitRec.t = length(hitRec.p - ray.origin);
+            hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(candidate, sdf)));
+            hitRec.front_face = sdf_select(sdf.class_index, local_ray.origin) >= 0;
+            if(hitRec.front_face == false){
+                hitRec.normal = -hitRec.normal;
+            }
             hitRec.material = materials[i32(sdf.material_id)];
             return true;
         }
         let step_size = max(abs(signed_distance), t_scaled);
-        t += step_size;
+        local_t += step_size;
         i = i + 1;
     }
+
     return false;
-}
-
-fn hit_sphere(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
-	let oc = ray.origin - sphere.center;
-	let a = dot(ray.dir, ray.dir);
-	let half_b = dot(ray.dir, oc);
-	let c = dot(oc, oc) - sphere.r * sphere.r;
-	let discriminant = half_b*half_b - a*c;
-
-	if(discriminant < 0) {
-		return false;
-	}
-
-	let sqrtd = sqrt(discriminant);
-	var root = (-half_b - sqrtd) / a;
-	if(root <= tmin || root >= tmax)
-	{
-		root = (-half_b + sqrtd) / a;
-		if(root <= tmin || root >= tmax)
-		{
-			return false;
-		}
-	}
-
-	hitRec.t = root;
-	hitRec.p = at(ray, root);
-
-	hitRec.normal = normalize(hitRec.p - sphere.center);
-
-	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
-	if(hitRec.front_face == false)
-	{
-		hitRec.normal = -hitRec.normal;
-	}
-
-	hitRec.material = materials[i32(sphere.material_id)];
-	return true;
-}
-
-fn hit_sphere_local(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> f32 {
-	let oc = ray.origin - sphere.center;
-	let a = dot(ray.dir, ray.dir);
-	let half_b = dot(ray.dir, oc);
-	let c = dot(oc, oc) - sphere.r * sphere.r;
-	let discriminant = half_b*half_b - a*c;
-
-	if(discriminant < 0) {
-		return MAX_FLOAT + 1;
-	}
-
-	let sqrtd = sqrt(discriminant);
-	var root = (-half_b - sqrtd) / a;
-	if(root <= tmin || root >= tmax)
-	{
-		root = (-half_b + sqrtd) / a;
-		if(root <= tmin || root >= tmax)
-		{
-			return MAX_FLOAT + 1;
-		}
-	}
-
-	return root;
-}
-
-fn hit_volume(sphere : Sphere, tmin : f32, tmax : f32, ray : Ray) -> bool {
-
-	var rec1 = hit_sphere_local(sphere, -MAX_FLOAT, MAX_FLOAT, ray);
-	if(rec1 == MAX_FLOAT + 1) {
-		return false;
-	}
-
-	var rec2 = hit_sphere_local(sphere, rec1 + 0.0001, MAX_FLOAT, ray);
-	if(rec2 == MAX_FLOAT + 1) {
-		return false;
-	}
-
-	if(rec1 < tmin) {
-		rec1 = tmin;
-	}
-
-	if(rec2 > tmax) {
-		rec2 = tmax;
-	}
-
-	if(rec1 >= rec2) {
-		return false;
-	}
-
-	if(rec1 < 0) {
-		rec1 = 0;
-	}
-
-	hitRec.material = materials[i32(sphere.material_id)];
-
-	let ray_length = length(ray.dir);
-	let dist_inside = (rec2 - rec1) * ray_length;
-	let hit_dist = hitRec.material.roughness * log(rand2D());
-
-	if(hit_dist > dist_inside) {
-		return false;
-	}
-
-	hitRec.t = rec1 + (hit_dist / ray_length);
-	hitRec.p = at(ray, hitRec.t);
-	hitRec.normal = normalize(hitRec.p - sphere.center);
-	hitRec.front_face = true;
-
-	return true;
 }
 
 fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
@@ -586,16 +489,6 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var hit_albedo: vec3f = vec3f(0.0f, 0.0f, 0.0f);
     var hit_normal: vec3f = vec3f(0.0f, 0.0f, 0.0f);
 
-    for(var i = u32(0); i < uniforms.spheres_count; i++){
-        let sphere = sphere_objs[i];
-        if(hit_sphere(sphere, ray_tmin, closest_so_far, ray)){
-            hit_uid = sphere.object_uid;
-            hit_albedo = materials[u32(sphere.material_id)].color;
-            hit_normal = hitRec.normal;
-            closest_so_far = hitRec.t;
-        }
-    }
-
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
@@ -692,27 +585,6 @@ fn hitScene(ray : Ray) -> bool
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
 
-	for(var i = u32(0); i < uniforms.spheres_count; i++)
-	{
-		let medium = materials[i32(sphere_objs[i].material_id)].material_type;
-		if(medium < ISOTROPIC)
-		{
-			if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-			{
-				hit_anything = true;
-				closest_so_far = hitRec.t;
-			}
-		}
-		else
-		{
-			if(hit_volume(sphere_objs[i], ray_tmin, closest_so_far, ray))
-			{
-				hit_anything = true;
-				closest_so_far = hitRec.t;
-			}
-		}
-	}
-
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++)
 	{
 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
@@ -790,10 +662,8 @@ fn hitScene(ray : Ray) -> bool
 		}
 	}
 
-	for(var i = u32(0); i < uniforms.sdf_count; i++)
-    {
-        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray))
-        {
+	for(var i = u32(0); i < uniforms.sdf_count; i++) {
+        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)) {
             hit_anything = true;
             closest_so_far = hitRec.t;
         }
@@ -802,18 +672,7 @@ fn hitScene(ray : Ray) -> bool
 	return hit_anything;
 }
 
-
-
-
-
-
 // ============== Other BVH traversal methods (brute force and using skip pointers) =================
-
-
-
-
-
-
 
 // fn hit_skipPointers(ray : Ray) -> bool
 // {
@@ -849,52 +708,6 @@ fn hitScene(ray : Ray) -> bool
 // 		else
 // 		{
 // 			i = i32(bvh[i].skip_link);
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.spheres_count; i++)
-// 	{
-// 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.parallelograms_count; i++)
-// 	{
-// 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	return hit_anything;
-// }
-
-
-
-// fn hit_bruteForce(ray : Ray) -> bool
-// {
-// 	var closest_so_far = MAX_FLOAT;
-// 	var hit_anything = false;
-
-// 	for(var i = 0; i < uniforms.triangles_count; i++)
-// 	{
-// 		if(hit_triangle(triangles[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.spheres_count; i++)
-// 	{
-// 		if(hit_sphere(sphere_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
 // 		}
 // 	}
 

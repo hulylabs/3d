@@ -22,5 +22,5 @@ fn main() {
     let mut options = CopyOptions::new();
     options.overwrite = true;
     copy(copy_source, copy_target.clone(), &options)
-        .expect(format!("failed to copy folder {:?} into {:?}", copy_source, copy_target).as_str());
+        .unwrap_or_else(|_| panic!("failed to copy folder {:?} into {:?}", copy_source, copy_target));
 }

@@ -40,27 +40,26 @@ fn cargo_info(text: &str) {
 
 fn link_with_oidn_macos_arm_dylib() {
     cargo_info("current OS is macOS on ARM (Apple Silicon)");
-    link_with_oidn_library(&libraries_macos_arm_folder(), "**/*.dylib");
+    link_with_oidn_library(libraries_macos_arm_folder(), "**/*.dylib");
 }
 
 fn link_with_oidn_windows_dll() {
     cargo_info("current OS is Windows: using oidn's DLLs");
-    link_with_oidn_library(&libraries_windows_folder(), "**/*.dll");
+    link_with_oidn_library(libraries_windows_folder(), "**/*.dll");
 }
 
-fn link_with_oidn_library(libraries_local_path: &PathBuf, dylib_filter: &str) {
+fn link_with_oidn_library(libraries_local_path: impl AsRef<Path>, dylib_filter: &str) {
     cargo_emit::rustc_link_lib!(OPEN_IMAGE_DENOISE_LIBRARY_NAME);
     
     let project_directory = env::current_dir().expect("failed to get current directory");
-    let compiler_libraries_search_path = project_directory.join(libraries_local_path.clone());
+    let compiler_libraries_search_path = project_directory.join(libraries_local_path.as_ref());
 
     cargo_emit::rustc_link_search!(compiler_libraries_search_path.to_str().expect("project lib path is not valid UTF-8") => "native");
     
-    let libraries_folder = libraries_local_path.to_str().expect("windows lib path is not valid UTF-8");
-    copy_directory_content_to_output(libraries_folder, OUT_DIRECTORY_UP_LEVEL, dylib_filter).unwrap();
+    copy_directory_content_to_output(libraries_local_path, OUT_DIRECTORY_UP_LEVEL, dylib_filter).unwrap();
 }
 
-pub fn copy_directory_content_to_output(local_path: &str, out_directory_up_level: usize, filter: &str) -> std::io::Result<()> {
+pub fn copy_directory_content_to_output(local_path: impl AsRef<Path>, out_directory_up_level: usize, filter: &str) -> std::io::Result<()> {
     let out_directory = env::var("OUT_DIR")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -72,7 +71,7 @@ pub fn copy_directory_content_to_output(local_path: &str, out_directory_up_level
 
     cargo_info(format!("destination = {:?}", target_directory).as_str());
 
-    {let absolute_path = fs::canonicalize(Path::new(local_path))?;
+    {let absolute_path = fs::canonicalize(local_path.as_ref())?;
         cargo_info(format!("source = {:?}", absolute_path).as_str());}
 
     copy_directory(local_path, &target_directory, &Some(PathPattern::new(filter)))?;
@@ -113,10 +112,8 @@ fn copy_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>, file_
         let destination_path = destination.as_ref().join(entry.file_name());
         if file_type.is_dir() {
             copy_directory(entry.path(), &destination_path, file_pattern)?;
-        } else {
-            if file_pattern.as_ref().map_or(true, |pattern| pattern.matches(&entry)) {
-                fs::copy(entry.path(), destination_path)?;
-            }
+        } else if file_pattern.as_ref().is_none_or(|pattern| pattern.matches(&entry)) {
+            fs::copy(entry.path(), destination_path)?;
         }
     }
     Ok(())

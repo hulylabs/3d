@@ -4,7 +4,6 @@
 pub(crate) struct Version(pub u64);
 
 impl AddAssign<u64> for Version {
-    #[must_use]
     fn add_assign(&mut self, right: u64) {
         self.0 += right;
     }

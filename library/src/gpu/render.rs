@@ -11,8 +11,7 @@ use crate::gpu::rasterization_pipeline::RasterizationPipeline;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfBox;
-use crate::objects::sphere::Sphere;
+use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::container::{Container, DataKind};
@@ -67,7 +66,6 @@ impl Renderer {
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
-            spheres_count: 0,
             parallelograms_count: 0,
             sdf_count: 0,
             triangles_count: 0,
@@ -79,7 +77,8 @@ impl Renderer {
         let resources = Resources::new(context.clone(), presentation_format);
         let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
         
-        let shader_module = resources.create_shader_module("ray tracer shader", CODE_FOR_GPU);
+        let shader_code = scene.append_sdf_handling_code(CODE_FOR_GPU);
+        let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
         
         let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module);
         let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
@@ -109,7 +108,7 @@ impl Renderer {
     #[must_use]
     fn update_buffer<T: GpuSerializationSize>(geometry_kind: &'static DataKind, buffer: &mut VersionedBuffer, resources: &Resources, scene: &Container, queue: &wgpu::Queue,) -> BufferUpdateStatus {
         let actual_data_version = scene.data_version(*geometry_kind);
-        let serializer = || Self::serialize_scene_data::<T>(&scene, &geometry_kind);
+        let serializer = || Self::serialize_scene_data::<T>(scene, geometry_kind);
         buffer.try_update_and_resize(actual_data_version, resources, queue, serializer)
     }
     
@@ -117,9 +116,8 @@ impl Renderer {
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
         let mut composite_status = BuffersUpdateStatus::new();
 
-        composite_status.merge_geometry(Self::update_buffer::<Sphere>(&DataKind::Sphere, &mut self.buffers.spheres, &self.resources, &self.scene, self.context.queue()));
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
-        composite_status.merge_geometry(Self::update_buffer::<SdfBox>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
+        composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
 
         composite_status.merger_material(self.buffers.materials.try_update_and_resize(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
         
@@ -149,8 +147,7 @@ impl Renderer {
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
         }
-
-        self.uniforms.spheres_count = self.scene.count_of_a_kind(DataKind::Sphere) as u32;
+        
         self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
         
@@ -187,7 +184,6 @@ impl Renderer {
         let materials = if scene.materials().count() > 0
             { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
-        uniforms.spheres_count = scene.count_of_a_kind(DataKind::Sphere) as u32;
         uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
         uniforms.triangles_count = triangles.total_slots_count() as u32;
@@ -197,11 +193,10 @@ impl Renderer {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
             ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
-            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels"),
-
-            spheres: Self::make_buffer::<Sphere>(scene, resources, &DataKind::Sphere),
+            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels"),
+            
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
-            sdf: Self::make_buffer::<SdfBox>(scene, resources, &DataKind::Sdf),
+            sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || triangles),
             bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
@@ -250,12 +245,11 @@ impl Renderer {
     fn create_geometry_buffers_bindings(device: &wgpu::Device, buffers: &Buffers, pipeline: &mut ComputePipeline) {
         pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), device, |bind_group| {
             bind_group
-                .add_entry(0, buffers.spheres.backend().clone())
-                .add_entry(1, buffers.parallelograms.backend().clone())
-                .add_entry(2, buffers.sdf.backend().clone())
-                .add_entry(3, buffers.triangles.backend().clone())
-                .add_entry(4, buffers.materials.backend().clone())
-                .add_entry(5, buffers.bvh.backend().clone())
+                .add_entry(0, buffers.parallelograms.backend().clone())
+                .add_entry(1, buffers.sdf.backend().clone())
+                .add_entry(2, buffers.triangles.backend().clone())
+                .add_entry(3, buffers.materials.backend().clone())
+                .add_entry(4, buffers.bvh.backend().clone())
             ;
         });
     }
@@ -324,8 +318,8 @@ impl Renderer {
         let new_frame_size = self.uniforms.frame_buffer_area();
 
         if previous_frame_size < new_frame_size {
-            self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
-            self.buffers.denoised_beauty_image = FrameBufferLayer::new(&self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels");
+            self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(self.context.device(), self.uniforms.frame_buffer_size);
+            self.buffers.denoised_beauty_image = FrameBufferLayer::new(self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
 
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
@@ -434,7 +428,7 @@ impl Renderer {
     #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_and_save(&mut self) {
         let divider = self.uniforms.frame_number as f32;
-        fn save(name: &str, width: usize, height: usize, data: &Vec<PodVector>, divider: f32,) {
+        fn save(name: &str, width: usize, height: usize, data: &[PodVector], divider: f32,) {
             denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
             |x,y| {
                 let element = data[y * width + x];
@@ -450,7 +444,7 @@ impl Renderer {
             for y in 0..height {
                 for x in 0..width {
                     let index = y * width + x;
-                    data_cast[index * 3 + 0] = data[index].x / divider;
+                    data_cast[index * 3    ] = data[index].x / divider;
                     data_cast[index * 3 + 1] = data[index].y / divider;
                     data_cast[index * 3 + 2] = data[index].z / divider;
                 }
@@ -541,8 +535,7 @@ struct Buffers {
 
     ray_tracing_frame_buffer: FrameBuffer,
     denoised_beauty_image: FrameBufferLayer<PodVector>,
-
-    spheres: VersionedBuffer,
+    
     parallelograms: VersionedBuffer,
     sdf: VersionedBuffer,
     triangles: VersionedBuffer,
@@ -555,8 +548,7 @@ struct Uniforms {
     frame_number: u32,
     if_reset_framebuffer: bool,
     camera: Camera,
-
-    spheres_count: u32,
+    
     parallelograms_count: u32,
     sdf_count: u32,
     triangles_count: u32,
@@ -587,7 +579,7 @@ impl Uniforms {
         self.frame_buffer_size.area()
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 2 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -602,11 +594,7 @@ impl Uniforms {
         
         self.camera.serialize_into(&mut result);
 
-        result.write_quartet_u32(self.spheres_count, self.parallelograms_count, self.sdf_count, self.triangles_count);
-
-        result.write_quartet(|writer| {
-            writer.write_integer(self.bvh_length);
-        });
+        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.triangles_count, self.bvh_length);
 
         debug_assert!(result.object_fully_written());
         result
@@ -618,18 +606,21 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use crate::serialization::pod_vector::PodVector;
     use cgmath::EuclideanSpace;
-    use exr::prelude::write_rgba_file;
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
     use wgpu::TextureFormat;
 
+    #[cfg(feature = "denoiser")]
+    use exr::prelude::write_rgba_file;
+    use crate::sdf::code_generator::SdfRegistrator;
+    #[cfg(feature = "denoiser")]
+    use crate::serialization::pod_vector::PodVector;
+
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
 
-    const DEFAULT_SPHERES_COUNT: u32 = 4;
     const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
     const DEFAULT_SDF_COUNT: u32 = 6;
     const DEFAULT_TRIANGLES_COUNT: u32 = 7;
@@ -646,7 +637,6 @@ mod tests {
             if_reset_framebuffer: false,
             camera,
             
-            spheres_count: DEFAULT_SPHERES_COUNT,
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
             sdf_count: DEFAULT_SDF_COUNT,
             triangles_count: DEFAULT_TRIANGLES_COUNT,
@@ -659,11 +649,10 @@ mod tests {
     const SLOT_FRAME_NUMBER: usize = 2;
     const SLOT_RESET_FRAME_BUFFER: usize = 3;
 
-    const SLOT_SPHERES_COUNT: usize = 36;
-    const SLOT_PARALLELOGRAMS_COUNT: usize = 37;
-    const SLOT_SDF_COUNT: usize = 38;
-    const SLOT_TRIANGLES_COUNT: usize = 39;
-    const SLOT_BVH_LENGTH: usize = 40;
+    const SLOT_PARALLELOGRAMS_COUNT: usize = 36;
+    const SLOT_SDF_COUNT: usize = 37;
+    const SLOT_TRIANGLES_COUNT: usize = 38;
+    const SLOT_BVH_LENGTH: usize = 39;
 
     #[test]
     fn test_uniforms_reset_frame_accumulation() {
@@ -743,7 +732,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
         assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
         
-        assert_eq!(actual_state_floats[SLOT_SPHERES_COUNT].to_bits(), DEFAULT_SPHERES_COUNT);
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
         assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
         assert_eq!(actual_state_floats[SLOT_TRIANGLES_COUNT].to_bits(), DEFAULT_TRIANGLES_COUNT);
@@ -762,7 +750,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = Container::new();
+        let mut scene = Container::new(SdfRegistrator::default());
         let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);

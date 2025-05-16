@@ -1,4 +1,7 @@
-//#![deny(warnings)] TODO: switch on, when ready
+#![deny(warnings)]
+#![allow(clippy::bool_assert_comparison)]
+#![allow(clippy::bool_comparison)]
+#![allow(clippy::needless_range_loop)]
 
 pub mod geometry;
 pub mod objects;
@@ -9,6 +12,8 @@ mod denoiser;
 mod bvh;
 mod serialization;
 mod gpu;
+mod tests;
+pub mod sdf;
 
 use std::cmp::max;
 use std::rc::Rc;
@@ -56,7 +61,7 @@ pub struct Engine {
     renderer: Renderer,
     
     fps_measurer: SlidingTimeFrame,
-    denosing_measurer: MinMaxTimeMeasurer,
+    denoising_measurer: MinMaxTimeMeasurer,
     performance_reporter: TimeThrottledInfoLogger,
 }
 
@@ -132,7 +137,7 @@ impl Engine {
         let lost_device_handler = {
             let device_was_lost = Arc::clone(&device_was_lost_flag);
             move |reason, message| {
-                info!("device was lost: {}, {}", format!("{:?}", reason), message);
+                info!("device was lost: {:?}, {}", reason, message);
                 device_was_lost.store(true, Ordering::SeqCst);
             }
         };
@@ -155,7 +160,7 @@ impl Engine {
             renderer,
 
             fps_measurer: SlidingTimeFrame::new(FPS_MEASUREMENT_SAMPLES),
-            denosing_measurer: MinMaxTimeMeasurer::new(),
+            denoising_measurer: MinMaxTimeMeasurer::default(),
             performance_reporter: TimeThrottledInfoLogger::new(FPS_WRITE_INTERVAL),
         };
 
@@ -187,7 +192,7 @@ impl Engine {
     // TODO: add handling of window obscuring → request to unload all occupied resources (iOS)
 
     pub fn handle_window_resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width <= 0 || new_size.height <= 0 {
+        if new_size.width == 0 || new_size.height == 0 {
             info!("window resized to zero — will not respond to render requests");
             self.ignore_render_requests = true;
             return;
@@ -230,10 +235,9 @@ impl Engine {
 
         #[cfg(feature = "denoiser")]
         {
-            //self.renderer.denoise_and_save();
-            self.denosing_measurer.start();
+            self.denoising_measurer.start();
             self.renderer.denoise_accumulated_image();
-            self.denosing_measurer.stop();
+            self.denoising_measurer.stop();
         }
 
         self.renderer.present(&surface_texture);
@@ -255,9 +259,9 @@ impl Engine {
                 format!(
                     "CPU observed FPS: {}; Denoising (ms): min={}, max={}, current={}",
                     fps,
-                    self.denosing_measurer.min_time().as_millis(),
-                    self.denosing_measurer.max_time().as_millis(),
-                    self.denosing_measurer.last_time().as_millis(),
+                    self.denoising_measurer.min_time().as_millis(),
+                    self.denoising_measurer.max_time().as_millis(),
+                    self.denoising_measurer.last_time().as_millis(),
                 )
             } else {
                 format!("CPU observed FPS: {}", fps)

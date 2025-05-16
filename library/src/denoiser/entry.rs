@@ -85,7 +85,7 @@ impl DenoiserExecutor<'_> {
     fn issue_write(&self, buffer: Rc<Buffer>, data: &[f32], what: &str) {
         let f32_image_size = image_f32_size(self.image_width, self.image_height);
         assert!(data.len() >= f32_image_size);
-        buffer.write_async(&data[..f32_image_size]).expect(format!("failed to issue {} write", what).as_str())
+        buffer.write_async(&data[..f32_image_size]).unwrap_or_else(|| panic!("failed to issue {} write", what))
     }
 
     pub(crate) fn filter(&mut self, denoised_pixels: &mut [f32]) {
@@ -98,7 +98,7 @@ impl DenoiserExecutor<'_> {
             .expect("denoise execution failure");
 
         if let Err(e) = self.device.get_error() {
-            error!("error denosing image: {:?}, {}", e.0, e.1);
+            error!("error denoising image: {:?}, {}", e.0, e.1);
         }
         
         self.storage.beauty_io_image.read_slice_into(image_f32_size, denoised_pixels).expect("failed to read denoised data back");

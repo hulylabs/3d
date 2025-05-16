@@ -1,6 +1,6 @@
 ﻿use std::time::{Duration, Instant};
 
-pub(crate) struct MinMaxTimeMeasurer {
+pub struct MinMaxTimeMeasurer {
     min_time: Duration,
     max_time: Duration,
     last_time: Duration,
@@ -10,7 +10,7 @@ pub(crate) struct MinMaxTimeMeasurer {
 
 impl MinMaxTimeMeasurer {
     #[must_use]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             min_time: Duration::from_secs(u64::MAX),
             max_time: Duration::from_secs(0),
@@ -18,19 +18,19 @@ impl MinMaxTimeMeasurer {
             time_mark: Instant::now(),
         }
     }
-
-    pub(crate) fn start(&mut self) {
+    
+    pub fn start(&mut self) {
         self.time_mark = Instant::now();
     }
-
-    pub(crate) fn stop(&mut self) {
+    
+    pub fn stop(&mut self) {
         let delta = self.time_mark.elapsed();
         self.min_time = self.min_time.min(delta);
         self.max_time = self.max_time.max(delta);
         self.last_time = delta;
     }
 
-    #[must_use]
+    #[must_use] 
     pub fn min_time(&self) -> Duration {
         self.min_time
     }
@@ -43,6 +43,13 @@ impl MinMaxTimeMeasurer {
     #[must_use]
     pub fn last_time(&self) -> Duration {
         self.last_time
+    }
+}
+
+impl Default for MinMaxTimeMeasurer {
+    #[must_use]
+    fn default() -> Self {
+        Self::new()
     }
 }
 

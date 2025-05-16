@@ -3,14 +3,14 @@ use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFrom
 use bytemuck::{AnyBitPattern, Pod};
 use std::rc::Rc;
 
-pub(super) struct DuplexLayer<T: Sized + AnyBitPattern + Pod> {
+pub(crate) struct DuplexLayer<T: Sized + AnyBitPattern + Pod> {
     gpu_located_part: FrameBufferLayer<T>,
     last_read: Vec<T>,
 }
 
 impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
     #[must_use]
-    pub(super) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, copy_back_to_gpu: SupportUpdateFromCpu, marker: &str) -> Self {
+    pub(crate) fn new(device: &wgpu::Device, frame_buffer_size: FrameBufferSize, copy_back_to_gpu: SupportUpdateFromCpu, marker: &str) -> Self {
         Self {
             gpu_located_part: FrameBufferLayer::<T>::new(device, frame_buffer_size, copy_back_to_gpu, marker),
             last_read: Vec::new(),
@@ -29,7 +29,7 @@ impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
     }
     
     #[must_use]
-    pub(super) fn cpu_copy(&self) -> &Vec<T> {
+    pub(crate) fn cpu_copy(&self) -> &Vec<T> {
         &self.last_read
     }
 
@@ -39,7 +39,7 @@ impl<T: Sized + AnyBitPattern + Pod> DuplexLayer<T> {
     }
 
     #[must_use]
-    pub(super) fn gpu_copy(&self) -> Rc<wgpu::Buffer> {
+    pub(crate) fn gpu_copy(&self) -> Rc<wgpu::Buffer> {
         self.gpu_located_part.gpu_render_target()
     }
 
