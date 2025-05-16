@@ -12,7 +12,7 @@ pub struct MaterialsWarehouse {
 impl MaterialsWarehouse {
     #[must_use]
     pub fn add(&mut self, target: &Material) -> MaterialIndex {
-        self.materials.push(target.clone());
+        self.materials.push(*target);
         self.materials_version += 1;
         MaterialIndex(self.materials.len() - 1)
     }

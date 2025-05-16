@@ -8,10 +8,12 @@ use library::sdf::code_generator::SdfRegistrator;
 use library::utils::object_uid::ObjectUid;
 use library::Engine;
 use std::sync::Arc;
+use log::info;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
+use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -84,20 +86,18 @@ impl Sandbox {
             }
         } else if MouseButton::Left == button {
             self.left_mouse_down = state == ElementState::Pressed;
-        } else if MouseButton::Middle == button {
-            if state == ElementState::Pressed {
-                if let Some((last_x, last_y)) = self.last_cursor_position {
-                    let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
-                    if let Some(clicked_object) = clicked_object_or_none {
-                        self.engine.scene().delete(clicked_object);
+        } else if MouseButton::Middle == button && state == ElementState::Pressed {
+            if let Some((last_x, last_y)) = self.last_cursor_position {
+                let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
+                if let Some(clicked_object) = clicked_object_or_none {
+                    self.engine.scene().delete(clicked_object);
 
-                        if let Some(selected_object) = self.selected_object {
-                            if selected_object.uid == clicked_object {
-                                self.selected_object = None;
-                            }
+                    if let Some(selected_object) = self.selected_object {
+                        if selected_object.uid == clicked_object {
+                            self.selected_object = None;
                         }
                     }
-                }   
+                }
             }
         }
     }
@@ -131,18 +131,24 @@ impl Sandbox {
                     self.world.switch_to_ui_box_scene(self.engine.scene());
                 } else if "2" == letter_key {
                     self.world.switch_to_sdf_exhibition_scene(self.engine.scene());
+                } else if "3" == letter_key {
+                    self.world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
+                } else if "4" == letter_key {
+                    self.world.switch_to_bender_scene(self.engine.scene());
                 }
             }
             _ => (),
         }
     }
     
-    #[must_use]
     pub(super) fn new(window: Arc<Window>) -> anyhow::Result<Self> {
-
+        let mut timer = MinMaxTimeMeasurer::new();
+        
+        timer.start();
+        
         let camera = make_default_camera();
         
-        let mut sdf_registrator = SdfRegistrator::new();
+        let mut sdf_registrator = SdfRegistrator::default();
         let sdf_classes = SdfClasses::new(&mut sdf_registrator);
         
         let mut scene = Container::new(sdf_registrator);
@@ -150,10 +156,12 @@ impl Sandbox {
         
         let world = World::new(sdf_classes, materials);
         world.switch_to_ui_box_scene(&mut scene);
-
+        let selected_object_material = world.selected_object_material();
+        
         let engine = pollster::block_on(Engine::new(window.clone(), scene, camera))?;
         
-        let selected_object_material = world.selected_object_material();
+        timer.stop();
+        info!("sandbox initialized in {} seconds", timer.max_time().as_secs_f64());
         
         Ok(Self { 
             engine,

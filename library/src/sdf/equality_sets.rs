@@ -1,4 +1,4 @@
-﻿use crate::sdf::sdf::Sdf;
+﻿use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code_dossier::ShaderCodeDossier;
 use disjoint::DisjointSetVec;
 use std::collections::HashMap;

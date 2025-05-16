@@ -10,7 +10,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let argument = input_points[index];
 
     var result: f32;
-    if (argument.x > 0) { result = argument.y; } else { result = argument.z; };
+    if (argument.x > 0) { result = argument.y; } else { result = argument.z; }
 
     output_values[index] = result;
 }

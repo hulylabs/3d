@@ -1,6 +1,6 @@
 ﻿use crate::geometry::alias::Point;
-use crate::sdf::sdf::Sdf;
-use crate::sdf::shader_code::{FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
+use crate::sdf::sdf_base::Sdf;
+use crate::sdf::shader_code::{FunctionBody, ShaderCode,};
 use crate::sdf::shader_formatting_utils::{format_scalar, format_sdf_parameter};
 use crate::sdf::stack::Stack;
 use cgmath::{EuclideanSpace};
@@ -15,7 +15,7 @@ impl SdfSphere {
     #[must_use]
     pub fn new_offset(radius: f64, center: Point) -> Rc<Self> {
         assert!(radius > 0.0, "radius must be > 0");
-        Rc::new(Self { radius, center })
+        Rc::new(Self { radius, center, })
     }
 
     #[must_use]
@@ -27,10 +27,9 @@ impl SdfSphere {
 
 impl Sdf for SdfSphere {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
-            "{return} length({parameter})-{radius};",
-            return = SHADER_RETURN_KEYWORD,
+            "return length({parameter})-{radius};",
             parameter = format_sdf_parameter(self.center),
             radius = format_scalar(self.radius)
         ))
@@ -44,6 +43,7 @@ impl Sdf for SdfSphere {
 
 #[cfg(test)]
 mod tests {
+    use crate::sdf::shader_code::conventions;
     use super::*;
 
     #[test]
@@ -59,8 +59,8 @@ mod tests {
         
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         
-        let expected_body = format!("{} length({})-{:.1};", SHADER_RETURN_KEYWORD, conventions::PARAMETER_NAME_THE_POINT, expected_radius);
-        assert_eq!(String::from(actual_body).as_str(), expected_body);
+        let expected_body = format!("return length({})-{:.1};", conventions::PARAMETER_NAME_THE_POINT, expected_radius);
+        assert_eq!(actual_body.as_str(), expected_body);
     }
     
     #[test]
@@ -70,7 +70,7 @@ mod tests {
         
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         
-        let expected_body = format!("{} length(({}-vec3f(3.0,5.0,-1.0)))-{:.1};", SHADER_RETURN_KEYWORD, conventions::PARAMETER_NAME_THE_POINT, expected_radius);
-        assert_eq!(String::from(actual_body).as_str(), expected_body);
+        let expected_body = format!("return length(({}-vec3f(3.0,5.0,-1.0)))-{:.1};", conventions::PARAMETER_NAME_THE_POINT, expected_radius);
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 }

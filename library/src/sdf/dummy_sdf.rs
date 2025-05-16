@@ -1,8 +1,8 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
     use std::rc::Rc;
-    use crate::sdf::sdf::Sdf;
-    use crate::sdf::shader_code::{FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
+    use crate::sdf::sdf_base::Sdf;
+    use crate::sdf::shader_code::{FunctionBody, ShaderCode,};
     use crate::sdf::stack::Stack;
 
     pub(crate) struct DummySdf {
@@ -13,7 +13,7 @@ pub(crate) mod tests {
         #[must_use]
         pub(crate) fn new(return_value: &str) -> Self {
             Self {
-                payload: format!("{return} {value};", return = SHADER_RETURN_KEYWORD, value = return_value),
+                payload: format!("return {value};", value = return_value),
             }
         }
     }

@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::{format_point, format_scalar, format_sdf_parameter, format_vector};
 use crate::sdf::stack::Stack;
@@ -17,7 +17,7 @@ impl SdfRoundBox {
     pub fn new_offset(half_size: Vector, radius: f64, center: Point) -> Rc<Self> {
         assert!(radius > 0.0, "radius must be > 0");
         assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0, "half_size must be > 0");
-        Rc::new(Self { half_size, radius, center })
+        Rc::new(Self { half_size, radius, center, })
     }
 
     #[must_use]

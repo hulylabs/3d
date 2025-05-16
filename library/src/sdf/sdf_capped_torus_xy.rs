@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::Point;
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::{format_point, format_scalar, format_sdf_parameter};
 use crate::sdf::stack::Stack;
@@ -19,12 +19,7 @@ impl SdfCappedTorusXy {
         assert!(major_radius > 0.0, "major radius must be > 0");
         assert!(minor_radius > 0.0, "minor radius must be > 0");
         let (sin, cos) = cut_angle.into().sin_cos();
-        Rc::new(Self {
-            sin_cos: Point::new(sin, cos, 0.0),
-            major_radius,
-            minor_radius,
-            center,
-        })
+        Rc::new(Self { sin_cos: Point::new(sin, cos, 0.0), major_radius, minor_radius, center, })
     }
 
     #[must_use]
@@ -37,7 +32,7 @@ impl SdfCappedTorusXy {
 
 impl Sdf for SdfCappedTorusXy {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "var p = {parameter};\n\
             p.x = abs(p.x);\n\
@@ -74,7 +69,7 @@ mod tests {
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
         let expected_body = "var p = point;\np.x = abs(p.x);\nvar k: f32; if (vec3f(0.5,0.8660253882,0.0).y*p.x>vec3f(0.5,0.8660253882,0.0).x*p.y)  { k = dot(p.xy,vec3f(0.5,0.8660253882,0.0).xy); } else { k = length(p.xy); };\nreturn sqrt(dot(p,p) + 2.0*2.0 - 2.0*2.0*k) - 0.5;";
-        assert_eq!(expected_body, actual_body.as_str());
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 
     #[test]
@@ -84,6 +79,6 @@ mod tests {
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
         let expected_body = "var p = (point-vec3f(1.0,2.0,3.0));\np.x = abs(p.x);\nvar k: f32; if (vec3f(0.5,0.8660253882,0.0).y*p.x>vec3f(0.5,0.8660253882,0.0).x*p.y)  { k = dot(p.xy,vec3f(0.5,0.8660253882,0.0).xy); } else { k = length(p.xy); };\nreturn sqrt(dot(p,p) + 2.0*2.0 - 2.0*2.0*k) - 0.5;";
-        assert_eq!(expected_body, actual_body.as_str());
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 }

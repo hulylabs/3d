@@ -1,13 +1,14 @@
 ﻿use crate::geometry::alias::Point;
-use crate::sdf::sdf::Sdf;
-use crate::sdf::shader_code::{FunctionBody, ShaderCode, SHADER_RETURN_KEYWORD};
-use crate::sdf::shader_formatting_utils::{format_point, format_sdf_parameter};
+use crate::sdf::sdf_base::Sdf;
+use crate::sdf::shader_code::{FunctionBody, ShaderCode};
+use crate::sdf::shader_formatting_utils::{format_scalar, format_sdf_parameter};
 use crate::sdf::stack::Stack;
-use cgmath::{EuclideanSpace};
+use cgmath::EuclideanSpace;
 use std::rc::Rc;
 
 pub struct SdfTorusXz {
-    radii: Point, // using only x and y components for the torus radii (t)
+    major_radius: f64,
+    minor_radius: f64,
     center: Point,
 }
 
@@ -16,10 +17,7 @@ impl SdfTorusXz {
     pub fn new_offset(major_radius: f64, minor_radius: f64, center: Point) -> Rc<Self> {
         assert!(major_radius > 0.0, "major radius must be > 0");
         assert!(minor_radius > 0.0, "minor radius must be > 0");
-        Rc::new(Self {
-            radii: Point::new(major_radius, minor_radius, 0.0),
-            center
-        })
+        Rc::new(Self { major_radius, minor_radius, center, })
     }
 
     #[must_use]
@@ -32,13 +30,13 @@ impl SdfTorusXz {
 
 impl Sdf for SdfTorusXz {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
-            "let q = vec2f(length({parameter}.xz)-{radii}.x, {parameter}.y); \
-            {return} length(q)-{radii}.y;",
+            "let q = vec2f(length({parameter}.xz)-{major_radius}, {parameter}.y); \
+            return length(q)-{minor_radius};",
             parameter = format_sdf_parameter(self.center),
-            radii = format_point(Point::new(self.radii.x, self.radii.y, 0.0)),
-            return = SHADER_RETURN_KEYWORD
+            major_radius = format_scalar(self.major_radius),
+            minor_radius = format_scalar(self.minor_radius),
         ))
     }
 
@@ -65,8 +63,8 @@ mod tests {
         let system_under_test = SdfTorusXz::new(major_radius, minor_radius);
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         
-        let expected_body = "let q = vec2f(length(point.xz)-vec3f(2.0,0.5,0.0).x, point.y); return length(q)-vec3f(2.0,0.5,0.0).y;";
-        assert_eq!(expected_body, actual_body.as_str());
+        let expected_body = "let q = vec2f(length(point.xz)-2.0, point.y); return length(q)-0.5;";
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 
     #[test]
@@ -76,7 +74,7 @@ mod tests {
         let system_under_test = SdfTorusXz::new_offset(major_radius, minor_radius, Point::new(1.0, 2.0, 3.0));
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
-        let expected_body = "let q = vec2f(length((point-vec3f(1.0,2.0,3.0)).xz)-vec3f(2.0,0.5,0.0).x, (point-vec3f(1.0,2.0,3.0)).y); return length(q)-vec3f(2.0,0.5,0.0).y;";
-        assert_eq!(expected_body, actual_body.as_str());
+        let expected_body = "let q = vec2f(length((point-vec3f(1.0,2.0,3.0)).xz)-2.0, (point-vec3f(1.0,2.0,3.0)).y); return length(q)-0.5;";
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 }

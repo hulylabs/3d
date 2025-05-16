@@ -21,7 +21,7 @@ const MAX_BOUNCES = 50;
 const STRATIFY = true;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
-const MAX_SDF_RAY_MARCH_STEPS = 20;
+const MAX_SDF_RAY_MARCH_STEPS = 120;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
 

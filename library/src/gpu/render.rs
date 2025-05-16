@@ -108,7 +108,7 @@ impl Renderer {
     #[must_use]
     fn update_buffer<T: GpuSerializationSize>(geometry_kind: &'static DataKind, buffer: &mut VersionedBuffer, resources: &Resources, scene: &Container, queue: &wgpu::Queue,) -> BufferUpdateStatus {
         let actual_data_version = scene.data_version(*geometry_kind);
-        let serializer = || Self::serialize_scene_data::<T>(&scene, &geometry_kind);
+        let serializer = || Self::serialize_scene_data::<T>(scene, geometry_kind);
         buffer.try_update_and_resize(actual_data_version, resources, queue, serializer)
     }
     
@@ -193,7 +193,7 @@ impl Renderer {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
             ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
-            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels"),
+            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels"),
             
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
@@ -318,8 +318,8 @@ impl Renderer {
         let new_frame_size = self.uniforms.frame_buffer_area();
 
         if previous_frame_size < new_frame_size {
-            self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(&self.context.device(), self.uniforms.frame_buffer_size);
-            self.buffers.denoised_beauty_image = FrameBufferLayer::new(&self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::YES, "denoised pixels");
+            self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(self.context.device(), self.uniforms.frame_buffer_size);
+            self.buffers.denoised_beauty_image = FrameBufferLayer::new(self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
 
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
@@ -428,7 +428,7 @@ impl Renderer {
     #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_and_save(&mut self) {
         let divider = self.uniforms.frame_number as f32;
-        fn save(name: &str, width: usize, height: usize, data: &Vec<PodVector>, divider: f32,) {
+        fn save(name: &str, width: usize, height: usize, data: &[PodVector], divider: f32,) {
             denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
             |x,y| {
                 let element = data[y * width + x];
@@ -444,7 +444,7 @@ impl Renderer {
             for y in 0..height {
                 for x in 0..width {
                     let index = y * width + x;
-                    data_cast[index * 3 + 0] = data[index].x / divider;
+                    data_cast[index * 3    ] = data[index].x / divider;
                     data_cast[index * 3 + 1] = data[index].y / divider;
                     data_cast[index * 3 + 2] = data[index].z / divider;
                 }
@@ -750,7 +750,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = Container::new(SdfRegistrator::new());
+        let mut scene = Container::new(SdfRegistrator::default());
         let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);

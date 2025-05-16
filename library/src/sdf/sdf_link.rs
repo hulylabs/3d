@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::Point;
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::{format_scalar, format_sdf_parameter};
 use crate::sdf::stack::Stack;
@@ -19,7 +19,7 @@ impl SdfLink {
         assert!(half_length > 0.0, "length must be positive");
         assert!(inner_radius > 0.0, "inner_radius must be positive");
         assert!(outer_radius > 0.0, "outer_radius must be positive");
-        Rc::new(Self { half_length, inner_radius, outer_radius, center })
+        Rc::new(Self { half_length, inner_radius, outer_radius, center, })
     }
 
     #[must_use]
@@ -33,7 +33,7 @@ impl SdfLink {
 
 impl Sdf for SdfLink {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let q = vec3f({parameter}.x, max(abs({parameter}.y)-{length},0.0), {parameter}.z);\n\
             return length(vec2f(length(q.xy)-{inner_radius},q.z)) - {outer_radius};",
@@ -67,7 +67,7 @@ mod tests {
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
         let expected_body = "let q = vec3f(point.x, max(abs(point.y)-2.0,0.0), point.z);\nreturn length(vec2f(length(q.xy)-0.5,q.z)) - 0.3000000119;";
-        assert_eq!(expected_body, actual_body.as_str());
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 
     #[test]
@@ -79,6 +79,6 @@ mod tests {
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
         let expected_body = "let q = vec3f((point-vec3f(1.0,2.0,3.0)).x, max(abs((point-vec3f(1.0,2.0,3.0)).y)-1.0,0.0), (point-vec3f(1.0,2.0,3.0)).z);\nreturn length(vec2f(length(q.xy)-0.3000000119,q.z)) - 0.6999999881;";
-        assert_eq!(expected_body, actual_body.as_str());
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 }

@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::{format_sdf_parameter, format_vector};
 use crate::sdf::stack::Stack;
@@ -15,7 +15,7 @@ impl SdfBox {
     #[must_use]
     pub fn new_offset(half_size: Vector, center: Point) -> Rc<Self> {
         assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0, "half_size must be > 0");
-        Rc::new(Self { half_size, center })
+        Rc::new(Self { half_size, center, })
     }
 
     #[must_use]
@@ -27,7 +27,7 @@ impl SdfBox {
 
 impl Sdf for SdfBox {
     #[must_use]
-    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode::<FunctionBody>>, _level: Option<usize>) -> ShaderCode::<FunctionBody> {
+    fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let q = abs({parameter})-{extent}; return \
             length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);",
@@ -60,7 +60,7 @@ mod tests {
         
         let expected_body = "let q = abs(point)-vec3f(1.0,3.0,5.0); \
         return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
-        assert_eq!(String::from(actual_body).as_str(), expected_body);
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 
     #[test]
@@ -73,6 +73,6 @@ mod tests {
         
         let expected_body = "let q = abs((point-vec3f(-7.0,13.0,-17.0)))-vec3f(1.0,3.0,5.0); \
         return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
-        assert_eq!(String::from(actual_body).as_str(), expected_body);
+        assert_eq!(actual_body.as_str(), expected_body);
     }
 }

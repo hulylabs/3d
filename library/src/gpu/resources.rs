@@ -98,9 +98,9 @@ pub(crate) enum ComputeRoutine {
 impl ComputeRoutine {
     fn name(&self) -> Option<&'static str> {
         match self {
-            ComputeRoutine::ShaderObjectIdEntryPoint { .. } => Some("compute_object_id_buffer"),
-            ComputeRoutine::ShaderRayTracingEntryPoint { .. } => Some("compute_color_buffer"),
-            #[cfg(test)] ComputeRoutine::Default { .. } => None,
+            ComputeRoutine::ShaderObjectIdEntryPoint => Some("compute_object_id_buffer"),
+            ComputeRoutine::ShaderRayTracingEntryPoint => Some("compute_color_buffer"),
+            #[cfg(test)] ComputeRoutine::Default => None,
         }
     }
 }

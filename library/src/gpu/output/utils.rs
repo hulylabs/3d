@@ -72,14 +72,12 @@ pub(super) fn frame_buffer_layer_size_bytes(parameters: &FrameBufferLayerParamet
 pub(super) fn create_frame_buffer_layer(device: &wgpu::Device, parameters: &FrameBufferLayerParameters) -> wgpu::Buffer {
     let size_bytes = frame_buffer_layer_size_bytes(parameters);
 
-    let result = device.create_buffer(&wgpu::BufferDescriptor {
+    device.create_buffer(&wgpu::BufferDescriptor {
         label: parameters.label,
         usage: parameters.usage,
         size: size_bytes,
         mapped_at_creation: false,
-    });
-
-    result
+    })
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ pub(crate) mod tests {
 
         let input_buffer = resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
         let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
-        let mut output_buffer = DuplexLayer::<f32>::new(context.device(), buffer_size, SupportUpdateFromCpu::YES, "output");
+        let mut output_buffer = DuplexLayer::<f32>::new(context.device(), buffer_size, SupportUpdateFromCpu::Yes, "output");
 
         let mut pipeline = ComputePipeline::new(resources.create_compute_pipeline(ComputeRoutine::Default, &module));
         pipeline.setup_bind_group(0, None, context.device(), |bind_group|{

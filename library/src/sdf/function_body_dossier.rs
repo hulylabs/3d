@@ -1,6 +1,6 @@
 ﻿use crate::sdf::equality_sets::EqualitySets;
 use crate::sdf::shader_code_dossier::ShaderCodeDossier;
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
 use crate::sdf::shader_function_name::FunctionName;
 use crate::sdf::stack::Stack;
@@ -73,7 +73,7 @@ impl FunctionBodyDossier {
     by their physical memory addresses—we need to determine equality in terms of their code (SDF 
     code). The task is: given a node from the SDF tree, we need to get the code of its children. 
     We've already generated that code (since we're going bottom-up). But the issue is that this 
-    code might have been generated for a physically different object, even if its identical to any
+    code might have been generated for a physically different object, even if it's identical to any
     of the child. To find that other object, we use a disjoint set under the hood of the 
     EqualitySets object.
     */

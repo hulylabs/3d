@@ -13,7 +13,7 @@ impl<T> Stack<T> {
     }
 
     pub fn pop(&mut self) -> T {
-        assert!(self.backend.len() > 0, "can't pop from empty stack");
+        assert_eq!(self.backend.is_empty(), false, "can't pop from empty stack");
         self.backend.pop().unwrap()
     }
 

@@ -1,6 +1,6 @@
 ﻿use std::rc::Rc;
 use std::fmt::{Display, Formatter};
-use crate::sdf::sdf::Sdf;
+use crate::sdf::sdf_base::Sdf;
 
 #[derive(Clone)]
 pub struct NamedSdf {

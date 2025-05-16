@@ -1,4 +1,4 @@
-//#![deny(warnings)] TODO: switch on, when ready
+#![deny(warnings)]
 
 mod sandbox;
 mod world;

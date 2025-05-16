@@ -120,12 +120,19 @@ impl SdfRegistrator {
     }
 }
 
+impl Default for SdfRegistrator {
+    #[must_use]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::sdf::named_sdf::UniqueName;
-    use crate::sdf::sdf::Sdf;
+    use crate::sdf::sdf_base::Sdf;
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::sdf::sdf_union::SdfUnion;
@@ -288,7 +295,7 @@ mod tests {
     #[must_use]
     fn generate_code(sdf: Rc<dyn Sdf>, name: UniqueName) -> (FunctionName, String, SdfCodeGenerator) {
         let named = NamedSdf::new(sdf, name);
-        let mut registrator_under_test = SdfRegistrator::new();
+        let mut registrator_under_test = SdfRegistrator::default();
         
         registrator_under_test.add(&named);
         let generator_under_test = SdfCodeGenerator::new(registrator_under_test);

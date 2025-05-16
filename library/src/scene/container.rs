@@ -101,17 +101,13 @@ impl Container {
     }
 
     pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueName, material: MaterialIndex) -> ObjectUid{
-        let index_or_none = self.sdfs.index_for_name(class_uid);
-        if let Some(index) = index_or_none {
-            Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
-                Box::new(Monolithic::new(
-                    DataKind::Sdf as usize,
-                    Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
-                ))
-            })
-        } else {
-            panic!("registration for the '{}' sdf has not been found", class_uid);
-        }
+        let index = self.sdfs.index_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
+        Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
+            Box::new(Monolithic::new(
+                DataKind::Sdf as usize,
+                Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
+            ))
+        })
     }
 
     pub fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> ObjectUid {
@@ -177,7 +173,7 @@ impl Container {
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
         uid_generator: &mut UidGenerator,
-        statistics: &mut Vec<Statistics>,
+        statistics: &mut [Statistics],
         create_object: Constructor,
     ) -> ObjectUid {
         let uid = uid_generator.next();
@@ -258,7 +254,7 @@ mod tests {
 
     #[must_use]
     fn make_single_sdf_sphere() -> (UniqueName, SdfRegistrator) {
-        let mut sdf_classes = SdfRegistrator::new();
+        let mut sdf_classes = SdfRegistrator::default();
         let sphere_sdf_name = UniqueName::new("identity_sphere".to_string());
         sdf_classes.add(&NamedSdf::new(SdfSphere::new(1.0), sphere_sdf_name.clone()));
 
@@ -344,7 +340,7 @@ mod tests {
     
     #[test]
     fn test_add_parallelogram() {
-        let mut system_under_test = Container::new(SdfRegistrator::new());
+        let mut system_under_test = Container::new(SdfRegistrator::default());
 
         const PARALLELOGRAM_TO_ADD: u32 = 4;
 
@@ -432,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_delete_mesh() {
-        let mut system_under_test = Container::new(SdfRegistrator::new());
+        let mut system_under_test = Container::new(SdfRegistrator::default());
 
         let (mesh, meshes) = prepare_test_mesh();
         let dummy_material = system_under_test.materials().add(&Material::default());
