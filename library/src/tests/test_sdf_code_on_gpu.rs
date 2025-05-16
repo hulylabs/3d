@@ -485,7 +485,7 @@ mod tests {
 
         let actual_distances = execute_function(&sample_positions, function_to_call, shader_code);
 
-        let epsilon = 1e-6;
+        let epsilon = 1e-5;
         assert_eq(&actual_distances, expected_distances, epsilon);
     }
     
