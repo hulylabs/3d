@@ -61,7 +61,7 @@ pub struct Engine {
     renderer: Renderer,
     
     fps_measurer: SlidingTimeFrame,
-    denosing_measurer: MinMaxTimeMeasurer,
+    denoising_measurer: MinMaxTimeMeasurer,
     performance_reporter: TimeThrottledInfoLogger,
 }
 
@@ -160,7 +160,7 @@ impl Engine {
             renderer,
 
             fps_measurer: SlidingTimeFrame::new(FPS_MEASUREMENT_SAMPLES),
-            denosing_measurer: MinMaxTimeMeasurer::default(),
+            denoising_measurer: MinMaxTimeMeasurer::default(),
             performance_reporter: TimeThrottledInfoLogger::new(FPS_WRITE_INTERVAL),
         };
 
@@ -235,9 +235,9 @@ impl Engine {
 
         #[cfg(feature = "denoiser")]
         {
-            self.denosing_measurer.start();
+            self.denoising_measurer.start();
             self.renderer.denoise_accumulated_image();
-            self.denosing_measurer.stop();
+            self.denoising_measurer.stop();
         }
 
         self.renderer.present(&surface_texture);
@@ -259,9 +259,9 @@ impl Engine {
                 format!(
                     "CPU observed FPS: {}; Denoising (ms): min={}, max={}, current={}",
                     fps,
-                    self.denosing_measurer.min_time().as_millis(),
-                    self.denosing_measurer.max_time().as_millis(),
-                    self.denosing_measurer.last_time().as_millis(),
+                    self.denoising_measurer.min_time().as_millis(),
+                    self.denoising_measurer.max_time().as_millis(),
+                    self.denoising_measurer.last_time().as_millis(),
                 )
             } else {
                 format!("CPU observed FPS: {}", fps)

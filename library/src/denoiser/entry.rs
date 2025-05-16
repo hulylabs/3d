@@ -98,7 +98,7 @@ impl DenoiserExecutor<'_> {
             .expect("denoise execution failure");
 
         if let Err(e) = self.device.get_error() {
-            error!("error denosing image: {:?}, {}", e.0, e.1);
+            error!("error denoising image: {:?}, {}", e.0, e.1);
         }
         
         self.storage.beauty_io_image.read_slice_into(image_f32_size, denoised_pixels).expect("failed to read denoised data back");

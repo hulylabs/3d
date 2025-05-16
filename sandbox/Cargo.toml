@@ -5,13 +5,13 @@ edition = "2024"
 
 [dependencies]
 log = "0.4.27"
-winit = "0.30.9"
+winit = "0.30.10"
 pollster = "0.4"
 cgmath = "0.18.0"
-anyhow = "1.0.97"
+anyhow = "1.0.98"
 env_logger = "0.11.8"
 
-library = { path = "../library", features = ["denoiser"] }
+library = { path = "../library", features = [] }
 
 [build-dependencies]
 fs_extra = "1.3.0"

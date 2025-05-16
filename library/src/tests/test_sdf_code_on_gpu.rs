@@ -27,6 +27,7 @@ mod tests {
     use crate::sdf::shader_function_name::FunctionName;
     use crate::serialization::pod_vector::PodVector;
     use crate::tests::assert_utils::tests::assert_eq;
+    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use crate::tests::gpu_code_execution::tests::execute_code;
     use cgmath::Deg;
     use std::fmt::Write;
@@ -484,9 +485,8 @@ mod tests {
         generator.generate_shared_code(&mut shader_code);
 
         let actual_distances = execute_function(&sample_positions, function_to_call, shader_code);
-
-        let epsilon = 1e-5;
-        assert_eq(&actual_distances, expected_distances, epsilon);
+        
+        assert_eq(&actual_distances, expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }
     
     #[must_use]

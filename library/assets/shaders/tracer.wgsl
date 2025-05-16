@@ -170,7 +170,7 @@ fn random_double(min : f32, max : f32) -> f32 {
 
 @must_use
 fn near_zero(v : vec3f) -> bool {
-	return (abs(v[0]) < 0 && abs(v[1]) < 0 && abs(v[2]) < 0);
+	return (abs(v[0]) < MIN_FLOAT && abs(v[1]) < MIN_FLOAT && abs(v[2]) < MIN_FLOAT);
 }
 
 @must_use

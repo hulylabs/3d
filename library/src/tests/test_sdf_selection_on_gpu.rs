@@ -8,6 +8,7 @@ mod tests {
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
     use crate::tests::assert_utils::tests::assert_eq;
+    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use crate::tests::gpu_code_execution::tests::execute_code;
     use std::fmt::Write;
 
@@ -51,9 +52,8 @@ mod tests {
         ];
 
         let actual_distances = execute_code(&input_points, the_code.as_str());
-
-        let epsilon = 1e-7;
-        assert_eq(&actual_distances, &expected_distances, epsilon);
+        
+        assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }
     
     const FUNCTION_EXECUTOR: &str = include_str!("sdf_function_executor.wgsl");
