@@ -579,17 +579,24 @@ impl Uniforms {
         self.frame_buffer_size.area()
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 2 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
         let mut result = GpuReadySerializationBuffer::new(1, Self::SERIALIZED_QUARTET_COUNT);
 
+        result.write_quartet(|writer| {
+            writer.write_integer(self.frame_buffer_size.width());
+            writer.write_integer(self.frame_buffer_size.height());
+            writer.write_integer(self.frame_buffer_size.area());
+            writer.write_float(self.frame_buffer_size.aspect());
+        });
+        
         result.write_quartet_f32(
-            self.frame_buffer_size.width() as f32,
-            self.frame_buffer_size.height() as f32,
-            self.frame_number as f32,
-            if self.if_reset_framebuffer { 1.0 } else { 0.0 },
+           1.0 / self.frame_buffer_size.width() as f32,
+           1.0 / self.frame_buffer_size.height() as f32,
+           self.frame_number as f32,
+           if self.if_reset_framebuffer { 1.0 } else { 0.0 },
         );
         
         self.camera.serialize_into(&mut result);
@@ -646,13 +653,18 @@ mod tests {
 
     const SLOT_FRAME_WIDTH: usize = 0;
     const SLOT_FRAME_HEIGHT: usize = 1;
-    const SLOT_FRAME_NUMBER: usize = 2;
-    const SLOT_RESET_FRAME_BUFFER: usize = 3;
+    const SLOT_FRAME_AREA: usize = 2;
+    const SLOT_FRAME_ASPECT: usize = 3;
 
-    const SLOT_PARALLELOGRAMS_COUNT: usize = 36;
-    const SLOT_SDF_COUNT: usize = 37;
-    const SLOT_TRIANGLES_COUNT: usize = 38;
-    const SLOT_BVH_LENGTH: usize = 39;
+    const SLOT_FRAME_INVERTED_WIDTH: usize = 4;
+    const SLOT_FRAME_INVERTED_HEIGHT: usize = 5;
+    const SLOT_FRAME_NUMBER: usize = 6;
+    const SLOT_RESET_FRAME_BUFFER: usize = 7;
+
+    const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
+    const SLOT_SDF_COUNT: usize = 41;
+    const SLOT_TRIANGLES_COUNT: usize = 42;
+    const SLOT_BVH_LENGTH: usize = 43;
 
     #[test]
     fn test_uniforms_reset_frame_accumulation() {
@@ -693,8 +705,12 @@ mod tests {
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
-        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], expected_width as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], expected_height as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), expected_width);
+        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT].to_bits(), expected_height);
+        assert_eq!(actual_state_floats[SLOT_FRAME_AREA].to_bits(), expected_width * expected_height);
+        assert_eq!(actual_state_floats[SLOT_FRAME_ASPECT], expected_width as f32 / expected_height as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_WIDTH], 1.0 / expected_width as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / expected_height as f32);
     }
 
     #[test]
@@ -727,8 +743,12 @@ mod tests {
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
-        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH], DEFAULT_FRAME_WIDTH as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT], DEFAULT_FRAME_HEIGHT as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), DEFAULT_FRAME_WIDTH);
+        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT].to_bits(), DEFAULT_FRAME_HEIGHT);
+        assert_eq!(actual_state_floats[SLOT_FRAME_AREA].to_bits(), DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT);
+        assert_eq!(actual_state_floats[SLOT_FRAME_ASPECT], DEFAULT_FRAME_WIDTH as f32 / DEFAULT_FRAME_HEIGHT as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_WIDTH], 1.0 / DEFAULT_FRAME_WIDTH as f32);
+        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / DEFAULT_FRAME_HEIGHT as f32);
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
         assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
         
@@ -755,7 +775,6 @@ mod tests {
         
         scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);
 
-
         let context = create_headless_wgpu_context();
 
         let mut system_under_test 
@@ -774,15 +793,7 @@ mod tests {
     }
 
     #[cfg(feature = "denoiser")]
-    fn assert_parallelogram_vector_data_in_center(data: &Vec<PodVector>, expected: PodVector, data_name: &str) {
-        assert_eq!(data.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
-
-        // TODO: compare with reference image from file, not a single pixel
-        let center = TEST_FRAME_BUFFER_WIDTH * (TEST_FRAME_BUFFER_HEIGHT / 2) + TEST_FRAME_BUFFER_WIDTH / 2;
-        let actual = data[center as usize];
-
-        assert_eq!(actual, expected);
-
+    fn assert_parallelogram_vector_data_in_center(data: &Vec<PodVector>, parallelogram: PodVector, background: PodVector, data_name: &str) {
         let exr_path = Path::new("tests").join(format!("out/{}.exr", data_name));
 
         write_rgba_file(exr_path, TEST_FRAME_BUFFER_WIDTH as usize, TEST_FRAME_BUFFER_HEIGHT as usize,
@@ -792,35 +803,64 @@ mod tests {
             (element.x, element.y, element.z, 1.0)
         }
         ).unwrap();
+
+        assert_eq!(data.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
+        
+        assert_parallelogram_in_center(data, parallelogram, background);
     }
 
     #[cfg(feature = "denoiser")]
     fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer) {
         let (_, albedo, _) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
-        let expected_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
-        assert_parallelogram_vector_data_in_center(albedo, expected_color, "single_parallelogram_colors");
+        let parallelogram_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
+        let background_color = PodVector { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
+        assert_parallelogram_vector_data_in_center(albedo, parallelogram_color, background_color, "single_parallelogram_colors");
     }
 
     #[cfg(feature = "denoiser")]
     fn assert_parallelogram_normals_in_center(system_under_test: &mut Renderer) {
         let (_, _, normal_map) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
-        let expected_normal = PodVector { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
-        assert_parallelogram_vector_data_in_center(normal_map, expected_normal, "single_parallelogram_normals");
+        let parallelogram_normal = PodVector { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        let background_normal = PodVector { x: 0.0, y: 0.0, z: 0.0, w: 0.0 };
+        assert_parallelogram_vector_data_in_center(normal_map, parallelogram_normal, background_normal, "single_parallelogram_normals");
     }
 
     fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer) {
         let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
-        assert_eq!(object_id_map.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
-
-        // TODO: compare with reference image from file, not a single pixel
-        let center_pixel = TEST_FRAME_BUFFER_WIDTH * (TEST_FRAME_BUFFER_HEIGHT / 2) + TEST_FRAME_BUFFER_WIDTH / 2;
-        let actual_uid = object_id_map[center_pixel as usize];
-        let expected_uid = 1;
-        assert_eq!(expected_uid, actual_uid);
 
         let png_path = Path::new("tests").join("out/single_parallelogram_identification.png");
         save_u32_buffer_as_png(object_id_map, TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
         print_full_path(png_path.clone(), "object id map");
+        
+        assert_eq!(object_id_map.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
+
+        let parallelogram_uid: u32 = 1;
+        let null_uid: u32 = 0;
+        assert_parallelogram_in_center(object_id_map, parallelogram_uid, null_uid);
+    }
+    
+    fn assert_parallelogram_in_center<T: Copy + PartialEq + std::fmt::Debug>(data: &Vec<T>, parallelogram: T, background: T) {
+        let center_box_width = TEST_FRAME_BUFFER_WIDTH / 2;
+        let center_box_height = TEST_FRAME_BUFFER_HEIGHT / 2;
+        let center_box_left = (TEST_FRAME_BUFFER_WIDTH - center_box_width) / 2;
+        let center_box_right = center_box_left + center_box_width;
+        let center_box_top = (TEST_FRAME_BUFFER_HEIGHT - center_box_height) / 2;
+        let center_box_bottom = center_box_top + center_box_height;
+
+        for j in 0..TEST_FRAME_BUFFER_HEIGHT {
+            for i in 0..TEST_FRAME_BUFFER_WIDTH {
+                let pixel_index = TEST_FRAME_BUFFER_WIDTH * j + i;
+                let actual = data[pixel_index as usize];
+                let expected =
+                    if i >= center_box_left && i < center_box_right
+                        && j >= center_box_top && j < center_box_bottom {
+                        parallelogram
+                    } else {
+                        background
+                    };
+                assert_eq!(expected, actual, "unexpected pixel value at ({i}, {j})");
+            }
+        }
     }
 
     fn print_full_path(path: impl AsRef<Path>, entity_name: &str) {

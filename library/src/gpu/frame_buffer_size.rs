@@ -30,6 +30,11 @@ impl FrameBufferSize {
     }
     
     #[must_use]
+    pub(crate) fn aspect(&self) -> f32 {
+        self.width as f32 / self.height as f32
+    }
+    
+    #[must_use]
     pub(crate) fn work_groups_count(&self, work_group_size: Vector2<u32>) -> Vector2<u32> {
         Vector2::new(
             self.width.div_ceil(work_group_size.x), 
@@ -68,6 +73,15 @@ mod tests {
         let expected_count = Vector2::new(width_multiplier + 1, height_multiplier + 1);
         
         assert_eq!(actual_count, expected_count);
+    }
+
+    #[test]
+    fn test_aspect() {
+        let width: u32 = 1000;
+        let height: u32 = 500;
+        let system_under_test = FrameBufferSize::new(width, height);
+        
+        assert_eq!(system_under_test.aspect(), (width as f32) / (height as f32));
     }
     
     #[test]

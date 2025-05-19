@@ -16,9 +16,9 @@ const WORK_GROUP_SIZE_Y = 8;
 const WORK_GROUP_SIZE_Z = 1;
 const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
 
-const NUM_SAMPLES = 2.0;
+const NUM_SAMPLES = 1.0;
 const MAX_BOUNCES = 50;
-const STRATIFY = true;
+const STRATIFY = false;
 const IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
 const MAX_SDF_RAY_MARCH_STEPS = 120;
@@ -37,7 +37,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 4) var<storage, read> bvh: array<AABB>;
 
 var<private> randState : u32 = 0u;
-var<private> pixelCoords : vec3f;
+var<private> pixelCoords : vec2f;
 
 var<private> hitRec : HitRecord;
 var<private> scatterRec : ScatterRecord;
@@ -47,7 +47,10 @@ var<private> ray_tmax : f32 = MAX_FLOAT;
 var<private> stack : array<i32, STACK_SIZE>;
 
 struct Uniforms {
-	frame_buffer_size : vec2f,
+	frame_buffer_size : vec2u,
+	frame_buffer_area: u32,
+	frame_buffer_aspect: f32, // width / height
+	inverted_frame_buffer_size: vec2f,
 	frame_number : f32,
 	if_reset_frame_buffer : f32,
 	view_matrix : mat4x4f,
@@ -378,7 +381,9 @@ fn evaluate_pixel_index(
 }
 
 fn setup_pixel_coordinates(pixel_index: u32) {
-    pixelCoords = vec3f(f32(pixel_index) % uniforms.frame_buffer_size.x, f32(pixel_index) / uniforms.frame_buffer_size.x, 1);
+    let x: u32 = pixel_index % uniforms.frame_buffer_size.x;
+    let y: u32 = pixel_index / uniforms.frame_buffer_size.x;
+    pixelCoords = vec2f(f32(x), f32(y));
 }
 
 fn setup_camera() {
@@ -387,7 +392,7 @@ fn setup_camera() {
 }
 
 fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
-    return f32(pixel_index) >= uniforms.frame_buffer_size.x * uniforms.frame_buffer_size.y;
+    return pixel_index >= uniforms.frame_buffer_area;
 }
 
 @compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_object_id_buffer(
@@ -403,7 +408,7 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
 	setup_pixel_coordinates(pixel_index);
 	setup_camera();
 
-    let ray = ray_to_pixel(0.0, 0.0);
+    let ray = ray_to_pixel(0.5, 0.5);
 	let surface_intersection = trace_first_intersection(ray);
     object_id_buffer[pixel_index] = surface_intersection.object_uid;
     albedo_buffer[pixel_index] = vec4f(surface_intersection.albedo, 1.0f);
@@ -442,11 +447,11 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
 //		x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
 //		y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
 
+// lower left pixel corner -> 0.5, 0.5 gives pixel's center;
 fn ray_to_pixel(subPixelX: f32, subPixelY: f32) -> Ray {
-    return getCameraRay(
-        (uniforms.frame_buffer_size.x / uniforms.frame_buffer_size.y) * (2 * ((pixelCoords.x - 0.5 + subPixelX) / uniforms.frame_buffer_size.x) - 1),
-        -1 * (2 * ((pixelCoords.y - 0.5 + subPixelY) / uniforms.frame_buffer_size.y) - 1)
-        );
+    let s = uniforms.frame_buffer_aspect * (2 * ((pixelCoords.x + subPixelX) * uniforms.inverted_frame_buffer_size.x) - 1);
+    let t = -1 * (2 * ((pixelCoords.y + subPixelY) * uniforms.inverted_frame_buffer_size.y) - 1);
+    return getCameraRay(s, t);
 }
 
 fn pathTrace() -> vec3f {
@@ -486,8 +491,8 @@ fn pathTrace() -> vec3f {
 fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var closest_so_far = MAX_FLOAT;
     var hit_uid: u32 = 0;
-    var hit_albedo: vec3f = vec3f(0.0f, 0.0f, 0.0f);
-    var hit_normal: vec3f = vec3f(0.0f, 0.0f, 0.0f);
+    var hit_albedo: vec3f = vec3f(0.0f);
+    var hit_normal: vec3f = vec3f(0.0f);
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
@@ -568,9 +573,9 @@ var<private> fovFactor : f32;
 var<private> cam_origin : vec3f;
 
 fn getCameraRay(s : f32, t : f32) -> Ray {
-	let eye_to_pixel_direction = (uniforms.view_matrix * vec4f(vec3f(s, t, -fovFactor), 0)).xyz;
+	let eye_to_pixel_direction = (uniforms.view_matrix * vec4f(vec3f(s, t, -fovFactor), 0.0)).xyz;
 
-	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0f);
+	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0);
 	let ray_origin_world_space = uniforms.view_ray_origin_matrix * pixel_world_space;
 
 	let ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
@@ -1039,7 +1044,7 @@ const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
 /// fragment
 
 fn pixel_global_index(pixel_position: vec2f) -> u32 {
-    return (u32(pixel_position.y) * u32(uniforms.frame_buffer_size.x) + u32(pixel_position.x));
+    return u32(pixel_position.y) * uniforms.frame_buffer_size.x + u32(pixel_position.x);
 }
 
 @fragment fn fs(@builtin(position) fragment_coordinate: vec4f) -> @location(0) vec4f {
@@ -1047,10 +1052,10 @@ fn pixel_global_index(pixel_position: vec2f) -> u32 {
     var color = pixel_color_buffer[i].xyz / uniforms.frame_number;
 
     color = aces_approx(color.xyz);
-    color = pow(color.xyz, vec3f(1/2.2));
+    color = pow(color.xyz, vec3f(1.0/2.2));
 
     if(uniforms.if_reset_frame_buffer == 1) {
-        pixel_color_buffer[i] = vec4f(0);
+        pixel_color_buffer[i] = vec4f(0.0);
     }
 
     return vec4f(color, 1);
