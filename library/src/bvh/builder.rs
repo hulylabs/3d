@@ -6,7 +6,7 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 #[must_use]
-pub(crate) fn build_serialized_bvh(support: &mut Vec<Triangle>) -> GpuReadySerializationBuffer {
+pub(crate) fn build_serialized_bvh(support: &mut[Triangle]) -> GpuReadySerializationBuffer {
     let root = BvhNode::make_for(support);
 
     BvhNode::populate_links(&mut root.borrow_mut(), None);

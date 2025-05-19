@@ -7,7 +7,6 @@ pub(crate) struct Linkage {
     material_index: MaterialIndex,
 }
 
-
 impl Linkage {
     #[must_use]
     pub(crate) const fn new(uid: ObjectUid, material_index: MaterialIndex,) -> Self {

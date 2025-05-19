@@ -13,14 +13,12 @@ impl GpuReadyTriangles {
     #[must_use]
     pub(crate) fn extract_geometry(&mut self) -> GpuReadySerializationBuffer {
         let replacement = GpuReadySerializationBuffer::make_filled(0, <Triangle as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT, -1.0_f32);
-        let result = mem::replace(&mut self.triangles, replacement);
-        result
+        mem::replace(&mut self.triangles, replacement)
     }
     #[must_use]
     pub(crate) fn extract_bvh(&mut self) -> GpuReadySerializationBuffer {
         let replacement = GpuReadySerializationBuffer::make_filled(0, <BvhNode as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT, -1.0_f32);
-        let result = mem::replace(&mut self.bvh, replacement);
-        result
+        mem::replace(&mut self.bvh, replacement)
     }
     
     #[must_use]

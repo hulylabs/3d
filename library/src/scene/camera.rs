@@ -249,7 +249,7 @@ mod tests {
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, z_axis_offset as f32, 1.0,
         ];
         assert_camera_serialized_data(&system_under_test, expected_serialized_camera);
-        assert!(false == system_under_test.check_and_clear_updated_status());
+        assert_eq!(false, system_under_test.check_and_clear_updated_status());
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
         system_under_test.rotate_horizontal(90.0);
 
         assert!(system_under_test.check_and_clear_updated_status());
-        assert!(false == system_under_test.check_and_clear_updated_status());
+        assert_eq!(false, system_under_test.check_and_clear_updated_status());
     }
 
     #[test]

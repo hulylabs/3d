@@ -31,6 +31,11 @@ impl Statistics {
     pub(super) fn object_count(&self) -> usize {
         self.object_count
     }
+    
+    pub(super) fn clear_objects(&mut self) {
+        self.object_count = 0;
+        self.data_version += 1;
+    }
 }
 
 #[cfg(test)]

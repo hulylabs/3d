@@ -5,19 +5,19 @@ use wgpu::BufferUsages;
 
 // TODO: work in progress
 
-pub(super) struct Resources {
+pub(crate) struct Resources {
     context: Rc<Context>,
     presentation_format: wgpu::TextureFormat,
 }
 
 impl Resources {
     #[must_use]
-    pub fn new(context: Rc<Context>, presentation_format: wgpu::TextureFormat) -> Self {
+    pub(crate) fn new(context: Rc<Context>, presentation_format: wgpu::TextureFormat) -> Self {
         Self { context, presentation_format }
     }
 
     #[must_use]
-    pub(super) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> wgpu::ShaderModule {
+    pub(crate) fn create_shader_module(&self, shader_name: &str, shader_source_code: &str) -> wgpu::ShaderModule {
         self.context.device().create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(shader_name),
             source: wgpu::ShaderSource::Wgsl(shader_source_code.into()), //TODO: can we use naga module created above?
@@ -42,7 +42,7 @@ impl Resources {
     }
 
     #[must_use]
-    pub(super) fn create_storage_buffer_write_only(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
+    pub(crate) fn create_storage_buffer_write_only(&self, label: &str, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         self.create_buffer(label, BufferUsages::STORAGE | BufferUsages::COPY_DST, buffer_data)
     }
 
@@ -76,28 +76,31 @@ impl Resources {
     }
     
     #[must_use]
-    pub(super) fn create_compute_pipeline(&self, routine: ComputeRoutine, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
+    pub(crate) fn create_compute_pipeline(&self, routine: ComputeRoutine, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some(routine.name()),
+            label: routine.name(),
             compilation_options: Default::default(),
             layout: None,
             module,
-            entry_point: Some(routine.name()),
+            entry_point: routine.name(),
             cache: None, // TODO: how can be used?
         })
     }
 }
 
-pub(super) enum ComputeRoutine {
+pub(crate) enum ComputeRoutine {
     ShaderRayTracingEntryPoint,
     ShaderObjectIdEntryPoint,
+    
+    #[cfg(test)] Default,
 }
 
 impl ComputeRoutine {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> Option<&'static str> {
         match self {
-            ComputeRoutine::ShaderObjectIdEntryPoint { .. } => "compute_object_id_buffer",
-            ComputeRoutine::ShaderRayTracingEntryPoint { .. } => "compute_color_buffer",
+            ComputeRoutine::ShaderObjectIdEntryPoint => Some("compute_object_id_buffer"),
+            ComputeRoutine::ShaderRayTracingEntryPoint => Some("compute_color_buffer"),
+            #[cfg(test)] ComputeRoutine::Default => None,
         }
     }
 }

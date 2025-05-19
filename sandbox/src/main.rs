@@ -1,6 +1,7 @@
-//#![deny(warnings)] TODO: switch on, when ready
+//#![deny(warnings)]
 
 mod sandbox;
+mod world;
 
 use std::env;
 use std::sync::Arc;

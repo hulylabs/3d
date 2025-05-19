@@ -4,29 +4,30 @@ use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfBox;
-use crate::objects::sphere::Sphere;
+use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::gpu_ready_triangles::GpuReadyTriangles;
 use crate::scene::materials_warehouse::MaterialsWarehouse;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::scene::monolithic::Monolithic;
 use crate::scene::scene_object::SceneObject;
+use crate::sdf::code_generator::SdfRegistrator;
+use crate::sdf::named_sdf::UniqueName;
+use crate::scene::sdf_warehouse::SdfWarehouse;
 use crate::scene::statistics::Statistics;
 use crate::scene::triangulated::Triangulated;
 use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::utils::object_uid::ObjectUid;
+use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
 use std::collections::HashMap;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
-use crate::utils::remove_with_reorder::remove_with_reorder;
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum DataKind {
-    Sphere,
     Parallelogram,
     Sdf,
     TriangleMesh,
@@ -38,13 +39,14 @@ pub struct Container {
     triangles: Vec<Triangle>,
     
     materials: MaterialsWarehouse,
+    sdfs: SdfWarehouse,
     
     uid_generator: UidGenerator,
 }
 
 impl Container {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(sdf_classes: SdfRegistrator) -> Self {
         let per_object_kind_statistics: Vec<Statistics> = vec![Statistics::default(); DataKind::COUNT];
 
         Self {
@@ -52,8 +54,14 @@ impl Container {
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials: MaterialsWarehouse::new(),
+            sdfs: SdfWarehouse::new(sdf_classes),
             uid_generator: UidGenerator::new(),
         }
+    }
+
+    #[must_use]
+    pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
+        format!("{}\n{}", base_code, self.sdfs.sdf_classes_code())
     }
 
     #[must_use]
@@ -83,16 +91,6 @@ impl Container {
         }
     }
 
-    pub fn add_sphere(&mut self, center: Point, radius: f64, material: MaterialIndex) -> ObjectUid {
-        assert!(radius > 0.0, "radius must be positive");
-        Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
-            Box::new(Monolithic::new(
-                DataKind::Sphere as usize,
-                Box::new(Sphere::new(center, radius, Linkage::new(uid, material))),
-            ))
-        })
-    }
-
     pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
@@ -102,13 +100,12 @@ impl Container {
         })
     }
 
-    pub fn add_sdf_box(&mut self, location: &Affine, half_size: Vector, corners_radius: f64, material: MaterialIndex) -> ObjectUid {
-        assert!(half_size.x > 0.0 && half_size.y > 0.0 && half_size.z > 0.0);
-        assert!(corners_radius >= 0.0);
+    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueName, material: MaterialIndex) -> ObjectUid{
+        let index = self.sdfs.index_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
-                Box::new(SdfBox::new(*location, half_size, corners_radius, Linkage::new(uid, material))),
+                Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
             ))
         })
     }
@@ -138,6 +135,17 @@ impl Container {
         }
     }
     
+    pub fn clear_objects(&mut self) {
+        self.triangles.clear();
+        for object in self.objects.keys() {
+            self.uid_generator.put_back(*object);
+        }
+        for statistics in self.per_object_kind_statistics.iter_mut() {
+            statistics.clear_objects();
+        }
+        self.objects.clear();
+    }
+    
     #[must_use]
     pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
         let bvh = build_serialized_bvh(&mut self.triangles);
@@ -165,7 +173,7 @@ impl Container {
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
         uid_generator: &mut UidGenerator,
-        statistics: &mut Vec<Statistics>,
+        statistics: &mut [Statistics],
         create_object: Constructor,
     ) -> ObjectUid {
         let uid = uid_generator.next();
@@ -219,10 +227,13 @@ mod tests {
     use crate::objects::material::Material;
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::parallelogram::Parallelogram;
-    use crate::objects::sdf::SdfBox;
-    use crate::objects::sphere::Sphere;
+    use crate::objects::sdf::SdfInstance;
+    use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::scene::container::{Container, DataKind};
     use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+    use crate::sdf::code_generator::SdfRegistrator;
+    use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+    use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
     use crate::utils::object_uid::ObjectUid;
@@ -240,10 +251,20 @@ mod tests {
         let slot = warehouse.load(&dummy_mesh_path).unwrap();
         (warehouse, slot)
     }
+
+    #[must_use]
+    fn make_single_sdf_sphere() -> (UniqueName, SdfRegistrator) {
+        let mut sdf_classes = SdfRegistrator::default();
+        let sphere_sdf_name = UniqueName::new("identity_sphere".to_string());
+        sdf_classes.add(&NamedSdf::new(SdfSphere::new(1.0), sphere_sdf_name.clone()));
+
+        (sphere_sdf_name, sdf_classes)
+    }
     
     #[test]
     fn test_set_material() {
-        let system_under_test = Rc::new(RefCell::new(Container::new()));
+        let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
+        let system_under_test = Rc::new(RefCell::new(Container::new(sdf_classes)));
         
         let material_one = system_under_test.borrow_mut().materials().add(&Material::default());
         let material_two = system_under_test.borrow_mut().materials().add(&Material::default());
@@ -259,20 +280,14 @@ mod tests {
         assert_material_changed(material_one, material_two, parallelogram);
         assert_ne!(system_under_test.borrow().data_version(DataKind::Parallelogram), version_before);
         
-        let sphere = system_under_test.borrow_mut().add_sphere(Point::origin(), 1.0, material_one);
-        let version_before = system_under_test.borrow().data_version(DataKind::Sphere);
-        assert_material_changed(material_one, material_two, sphere);
-        assert_ne!(system_under_test.borrow().data_version(DataKind::Sphere), version_before);
-        
         assert_material_changed(material_two, material_one, parallelogram);
         
-        let sdf = system_under_test.borrow_mut().add_sdf_box(&Affine::identity(), Vector::new(1.0,1.0,1.0), 0.0, material_one);
+        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), &sphere_sdf_name, material_one);
         let version_before = system_under_test.borrow().data_version(DataKind::Sdf);
         assert_material_changed(material_one, material_two, sdf);
         assert_ne!(system_under_test.borrow().data_version(DataKind::Sdf), version_before);
         
         assert_material_changed(material_one, material_two, parallelogram);
-        assert_material_changed(material_two, material_one, sphere);
 
         let (mesh_warehouse, mesh_slot) = make_test_mesh();
         let mesh = system_under_test.borrow_mut().add_mesh(&mesh_warehouse, mesh_slot, &Transformation::identity(), material_one);
@@ -281,13 +296,13 @@ mod tests {
         assert_ne!(system_under_test.borrow().data_version(DataKind::TriangleMesh), version_before);
 
         assert_material_changed(material_two, material_one, parallelogram);
-        assert_material_changed(material_one, material_two, sphere);
         assert_material_changed(material_two, material_one, sdf);
     }
 
     #[test]
     fn test_add_sdf() {
-        let mut system_under_test = Container::new();
+        let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
+        let mut system_under_test = Container::new(sdf_classes);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -300,21 +315,19 @@ mod tests {
         
         let expected_material = system_under_test.materials().add(&material);
         let expected_transform = Affine::identity();
-        let expected_size = Vector::new(5.0, 7.0, 3.0);
-        let expected_corners_radius = 0.7;
-        
-        let mut expected_serialized = GpuReadySerializationBuffer::new(SDF_TO_ADD as usize, <SdfBox as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT);
+
+        let mut expected_serialized = GpuReadySerializationBuffer::new(SDF_TO_ADD as usize, <SdfInstance as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT);
         for i in 0_u32..SDF_TO_ADD
         {
             {
                 let linkage = Linkage::new(ObjectUid(i+1), expected_material);
-                let expected_sdf = SdfBox::new(Affine::identity(), Vector::new(5.0, 7.0, 3.0), expected_corners_radius, linkage);
+                let expected_sdf = SdfInstance::new(Affine::identity(), SdfClassIndex(0), linkage);
                 expected_sdf.serialize_into(&mut expected_serialized);
             }
             assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), i as usize);
             {
                 let data_version_before_addition = system_under_test.data_version(DataKind::Sdf);
-                system_under_test.add_sdf_box(&expected_transform, expected_size, expected_corners_radius, expected_material);
+                system_under_test.add_sdf(&expected_transform, &sphere_sdf_name, expected_material);
                 let data_version_after_addition = system_under_test.data_version(DataKind::Sdf);
                 assert_ne!(data_version_before_addition, data_version_after_addition);
             }
@@ -327,7 +340,7 @@ mod tests {
     
     #[test]
     fn test_add_parallelogram() {
-        let mut system_under_test = Container::new();
+        let mut system_under_test = Container::new(SdfRegistrator::default());
 
         const PARALLELOGRAM_TO_ADD: u32 = 4;
 
@@ -354,39 +367,6 @@ mod tests {
         }
 
         let actual_serialized = system_under_test.evaluate_serialized(DataKind::Parallelogram);
-
-        assert_eq!(actual_serialized.backend(), expected_serialized.backend());
-    }
-    
-    #[test]
-    fn test_add_sphere() {
-        let mut system_under_test = Container::new();
-
-        let material = system_under_test.materials().add(&Material::default().with_albedo(1.0, 0.0, 0.0));
-        
-        let expected_sphere_center = Point::new(1.0, 2.0, 3.0);
-        let expected_sphere_radius = 1.5;
-
-        const SPHERES_TO_ADD: u32 = 3;
-        
-        let mut expected_serialized = GpuReadySerializationBuffer::new(SPHERES_TO_ADD as usize, Sphere::SERIALIZED_QUARTET_COUNT);
-        for i in 0_u32..SPHERES_TO_ADD
-        {
-            {
-                let linkage = Linkage::new(ObjectUid(i+1), material);
-                let expected_sphere = Sphere::new(expected_sphere_center, expected_sphere_radius, linkage);
-                expected_sphere.serialize_into(&mut expected_serialized);
-            }
-            assert_eq!(system_under_test.count_of_a_kind(DataKind::Sphere), i as usize);
-            {
-                let data_version_before_addition = system_under_test.data_version(DataKind::Sphere);
-                system_under_test.add_sphere(expected_sphere_center, expected_sphere_radius, material);
-                let data_version_after_addition = system_under_test.data_version(DataKind::Sphere);
-                assert_ne!(data_version_before_addition, data_version_after_addition);
-            }
-        }
-
-        let actual_serialized = system_under_test.evaluate_serialized(DataKind::Sphere);
 
         assert_eq!(actual_serialized.backend(), expected_serialized.backend());
     }
@@ -448,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_delete_mesh() {
-        let mut system_under_test = Container::new();
+        let mut system_under_test = Container::new(SdfRegistrator::default());
 
         let (mesh, meshes) = prepare_test_mesh();
         let dummy_material = system_under_test.materials().add(&Material::default());
@@ -473,17 +453,15 @@ mod tests {
 
     #[test]
     fn test_delete_sdf() {
-        let mut system_under_test = Container::new();
+        let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
+        let mut system_under_test = Container::new(sdf_classes);
 
         let dummy_material = system_under_test.materials().add(&Material::default());
         let (mesh, meshes) = prepare_test_mesh();
         
-        let dummy_corners_radius = 0.0;
-        let dummy_size = Vector::new(1.0, 1.0, 1.0);
-        
-        let to_be_deleted = system_under_test.add_sdf_box(&Affine::identity(), dummy_size, dummy_corners_radius, dummy_material);
+        let to_be_deleted = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
         let parallelogram_to_keep = system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
-        let sdf_to_keep = system_under_test.add_sdf_box(&Affine::identity(), dummy_size, dummy_corners_radius, dummy_material);
+        let sdf_to_keep = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
         let mesh_to_keep = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
         
         system_under_test.delete(to_be_deleted);
