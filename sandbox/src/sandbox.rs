@@ -134,7 +134,7 @@ impl Sandbox {
                 } else if "3" == letter_key {
                     self.world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
                 } else if "4" == letter_key {
-                    self.world.switch_to_bender_scene(self.engine.scene());
+                    self.world.switch_to_smoth_operators_scene(self.engine.scene());
                 }
             }
             _ => (),

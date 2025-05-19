@@ -223,13 +223,13 @@ mod tests {
         left_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
         var right_1: f32;\n { \
         let q = abs(point)-vec3f(5.0,7.0,11.0); \
-        right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
+        right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); }  \
         left_2 = min(left_1,right_1); } \
         var right_2: f32;\n { \
-        right_2 = length((point-vec3f(-17.0,-19.0,-23.0)))-13.0; } \
+        right_2 = length((point-vec3f(-17.0,-19.0,-23.0)))-13.0; }  \
         left_3 = min(left_2,right_2); } \
         var right_3: f32;\n { \
-        right_3 = length((point-vec3f(31.0,37.0,41.0)))-29.0; } \
+        right_3 = length((point-vec3f(31.0,37.0,41.0)))-29.0; }  \
         return min(left_3,right_3); }\n";
 
         assert_no_shared_code(generator_under_test);
@@ -252,7 +252,7 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
         
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_1: f32;\n { left_1 = sdf_test_1(point); } var right_1: f32;\n { right_1 = sdf_test_1(point); } return min(left_1,right_1); }\n";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_1: f32;\n { left_1 = sdf_test_1(point); } var right_1: f32;\n { right_1 = sdf_test_1(point); }  return min(left_1,right_1); }\n";
         let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\n";
         
         assert_eq!(actual_name, expected_name);
@@ -284,8 +284,8 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_3: f32;\n { left_3 = sdf_test_1(point); } var right_3: f32;\n { var left_2: f32;\n { left_2 = sdf_test_2(point); } var right_2: f32;\n { right_2 = sdf_test_2(point); } right_3 = min(left_2,right_2); } return min(left_3,right_3); }\n";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { var left: f32;\n { left = sdf_test_1(point); } var right: f32;\n { right = sdf_test_1(point); } return min(left,right); }\n";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_3: f32;\n { left_3 = sdf_test_1(point); } var right_3: f32;\n { var left_2: f32;\n { left_2 = sdf_test_2(point); } var right_2: f32;\n { right_2 = sdf_test_2(point); }  right_3 = min(left_2,right_2); }  return min(left_3,right_3); }\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { var left: f32;\n { left = sdf_test_1(point); } var right: f32;\n { right = sdf_test_1(point); }  return min(left,right); }\n";
 
         assert_eq!(actual_name, expected_name);
         assert_eq!(actual_shared_code, expected_shared_code);

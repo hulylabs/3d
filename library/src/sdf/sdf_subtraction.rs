@@ -1,8 +1,8 @@
-﻿use crate::sdf::sdf_base::Sdf;
+﻿use crate::sdf::binary_operations_utils::produce_binary_operation_body;
+use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
-use std::rc::Rc;
-use crate::sdf::binary_operations_utils::produce_binary_operation_body;
 use crate::sdf::stack::Stack;
+use std::rc::Rc;
 
 pub struct SdfSubtraction {
     left: Rc<dyn Sdf>,
@@ -22,6 +22,7 @@ impl Sdf for SdfSubtraction {
         assert!(children_bodies.size() >= 2);
 
         produce_binary_operation_body(children_bodies, level
+          , |_, _| "".to_string()
           , |left_name, right_name| format!("max({left_name},-{right_name})"))
     }
 
@@ -33,35 +34,20 @@ impl Sdf for SdfSubtraction {
 
 #[cfg(test)]
 mod tests {
-    use crate::sdf::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use super::*;
+    use crate::sdf::binary_operations_utils::tests::{test_binary_operator_body_production, test_binary_operator_children};
 
     #[test]
     fn test_children() {
-        let left: Rc<dyn Sdf> = make_dummy_sdf();
-        let right: Rc<dyn Sdf> = make_dummy_sdf();
-        let system_under_test = SdfSubtraction::new(left.clone(), right.clone());
-
-        let children = system_under_test.children();
-
-        assert_eq!(children.len(), 2);
-        assert!(Rc::ptr_eq(&children[0], &left));
-        assert!(Rc::ptr_eq(&children[1], &right));
+        test_binary_operator_children(|left, right| SdfSubtraction::new(left, right));
     }
 
     #[test]
     fn test_produce_body() {
-        let left: Rc<dyn Sdf> = Rc::new(DummySdf::new("left_17"));
-        let right: Rc<dyn Sdf> = Rc::new(DummySdf::new("right_23"));
-        let system_under_test = SdfSubtraction::new(left.clone(), right.clone());
-
-        let mut children_bodies = Stack::<ShaderCode<FunctionBody>>::new();
-        children_bodies.push(ShaderCode::<FunctionBody>::new("return ?_left;".to_string()),);
-        children_bodies.push(ShaderCode::<FunctionBody>::new("return !_right;".to_string()),);
-
-        let actual_body = system_under_test.produce_body(&mut children_bodies, Some(0));
-
-        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; } return max(left_0,-right_0);";
-        assert_eq!(actual_body.to_string(), expected_body.to_string());
+        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; }  return max(left_0,-right_0);";
+        test_binary_operator_body_production(
+            |left, right| SdfSubtraction::new(left, right),
+            expected_body,
+        );
     }
 }

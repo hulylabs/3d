@@ -20,6 +20,7 @@ use library::sdf::sdf_capsule::SdfCapsule;
 use library::sdf::sdf_cone::SdfCone;
 use library::sdf::sdf_hex_prism::SdfHexPrism;
 use library::sdf::sdf_intersection::SdfIntersection;
+use library::sdf::sdf_intersection_smooth::SdfIntersectionSmooth;
 use library::sdf::sdf_link::SdfLink;
 use library::sdf::sdf_octahedron::SdfOctahedron;
 use library::sdf::sdf_pyramid::SdfPyramid;
@@ -29,9 +30,11 @@ use library::sdf::sdf_round_code::SdfRoundCone;
 use library::sdf::sdf_solid_angle::SdfSolidAngle;
 use library::sdf::sdf_sphere::SdfSphere;
 use library::sdf::sdf_subtraction::SdfSubtraction;
+use library::sdf::sdf_subtraction_smooth::SdfSubtractionSmooth;
 use library::sdf::sdf_torus_xz::SdfTorusXz;
 use library::sdf::sdf_triangular_prism::SdfTriangularPrism;
 use library::sdf::sdf_union::SdfUnion;
+use library::sdf::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::sdf_vesica_segment::SdfVesicaSegment;
 
 pub(super) struct SdfClasses {
@@ -56,6 +59,9 @@ pub(super) struct SdfClasses {
     rhombus: NamedSdf,
     pyramid: NamedSdf,
     csg_example: NamedSdf,
+    union_smooth: NamedSdf,
+    subtraction_smooth: NamedSdf,
+    intersection_smooth: NamedSdf,
 }
 
 impl SdfClasses {
@@ -156,6 +162,34 @@ impl SdfClasses {
             );
         let csg_example = NamedSdf::new(csg_example_sdf, UniqueName::new("csg_example".to_string()));
         registrator.add(&csg_example);
+        
+        let union_smooth = NamedSdf::new(SdfUnionSmooth::new(
+            SdfSphere::new_offset(1.0, Point::new(-0.9, 0.0, 0.0)),
+            SdfSphere::new_offset(1.0, Point::new( 0.9, 0.0, 0.0)),
+            0.25,
+        ), UniqueName::new("union_smooth".to_string()));
+        registrator.add(&union_smooth);
+        
+        let subtraction_smooth = NamedSdf::new(
+            SdfSubtractionSmooth::new(
+                SdfSubtractionSmooth::new(
+                    SdfBox::new_offset(Vector::new(1.0, 1.0, 1.0), Point::new(0.0, 0.0, 0.0)),
+                    SdfSphere::new_offset(0.5, Point::new( 0.9, 0.0, 0.0)),
+                    0.25,
+                ),
+                SdfSphere::new_offset(0.5, Point::new( -0.9, 0.0, 0.0)),
+            0.25,
+            ),
+            UniqueName::new("subtraction_smooth".to_string())
+        );
+        registrator.add(&subtraction_smooth);
+
+        let intersection_smooth = NamedSdf::new(SdfIntersectionSmooth::new(
+            SdfSphere::new_offset(1.0, Point::new(-0.2, 0.0, 0.0)),
+            SdfSphere::new_offset(1.0, Point::new( 0.2, 0.0, 0.0)),
+            0.25,
+        ), UniqueName::new("intersection_smooth".to_string()));
+        registrator.add(&intersection_smooth);
             
         Self { 
             rectangular_box, 
@@ -179,6 +213,9 @@ impl SdfClasses {
             rhombus,
             pyramid,
             csg_example,
+            union_smooth,
+            subtraction_smooth,
+            intersection_smooth,
         }
     }
 }
@@ -354,15 +391,25 @@ impl World {
             self.materials.blue_material);
     }
 
-    pub(super) fn switch_to_bender_scene(&self, scene: &mut Container) {
+    pub(super) fn switch_to_smoth_operators_scene(&self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
 
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.0, 0.0, -0.9))*Affine::from_nonuniform_scale(0.5, 0.5, 0.5)),
-            self.sdf_classes.cylinder_cross.name(),
+            &(Affine::from_translation(Vector::new(0.0, 0.0, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            self.sdf_classes.union_smooth.name(),
             self.materials.blue_material);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.9, 0.0, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            self.sdf_classes.subtraction_smooth.name(),
+            self.materials.red_material);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.0, -0.5, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            self.sdf_classes.intersection_smooth.name(),
+            self.materials.green_mirror);
     }
 
     pub(super) fn switch_to_sdf_exhibition_scene(&self, scene: &mut Container) {

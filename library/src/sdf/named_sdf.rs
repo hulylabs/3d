@@ -13,15 +13,15 @@ impl NamedSdf {
     pub const fn new(sdf: Rc<dyn Sdf>, name: UniqueName) -> Self {
         Self { sdf, name }
     }
-
-    #[must_use]
-    pub(crate) fn sdf(&self) -> Rc<dyn Sdf> {
-        self.sdf.clone()
-    }
-
+    
     #[must_use]
     pub const fn name(&self) -> &UniqueName {
         &self.name
+    }
+    
+    #[must_use]
+    pub(crate) fn sdf(&self) -> Rc<dyn Sdf> {
+        self.sdf.clone()
     }
 }
 
@@ -39,7 +39,7 @@ impl UniqueName {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub(super) fn as_str(&self) -> &str {
         &self.0
     }
 }

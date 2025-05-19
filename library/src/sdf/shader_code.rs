@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 #[derive(Clone)]
 pub struct FunctionBody;
 #[derive(Clone)]
-pub struct VariableAssignment;
+pub(super) struct VariableAssignment;
 #[derive(Clone)]
 pub struct Generic;
 
@@ -66,7 +66,7 @@ impl ShaderCode<FunctionBody> {
     }
 
     #[must_use]
-    pub(crate) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
+    pub(super) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
         let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
         let assignment = format!("var {name}: f32;\n {{ {assignment} }}", name=variable_name, assignment=evaluation.trim());
         ShaderCode::<VariableAssignment>::new(assignment.to_string())
