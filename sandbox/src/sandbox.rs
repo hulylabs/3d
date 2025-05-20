@@ -127,6 +127,10 @@ impl Sandbox {
                     self.engine.camera().set_kind(Box::new(OrthographicCamera {}));
                 } else if "r" == letter_key {
                     self.engine.camera().set_from(&make_default_camera());
+                } else if "m" == letter_key {
+                    self.engine.use_monte_carlo_render();
+                } else if "n" == letter_key {
+                    self.engine.use_deterministic_render();
                 } else if "1" == letter_key {
                     self.world.switch_to_ui_box_scene(self.engine.scene());
                 } else if "2" == letter_key {

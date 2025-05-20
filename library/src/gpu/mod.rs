@@ -1,4 +1,6 @@
-﻿pub(crate) mod resources;
+﻿pub(super) mod color_buffer_evaluation;
+
+pub(crate) mod resources;
 pub(crate) mod headless_device;
 pub(crate) mod render;
 pub(crate) mod frame_buffer_size;

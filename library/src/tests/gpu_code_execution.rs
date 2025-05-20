@@ -5,7 +5,7 @@ pub(crate) mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::output::duplex_layer::DuplexLayer;
     use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
-    use crate::gpu::resources::{ComputeRoutine, Resources};
+    use crate::gpu::resources::{ComputeRoutineEntryPoint, Resources};
     use crate::serialization::pod_vector::PodVector;
     use wgpu::wgt::PollType;
 
@@ -20,7 +20,7 @@ pub(crate) mod tests {
         let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
         let mut output_buffer = DuplexLayer::<f32>::new(context.device(), buffer_size, SupportUpdateFromCpu::Yes, "output");
 
-        let mut pipeline = ComputePipeline::new(resources.create_compute_pipeline(ComputeRoutine::Default, &module));
+        let mut pipeline = ComputePipeline::new(resources.create_compute_pipeline(ComputeRoutineEntryPoint::Default, &module));
         pipeline.setup_bind_group(0, None, context.device(), |bind_group|{
             bind_group.add_entry(0, input_buffer.clone());
             bind_group.add_entry(1, output_buffer.gpu_copy());

@@ -286,6 +286,14 @@ impl Engine {
     pub fn scene(&mut self) -> &mut Container {
         self.renderer.scene()
     }
+    
+    pub fn use_monte_carlo_render(&mut self) {
+        self.renderer.monte_carlo_mode();
+    }
+    
+    pub fn use_deterministic_render(&mut self) {
+        self.renderer.deterministic_mode();
+    }
 }
 
 fn log_adapter_info(adapter: &Adapter) {

@@ -16,7 +16,10 @@ const WORK_GROUP_SIZE_Y = 8;
 const WORK_GROUP_SIZE_Z = 1;
 const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
 
-const NUM_SAMPLES = 1.0;
+const BACKGROUND_COLOR = vec3f(0.1);
+
+const SAMPLES_COUNT_MONTE_CARLO = 1.0;
+const SAMPLES_COUNT_DETERMINISTIC = 1.0;
 const MAX_BOUNCES = 50;
 const STRATIFY = false;
 const IMPORTANCE_SAMPLING = true;
@@ -415,7 +418,13 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
     normal_buffer[pixel_index] = vec4f(surface_intersection.normal, 0.0f);
 }
 
-@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer(
+fn make_common_color_evaluation_setup(pixel_index: u32) {
+    setup_pixel_coordinates(pixel_index);
+	setup_camera();
+	get_lights();
+}
+
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_monte_carlo(
     @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
 
@@ -425,14 +434,10 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
         return;
     }
 
-	setup_pixel_coordinates(pixel_index);
-	setup_camera();
+	make_common_color_evaluation_setup(pixel_index);
 
 	randState = pixel_index + u32(uniforms.frame_number) * 719393;
-
-	get_lights();
-
-	let traced_color = pathTrace();
+	let traced_color = path_trace_monte_carlo();
 
 	if(uniforms.if_reset_frame_buffer == 0) {
 		pixel_color_buffer[pixel_index] = vec4f(pixel_color_buffer[pixel_index].xyz + traced_color, 1.0);
@@ -441,53 +446,96 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
 	}
 }
 
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_deterministic(
+    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
+
+	let pixel_index = evaluate_pixel_index(global_invocation_id, num_workgroups);
+
+    if (pixel_outside_frame_buffer(pixel_index)) {
+        return;
+    }
+
+	make_common_color_evaluation_setup(pixel_index);
+
+	let traced_color = path_trace_deterministic();
+	pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
+}
+
 /// shootRay
 
-// To get pixel center ->
-//		x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
-//		y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
-
-// lower left pixel corner -> 0.5, 0.5 gives pixel's center;
-fn ray_to_pixel(subPixelX: f32, subPixelY: f32) -> Ray {
-    let s = uniforms.frame_buffer_aspect * (2 * ((pixelCoords.x + subPixelX) * uniforms.inverted_frame_buffer_size.x) - 1);
-    let t = -1 * (2 * ((pixelCoords.y + subPixelY) * uniforms.inverted_frame_buffer_size.y) - 1);
+/*
+x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
+y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
+lower left pixel corner -> 0.5, 0.5 gives pixel's center;
+*/
+fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
+    let s = uniforms.frame_buffer_aspect * (2 * ((pixelCoords.x + sub_pixel_x) * uniforms.inverted_frame_buffer_size.x) - 1);
+    let t = -1 * (2 * ((pixelCoords.y + sub_pixel_y) * uniforms.inverted_frame_buffer_size.y) - 1);
     return getCameraRay(s, t);
 }
 
-fn pathTrace() -> vec3f {
+@must_use
+fn path_trace_deterministic() -> vec3f {
+    var result_color = vec3f(0.0);
 
-	var pixColor = vec3f(0, 0, 0);
+    let sqrt_samples_per_pixel = sqrt(SAMPLES_COUNT_DETERMINISTIC);
+    let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(i32(sqrt_samples_per_pixel));
+    var samplaes_taken = 0.0; // SAMPLES_COUNT_DETERMINISTIC may not be perfect square
+    for(var i = 0.0; i < sqrt_samples_per_pixel; i += 1.0) {
+        for(var j = 0.0; j < sqrt_samples_per_pixel; j += 1.0) {
+            let ray = ray_to_pixel(reciprocal_sqrt_samples_per_pixel * i, reciprocal_sqrt_samples_per_pixel * j);
+            result_color += ray_color_monte_carlo(ray);
+            samplaes_taken += 1;
+        }
+    }
+    result_color /= samplaes_taken;
 
-	if(STRATIFY)
-	{
-		let sqrt_spp = sqrt(NUM_SAMPLES);
-		let recip_sqrt_spp = 1.0 / f32(i32(sqrt_spp));
-		var numSamples = 0.0;	// NUM_SAMPLES may not be perfect square
-
-		for(var i = 0.0; i < sqrt_spp; i += 1.0)
-		{
-			for(var j = 0.0; j < sqrt_spp; j += 1.0)
-			{
-                let ray = ray_to_pixel(recip_sqrt_spp * (i + rand2D()), recip_sqrt_spp * (j + rand2D()));
-				pixColor += ray_color(ray);
-				numSamples += 1;
-			}
-		}
-		pixColor /= numSamples;
-	}
-	else
-	{
-		for(var i = 0; i < i32(NUM_SAMPLES); i += 1)
-		{
-		    let ray = ray_to_pixel(rand2D(), rand2D());
-			pixColor += ray_color(ray);
-		}
-		pixColor /= NUM_SAMPLES;
-	}
-
-	return pixColor;
+    return result_color;
 }
 
+@must_use
+fn ray_color_deterministic(incident_ray : Ray) -> vec3f {
+    var current_ray = incident_ray;
+    var accumulated_radiance = vec3f(0.0);
+
+    if(hitScene(current_ray)) {
+    } else {
+        accumulated_radiance = BACKGROUND_COLOR;
+    }
+
+    return accumulated_radiance;
+}
+
+@must_use
+fn path_trace_monte_carlo() -> vec3f {
+	var result_color = vec3f(0.0);
+
+	if(STRATIFY) {
+		let sqrt_samples_per_pixel = sqrt(SAMPLES_COUNT_MONTE_CARLO);
+		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(i32(sqrt_samples_per_pixel));
+		var samplaes_taken = 0.0; // SAMPLES_COUNT_MONTE_CARLO may not be perfect square
+
+		for(var i = 0.0; i < sqrt_samples_per_pixel; i += 1.0) {
+			for(var j = 0.0; j < sqrt_samples_per_pixel; j += 1.0) {
+                let ray = ray_to_pixel(reciprocal_sqrt_samples_per_pixel * (i + rand2D()), reciprocal_sqrt_samples_per_pixel * (j + rand2D()));
+				result_color += ray_color_monte_carlo(ray);
+				samplaes_taken += 1;
+			}
+		}
+		result_color /= samplaes_taken;
+	} else {
+		for(var i = 0; i < i32(SAMPLES_COUNT_MONTE_CARLO); i += 1) {
+		    let ray = ray_to_pixel(rand2D(), rand2D());
+			result_color += ray_color_monte_carlo(ray);
+		}
+		result_color /= SAMPLES_COUNT_MONTE_CARLO;
+	}
+
+	return result_color;
+}
+
+@must_use
 fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var closest_so_far = MAX_FLOAT;
     var hit_uid: u32 = 0;
@@ -732,18 +780,17 @@ fn hitScene(ray : Ray) -> bool
 
 // https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing#Implementation
 
-fn ray_color(incidentRay : Ray) -> vec3f {
+fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 
 	var currRay = incidentRay;
-	var acc_radiance = vec3f(0);	// initial radiance (pixel color) is black
-	var throughput = vec3f(1);		// initial throughput is 1 (no attenuation)
-	let background_color = vec3f(0.1, 0.1, 0.1);
+	var acc_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
+	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
 
 	for(var i = 0; i < MAX_BOUNCES; i++)
 	{
 		if(hitScene(currRay) == false)
 		{
-			acc_radiance += (background_color * throughput);
+			acc_radiance += (BACKGROUND_COLOR * throughput);
 			break;
 		}
 

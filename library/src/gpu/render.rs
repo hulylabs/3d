@@ -1,4 +1,6 @@
-﻿use super::resources::{ComputeRoutine, Resources};
+﻿use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
+use super::resources::{ComputeRoutineEntryPoint, Resources};
 use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
@@ -24,6 +26,7 @@ use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::gpu::color_buffer_evaluation::ColorBufferEvaluation;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -39,7 +42,9 @@ pub(crate) struct Renderer {
     resources: Resources,
     buffers: Buffers,
     uniforms: Uniforms,
-    pipeline_ray_tracing: ComputePipeline,
+    pipeline_ray_tracing_monte_carlo: Rc<RefCell<ComputePipeline>>,
+    pipeline_ray_tracing_deterministic: Rc<RefCell<ComputePipeline>>,
+    color_buffer_evaluation: ColorBufferEvaluation,
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
     scene: Container,
@@ -80,7 +85,8 @@ impl Renderer {
         let shader_code = scene.append_sdf_handling_code(CODE_FOR_GPU);
         let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
         
-        let ray_tracing = Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module);
+        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo)));
+        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingDeterministic)));
         let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
         
         let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
@@ -90,7 +96,9 @@ impl Renderer {
             resources,
             buffers,
             uniforms,
-            pipeline_ray_tracing: ray_tracing,
+            pipeline_ray_tracing_monte_carlo: ray_tracing_monte_carlo.clone(),
+            pipeline_ray_tracing_deterministic: ray_tracing_deterministic.clone(),
+            color_buffer_evaluation: ColorBufferEvaluation::new_monte_carlo(ray_tracing_monte_carlo.clone()),
             pipeline_surface_attributes: object_id,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
@@ -103,6 +111,16 @@ impl Renderer {
     #[must_use]
     pub(crate) fn scene(&mut self) -> &mut Container {
         &mut self.scene
+    }
+    
+    pub(crate) fn monte_carlo_mode(&mut self) {
+        self.color_buffer_evaluation = ColorBufferEvaluation::new_monte_carlo(self.pipeline_ray_tracing_monte_carlo.clone());
+        self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
+    }
+    
+    pub(crate) fn deterministic_mode(&mut self) {
+        self.color_buffer_evaluation = ColorBufferEvaluation::new_deterministic(self.pipeline_ray_tracing_deterministic.clone());
+        self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
     }
 
     #[must_use]
@@ -144,7 +162,8 @@ impl Renderer {
         }
         
         if composite_status.any_resized() {
-            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
+            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
+            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
         }
         
@@ -209,15 +228,15 @@ impl Renderer {
 
     #[must_use]
     fn create_object_id_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
-        let pipeline = resources.create_compute_pipeline(ComputeRoutine::ShaderObjectIdEntryPoint, module);
+        let pipeline = resources.create_compute_pipeline(ComputeRoutineEntryPoint::ShaderObjectId, module);
         Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(device, buffers, pipeline);
         })
     }
     
     #[must_use]
-    fn create_ray_tracing_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
-        let pipeline = resources.create_compute_pipeline(ComputeRoutine::ShaderRayTracingEntryPoint, module);
+    fn create_ray_tracing_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule, routine: ComputeRoutineEntryPoint) -> ComputePipeline {
+        let pipeline = resources.create_compute_pipeline(routine, module);
         Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, buffers, pipeline);
         })
@@ -315,13 +334,15 @@ impl Renderer {
     pub(crate) fn set_output_size(&mut self, new_size: PhysicalSize<u32>) {
         let previous_frame_size = self.uniforms.frame_buffer_area();
         self.uniforms.set_frame_size(new_size);
+        self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
+        
         let new_frame_size = self.uniforms.frame_buffer_area();
-
         if previous_frame_size < new_frame_size {
             self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(self.context.device(), self.uniforms.frame_buffer_size);
             self.buffers.denoised_beauty_image = FrameBufferLayer::new(self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
 
-            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, &mut self.pipeline_ray_tracing);
+            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
+            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
             Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
         } else {
@@ -352,15 +373,16 @@ impl Renderer {
             let geometry_changed = scene_status.geometry_updated();
             
             if scene_status.any_updated() {
-                self.uniforms.reset_frame_accumulation();
+                self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
             }
             
             if camera_changed || geometry_changed {
-                self.uniforms.reset_frame_accumulation();
+                self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
                 rebuild_geometry_buffers = true;
             }
             
-            self.uniforms.next_frame();
+            self.uniforms.next_frame(self.color_buffer_evaluation.frame_counter_increment());
+            
             // TODO: rewrite with 'write_buffer_with'? May be we need kind of ping-pong or circular buffer here?
             let uniform_values = self.uniforms.serialize();
             self.context.queue().write_buffer(&self.buffers.uniforms, 0, uniform_values.backend());
@@ -371,7 +393,7 @@ impl Renderer {
             || self.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
             || scene_status.any_updated();
         
-        self.compute_pass("ray tracing compute pass", &self.pipeline_ray_tracing, |ray_tracing_pass|{
+        self.compute_pass("ray tracing compute pass", self.color_buffer_evaluation.pipeline().deref(), |ray_tracing_pass|{
             self.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(ray_tracing_pass);
         });
 
@@ -556,9 +578,9 @@ struct Uniforms {
 }
 
 impl Uniforms {
-    fn reset_frame_accumulation(&mut self) {
+    fn reset_frame_accumulation(&mut self, value: u32) {
         self.if_reset_framebuffer = true;
-        self.frame_number = 0;
+        self.frame_number = value;
     }
 
     fn drop_reset_flag(&mut self) {
@@ -567,11 +589,10 @@ impl Uniforms {
 
     fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
         self.frame_buffer_size = FrameBufferSize::new(new_size.width, new_size.height);
-        self.reset_frame_accumulation();
     }
 
-    fn next_frame(&mut self) {
-        self.frame_number += 1;
+    fn next_frame(&mut self, increment: u32) {
+        self.frame_number += increment;
     }
 
     #[must_use]
@@ -670,8 +691,8 @@ mod tests {
     fn test_uniforms_reset_frame_accumulation() {
         let mut system_under_test = make_test_uniforms_instance();
 
-        system_under_test.next_frame();
-        system_under_test.reset_frame_accumulation();
+        system_under_test.next_frame(1);
+        system_under_test.reset_frame_accumulation(0);
 
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
@@ -684,7 +705,7 @@ mod tests {
     fn test_uniforms_drop_reset_flag() {
         let mut system_under_test = make_test_uniforms_instance();
 
-        system_under_test.reset_frame_accumulation();
+        system_under_test.reset_frame_accumulation(0);
         system_under_test.drop_reset_flag();
 
         let actual_state = system_under_test.serialize();
@@ -717,12 +738,12 @@ mod tests {
     fn test_uniforms_next_frame() {
         let mut system_under_test = make_test_uniforms_instance();
 
-        system_under_test.next_frame();
+        system_under_test.next_frame(1);
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 1.0);
 
-        system_under_test.next_frame();
+        system_under_test.next_frame(1);
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 2.0);

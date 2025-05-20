@@ -58,6 +58,7 @@ jobs:
       - name: Run Tests (${{ matrix.build-type }})
         run: |
           if ("${{ matrix.build-type }}" -eq "release") {
+            set RUST_BACKTRACE=full
             cargo test -p library --release --verbose -- --nocapture
           } else {
             cargo test -p library --verbose --lib -- --nocapture
