@@ -25,7 +25,7 @@ impl Resources {
     }
 
     #[must_use]
-    fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
+    pub(crate) fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         let buffer = self.context.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
             contents: buffer_data,
@@ -95,6 +95,7 @@ pub(crate) enum ComputeRoutineEntryPoint {
     ShaderRayTracingDeterministic,
     
     #[cfg(test)] Default,
+    #[cfg(test)] TestDefault,
 }
 
 impl ComputeRoutineEntryPoint {
@@ -103,6 +104,7 @@ impl ComputeRoutineEntryPoint {
             ComputeRoutineEntryPoint::ShaderObjectId => Some("compute_object_id_buffer"),
             ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
             ComputeRoutineEntryPoint::ShaderRayTracingDeterministic => Some("compute_color_buffer_deterministic"),
+            #[cfg(test)] ComputeRoutineEntryPoint::TestDefault => Some("test_entry_point"),
             #[cfg(test)] ComputeRoutineEntryPoint::Default => None,
         }
     }

@@ -1,6 +1,6 @@
 ﻿use crate::geometry::alias;
 use crate::geometry::axis::Axis;
-use crate::geometry::epsilon::DEFAULT_EPSILON;
+use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use alias::Point;
 use alias::Vector;
 use cgmath::AbsDiffEq;
@@ -94,7 +94,7 @@ impl AbsDiffEq for Aabb {
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
-        DEFAULT_EPSILON
+        DEFAULT_EPSILON_F64
     }
 
     #[must_use]

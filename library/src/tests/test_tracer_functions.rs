@@ -1,0 +1,109 @@
+﻿#[cfg(test)]
+mod tests {
+    use crate::geometry::alias::Vector;
+    use crate::geometry::transform::Affine;
+    use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
+    use crate::gpu::resources::ComputeRoutineEntryPoint;
+    use crate::objects::common_properties::Linkage;
+    use crate::objects::material_index::MaterialIndex;
+    use crate::objects::sdf::SdfInstance;
+    use crate::objects::sdf_class_index::SdfClassIndex;
+    use crate::scene::sdf_warehouse::SdfWarehouse;
+    use crate::sdf::code_generator::SdfRegistrator;
+    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::sdf_box::SdfBox;
+    use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+    use crate::serialization::pod_vector::PodVector;
+    use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+    use crate::tests::assert_utils::tests::assert_eq;
+    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use crate::tests::gpu_code_execution::tests::{execute_code, BindGroupSlot, ExecutionConfig};
+    use crate::utils::object_uid::ObjectUid;
+    use bytemuck::{Pod, Zeroable};
+    use std::fmt::Write;
+
+    #[repr(C)]
+    #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+    struct PositionAndDirection {
+        position: PodVector,
+        direction: PodVector,
+    }
+    
+    #[test]
+    fn test_sample_signed_distance() {
+        let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
+
+        let mut shader_code = generate_code_for(&identity_box_class);
+        
+        shader_code.write_str(WHOLE_TRACER_GPU_CODE).expect("shader tracer code base code concatenation has failed");
+        shader_code.write_str(FUNCTION_EXECUTOR).expect("shader entry point code concatenation has failed");
+
+        let instance_transformation = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
+        let sdf_instance = SdfInstance::new(instance_transformation, SdfClassIndex(0), Linkage::new(ObjectUid(0), MaterialIndex(0)));
+        let mut buffer = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
+        sdf_instance.serialize_into(&mut buffer);
+        
+        let execution_config = {
+            let mut ware = ExecutionConfig::new(); ware
+                .set_data_binding_group(3)
+                .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
+                .add_dummy_binding_group(1, vec![])
+                .add_binding_group(0, vec![], vec![
+                    // the only value we need is sdf instances count which is 1
+                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 44])),
+                ])
+                .add_binding_group(2, vec![], vec![
+                    BindGroupSlot::new(1, buffer.backend()),
+                ])
+            ; 
+            ware
+        };
+
+        let test_input = [
+            PositionAndDirection {
+                position:  PodVector::new(1.5, 0.0, 0.0),
+                direction: PodVector::new(0.0, 0.0, 1.0),
+            },
+            PositionAndDirection {
+                position:  PodVector::new(0.0, 0.0,  4.0),
+                direction: PodVector::new(0.0, 0.0, -1.0),
+            },
+            PositionAndDirection {
+                position:  PodVector::new(0.0, 0.5, 0.0),
+                direction: PodVector::new(0.0, 1.0, 0.0),
+            },
+            PositionAndDirection {
+                position:  PodVector::new(-1.0, -2.0, -3.0),
+                direction: PodVector::new( 0.0,  1.0,  0.0),
+            },
+        ];
+
+        // xyz: shifted position, w: signed distance
+        let expected_output: Vec<PodVector> = vec![
+            PodVector {x:  1.5, y:  0.0, z:  1.5, w:  1.5,},
+            PodVector {x:  0.0, y:  0.0, z:  3.0, w:  1.0,},
+            PodVector {x:  0.0, y: -1.0, z:  0.0, w: -1.5,},
+            PodVector {x: -1.0, y: -2.0, z: -3.0, w:  0.0,},
+        ];
+        
+        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), shader_code.as_str(), execution_config);
+        
+        assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
+    }
+
+    const FUNCTION_EXECUTOR: &str = include_str!("test_tracer_functions.wgsl");
+    
+    #[must_use]
+    fn generate_code_for(sdf: &NamedSdf) -> String {
+        let mut registrator = SdfRegistrator::new();
+        registrator.add(&sdf);
+        
+        let warehouse = SdfWarehouse::new(registrator);
+        warehouse.sdf_classes_code().to_string()
+    }
+
+    #[must_use]
+    fn make_dummy_sdf_name() -> UniqueSdfClassName {
+        UniqueSdfClassName::new("some_box".to_string())
+    }
+}

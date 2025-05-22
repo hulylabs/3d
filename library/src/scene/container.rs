@@ -12,7 +12,7 @@ use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::scene::monolithic::Monolithic;
 use crate::scene::scene_object::SceneObject;
 use crate::sdf::code_generator::SdfRegistrator;
-use crate::sdf::named_sdf::UniqueName;
+use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::scene::sdf_warehouse::SdfWarehouse;
 use crate::scene::statistics::Statistics;
 use crate::scene::triangulated::Triangulated;
@@ -100,7 +100,7 @@ impl Container {
         })
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueName, material: MaterialIndex) -> ObjectUid{
+    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid{
         let index = self.sdfs.index_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
@@ -232,7 +232,7 @@ mod tests {
     use crate::scene::container::{Container, DataKind};
     use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
     use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
@@ -253,9 +253,9 @@ mod tests {
     }
 
     #[must_use]
-    fn make_single_sdf_sphere() -> (UniqueName, SdfRegistrator) {
+    fn make_single_sdf_sphere() -> (UniqueSdfClassName, SdfRegistrator) {
         let mut sdf_classes = SdfRegistrator::default();
-        let sphere_sdf_name = UniqueName::new("identity_sphere".to_string());
+        let sphere_sdf_name = UniqueSdfClassName::new("identity_sphere".to_string());
         sdf_classes.add(&NamedSdf::new(SdfSphere::new(1.0), sphere_sdf_name.clone()));
 
         (sphere_sdf_name, sdf_classes)

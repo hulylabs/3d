@@ -1,9 +1,8 @@
-﻿use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
-use super::resources::{ComputeRoutineEntryPoint, Resources};
+﻿use super::resources::{ComputeRoutineEntryPoint, Resources};
 use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
+use crate::gpu::color_buffer_evaluation::ColorBufferEvaluation;
 use crate::gpu::compute_pipeline::ComputePipeline;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
@@ -22,19 +21,20 @@ use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
 use cgmath::Vector2;
+use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::gpu::color_buffer_evaluation::ColorBufferEvaluation;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
+    pub(super) use crate::denoiser::entry::Denoiser;
     pub(super) use exr::prelude::write_rgba_file;
     pub(super) use pxm::PFMBuilder;
     pub(super) use std::fs::File;
     pub(super) use std::path::Path;
-    pub(super) use crate::denoiser::entry::Denoiser;
 }
 
 pub(crate) struct Renderer {
@@ -82,7 +82,7 @@ impl Renderer {
         let resources = Resources::new(context.clone(), presentation_format);
         let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
         
-        let shader_code = scene.append_sdf_handling_code(CODE_FOR_GPU);
+        let shader_code = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
         let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
         
         let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo)));
@@ -418,14 +418,17 @@ impl Renderer {
         }
     }
 
+    #[cfg(any(test, feature = "denoiser"))]
+    fn copy_noisy_pixels_to_cpu(&mut self) {
+        let pixel_colors_buffer_gpu_to_cpu_transfer = self.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
+        self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+        pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
+    }
+
     #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_accumulated_image(&mut self)
     {
-        {
-            let pixel_colors_buffer_gpu_to_cpu_transfer = self.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
-            self.context.device().poll(PollType::Wait).expect("failed to poll the device");
-            pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
-        }
+        self.copy_noisy_pixels_to_cpu();
 
         {
             let frame_buffer_width = self.uniforms.frame_buffer_size.width() as usize;
@@ -550,7 +553,7 @@ impl Renderer {
     }
 }
 
-pub(crate) const CODE_FOR_GPU: &str = include_str!("../../assets/shaders/tracer.wgsl");
+pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../assets/shaders/tracer.wgsl");
 
 struct Buffers {
     uniforms: Rc<wgpu::Buffer>,
@@ -634,17 +637,21 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use cgmath::EuclideanSpace;
+    use cgmath::{AbsDiffEq, EuclideanSpace, SquareMatrix};
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
     use wgpu::TextureFormat;
 
-    #[cfg(feature = "denoiser")]
-    use exr::prelude::write_rgba_file;
+    use crate::geometry::transform::Affine;
     use crate::sdf::code_generator::SdfRegistrator;
+    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::sdf_box::SdfBox;
     #[cfg(feature = "denoiser")]
     use crate::serialization::pod_vector::PodVector;
+    #[cfg(feature = "denoiser")]
+    use exr::prelude::write_rgba_file;
+
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
@@ -804,13 +811,42 @@ mod tests {
 
         system_under_test.accumulate_more_rays();
 
-        assert_parallelogram_ids_in_center(&mut system_under_test);
+        assert_parallelogram_ids_in_center(&mut system_under_test, "single_parallelogram");
         
         #[cfg(feature = "denoiser")] 
         {
             assert_parallelogram_normals_in_center(&mut system_under_test);
-            assert_parallelogram_colors_in_center(&mut system_under_test);   
+            assert_parallelogram_albedo_in_center(&mut system_under_test);   
         }
+    }
+
+    #[test]
+    fn test_single_box_sdf_rendering() {
+        let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
+        
+        let mut registrator = SdfRegistrator::default();
+        let test_box_name = UniqueSdfClassName::new("specimen".to_string());
+        registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));
+        
+        let mut scene = Container::new(registrator);
+        let test_material = Material::new()
+            .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
+            .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);
+        let test_material_uid = scene.materials().add(&test_material);
+        scene.add_sdf(&Affine::identity(), &test_box_name, test_material_uid);
+
+        let context = create_headless_wgpu_context();
+
+        let mut system_under_test
+            = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, TEST_FRAME_BUFFER_SIZE)
+            .expect("render instantiation has failed");
+        system_under_test.deterministic_mode();
+
+        system_under_test.accumulate_more_rays();
+        system_under_test.copy_noisy_pixels_to_cpu();
+        
+        assert_parallelogram_ids_in_center(&mut system_under_test, "sdf_box");
+        assert_parallelogram_colors_in_center(&mut system_under_test, "sdf_box");
     }
 
     #[cfg(feature = "denoiser")]
@@ -827,11 +863,12 @@ mod tests {
 
         assert_eq!(data.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
         
-        assert_parallelogram_in_center(data, parallelogram, background);
+        assert_parallelogram_in_center(data, parallelogram, background, 
+    |actual, expected, i, j| assert_eq!(actual, expected, "unexpected pixel value at ({i}, {j})"));
     }
 
     #[cfg(feature = "denoiser")]
-    fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer) {
+    fn assert_parallelogram_albedo_in_center(system_under_test: &mut Renderer) {
         let (_, albedo, _) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
         let parallelogram_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
         let background_color = PodVector { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
@@ -846,10 +883,10 @@ mod tests {
         assert_parallelogram_vector_data_in_center(normal_map, parallelogram_normal, background_normal, "single_parallelogram_normals");
     }
 
-    fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer) {
+    fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer, file_identity: &str) {
         let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
 
-        let png_path = Path::new("tests").join("out/single_parallelogram_identification.png");
+        let png_path = Path::new("tests").join(format!("out/{file_identity}_identification.png"));
         save_u32_buffer_as_png(object_id_map, TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
         print_full_path(png_path.clone(), "object id map");
         
@@ -857,10 +894,50 @@ mod tests {
 
         let parallelogram_uid: u32 = 1;
         let null_uid: u32 = 0;
-        assert_parallelogram_in_center(object_id_map, parallelogram_uid, null_uid);
+        assert_parallelogram_in_center(object_id_map, parallelogram_uid, null_uid, 
+    |actual, expected, i, j| assert_eq!(actual, expected, "unexpected pixel value at ({i}, {j})"));
     }
-    
-    fn assert_parallelogram_in_center<T: Copy + PartialEq + std::fmt::Debug>(data: &Vec<T>, parallelogram: T, background: T) {
+
+    fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer, file_identity: &str) {
+        let colors = system_under_test.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
+
+        let png_path = Path::new("tests").join(format!("out/{file_identity}_colors.png"));
+        save_u32_buffer_as_png(&hdr_to_sdr(colors), TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
+        print_full_path(png_path.clone(), "noisy colors");
+
+        assert_eq!(colors.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
+
+        let parallelogram_color = PodVector { x: 0.2697169, y: 0.5394338, z: 1.0788676, w: 1.0 };
+        let null_color = PodVector { x: 0.1, y: 0.1, z: 0.1, w: 1.0 };
+        assert_parallelogram_in_center(colors, parallelogram_color, null_color,
+           |actual, expected, i, j| {
+               if false == actual.abs_diff_eq(&expected, 0.1) {
+                   panic!("unexpected pixel value at ({i}, {j}): actual = {actual}, expected = {expected}");
+               }
+           }
+        );
+    }
+
+    fn hdr_to_sdr(input: &Vec<PodVector>) -> Vec<u32> {
+        let mut result = Vec::<u32>::with_capacity(input.len());
+        #[must_use] fn to_byte(channel: f32) -> u8 {
+            (channel.clamp(0.0, 1.0) * u8::MAX as f32).clamp(0.0, 255.0) as u8
+        }
+        for color in input {
+            let r = to_byte(color.x);
+            let g = to_byte(color.y);
+            let b = to_byte(color.z);
+            let a = to_byte(color.w);
+            result.push(((a as u32) << 24) | ((b as u32) << 16) | ((g as u32) << 8) | (r as u32));
+        }
+        result
+    }
+
+    fn assert_parallelogram_in_center<AssertEquality, T>(data: &Vec<T>, parallelogram: T, background: T, assert_equality: AssertEquality) 
+    where 
+        T : Copy + PartialEq + std::fmt::Debug,
+        AssertEquality: Fn(T, T, u32, u32),
+    {
         let center_box_width = TEST_FRAME_BUFFER_WIDTH / 2;
         let center_box_height = TEST_FRAME_BUFFER_HEIGHT / 2;
         let center_box_left = (TEST_FRAME_BUFFER_WIDTH - center_box_width) / 2;
@@ -879,7 +956,7 @@ mod tests {
                     } else {
                         background
                     };
-                assert_eq!(expected, actual, "unexpected pixel value at ({i}, {j})");
+                assert_equality(actual, expected, i, j);
             }
         }
     }

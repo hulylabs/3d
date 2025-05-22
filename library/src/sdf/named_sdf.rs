@@ -5,17 +5,17 @@ use crate::sdf::sdf_base::Sdf;
 #[derive(Clone)]
 pub struct NamedSdf {
     sdf: Rc<dyn Sdf>, 
-    name: UniqueName,
+    name: UniqueSdfClassName,
 }
 
 impl NamedSdf {
     #[must_use]
-    pub const fn new(sdf: Rc<dyn Sdf>, name: UniqueName) -> Self {
+    pub const fn new(sdf: Rc<dyn Sdf>, name: UniqueSdfClassName) -> Self {
         Self { sdf, name }
     }
     
     #[must_use]
-    pub const fn name(&self) -> &UniqueName {
+    pub const fn name(&self) -> &UniqueSdfClassName {
         &self.name
     }
     
@@ -26,13 +26,13 @@ impl NamedSdf {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct UniqueName(String);
+pub struct UniqueSdfClassName(String);
 
-impl UniqueName {
+impl UniqueSdfClassName {
     #[must_use]
     pub fn new(name: String) -> Self {
         if name.chars().all(|c| c.is_ascii_alphabetic() || c == '_') {
-            UniqueName(name)
+            UniqueSdfClassName(name)
         } else {
             panic!("'{}' is invalid: names must contain only letters and underscores", name)
         }
@@ -44,7 +44,7 @@ impl UniqueName {
     }
 }
 
-impl Display for UniqueName {
+impl Display for UniqueSdfClassName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.as_str())
     }
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn test_display() {
         let expected_display = "display_name";
-        let system_under_test = UniqueName(expected_display.to_string());
+        let system_under_test = UniqueSdfClassName(expected_display.to_string());
 
         let actual_display = format!("{}", system_under_test);
 
@@ -68,9 +68,9 @@ mod tests {
     fn test_equality_and_hash() {
         use std::collections::HashSet;
 
-        let equal_name_one = UniqueName("abc".to_string());
-        let equal_name_two = UniqueName("abc".to_string());
-        let different_name = UniqueName("xyz".to_string());
+        let equal_name_one = UniqueSdfClassName("abc".to_string());
+        let equal_name_two = UniqueSdfClassName("abc".to_string());
+        let different_name = UniqueSdfClassName("xyz".to_string());
 
         assert_eq!(equal_name_one, equal_name_two);
         assert_ne!(equal_name_one, different_name);

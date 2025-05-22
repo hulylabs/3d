@@ -9,7 +9,6 @@ pub(crate) mod output;
 pub(crate) mod compute_pipeline;
 pub(crate) mod bind_group_builder;
 
-mod test_shaders;
 mod binding_groups;
 mod rasterization_pipeline;
 mod versioned_buffer;

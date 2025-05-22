@@ -5,11 +5,11 @@ const PI = 3.1415926535897932385;
 const MIN_FLOAT = 0.0001;
 const MAX_FLOAT = 999999999.999;
 
-const LAMBERTIAN = 0.0;
-const MIRROR = 1.0;
-const GLASS = 2.0;
-const ISOTROPIC = 3.0;
-const ANISOTROPIC = 4.0;
+const MATERIAL_LAMBERTIAN = 0.0;
+const MATERIAL_MIRROR = 1.0;
+const MATERIAL_GLASS = 2.0;
+const MATERIAL_ISOTROPIC = 3.0;
+const MATERIAL_ANISOTROPIC = 4.0;
 
 const WORK_GROUP_SIZE_X = 8;
 const WORK_GROUP_SIZE_Y = 8;
@@ -17,6 +17,11 @@ const WORK_GROUP_SIZE_Z = 1;
 const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
 
 const BACKGROUND_COLOR = vec3f(0.1);
+
+const DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES = 5;
+const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 256;
+const DETERMINISTIC_SHADOW_THRESHOLD = 0.001;
+const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
 
 const SAMPLES_COUNT_MONTE_CARLO = 1.0;
 const SAMPLES_COUNT_DETERMINISTIC = 1.0;
@@ -39,24 +44,24 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 3) var<storage, read> materials: array<Material>;
 @group(2) @binding( 4) var<storage, read> bvh: array<AABB>;
 
-var<private> randState : u32 = 0u;
-var<private> pixelCoords : vec2f;
+var<private> randState: u32 = 0u;
+var<private> pixelCoords: vec2f;
 
-var<private> hitRec : HitRecord;
-var<private> scatterRec : ScatterRecord;
-var<private> lights : Parallelogram;
-var<private> ray_tmin : f32 = 0.000001;
-var<private> ray_tmax : f32 = MAX_FLOAT;
-var<private> stack : array<i32, STACK_SIZE>;
+var<private> hitRec: HitRecord;
+var<private> scatterRec: ScatterRecord;
+var<private> lights: Parallelogram;
+var<private> ray_tmin: f32 = 0.000001;
+var<private> ray_tmax: f32 = MAX_FLOAT;
+var<private> stack: array<i32, STACK_SIZE>;
 
 struct Uniforms {
-	frame_buffer_size : vec2u,
+	frame_buffer_size: vec2u,
 	frame_buffer_area: u32,
 	frame_buffer_aspect: f32, // width / height
 	inverted_frame_buffer_size: vec2f,
-	frame_number : f32,
-	if_reset_frame_buffer : f32,
-	view_matrix : mat4x4f,
+	frame_number: f32,
+	if_reset_frame_buffer: f32,
+	view_matrix: mat4x4f,
 	/* Consider a view ray defined by an origin (e.g., the eye position for a perspective camera)
     and a direction that intersects the view plane at a world-space pixel position.
     This matrix, when multiplied by the world-space pixel position, returns the ray's origin.
@@ -71,29 +76,29 @@ struct Uniforms {
 }
 
 struct Ray {
-	origin : vec3f,
-	dir : vec3f,
+	origin: vec3f,
+	direction: vec3f,
 }
 
 struct Material {
-	color : vec3f,			// diffuse color
-	specularColor : vec3f,	// specular color
-	emissionColor : vec3f,	// emissive color
-	specularStrength : f32,	// chance that a ray hitting would reflect specularly
-	roughness : f32,		// diffuse strength
-	eta : f32,				// refractive index
-	material_type : f32,
+	albedo: vec3f,
+	specular: vec3f,
+	emission: vec3f,
+	specular_strength: f32, // chance that a ray hitting would reflect specularly
+	roughness: f32, // diffuse strength
+	refractive_index_eta: f32, // refractive index
+	material_type: f32,
 }
 
 struct Parallelogram {
-	Q : vec3f,
-	u : vec3f,
-	object_uid : u32,
-	v : vec3f,
-	D : f32,
-	normal : vec3f,
-	w : vec3f,
-	material_id : f32,
+	Q: vec3f,
+	u: vec3f,
+	object_uid: u32,
+	v: vec3f,
+	D: f32,
+	normal: vec3f,
+	w: vec3f,
+	material_id: f32,
 }
 
 struct Triangle {
@@ -151,7 +156,7 @@ struct ScatterRecord {
 /// common
 
 fn at(ray : Ray, t : f32) -> vec3f {
-	return ray.origin + t * ray.dir;
+	return ray.origin + t * ray.direction;
 }
 
 // PCG prng
@@ -204,9 +209,10 @@ fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, tr
     return length(point - transformed_origin);
 }
 
+@must_use
 fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
     let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
-    let local_ray_direction = transform_vector(sdf.inverse_location, ray.dir);
+    let local_ray_direction = transform_vector(sdf.inverse_location, ray.direction);
     let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
 
     var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
@@ -244,11 +250,11 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
 
 fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
-	if(dot(ray.dir, quad.normal) > 0) {
+	if(dot(ray.direction, quad.normal) > 0) {
 		return false;
 	}
 
-	let denom = dot(quad.normal, ray.dir);
+	let denom = dot(quad.normal, ray.direction);
 
 	// No hit if the ray is paraller to the plane
 	if(abs(denom) < 1e-8) {
@@ -273,7 +279,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	hitRec.t = t;
 	hitRec.p = intersection;
 	hitRec.normal = quad.normal;
-	hitRec.front_face = dot(ray.dir, hitRec.normal) < 0;
+	hitRec.front_face = dot(ray.direction, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
 	{
 		hitRec.normal = -hitRec.normal;
@@ -287,12 +293,12 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html
 fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bool {
 
-	let ray = Ray(incidentRay.origin, incidentRay.dir);
+	let ray = Ray(incidentRay.origin, incidentRay.direction);
 
 	let AB = tri.B - tri.A;
 	let AC = tri.C - tri.A;
 	let normal = cross(AB, AC);
-	let determinant = -dot(ray.dir, normal);
+	let determinant = -dot(ray.direction, normal);
 
 	// CULLING
 	if(abs(determinant) < tmin) {
@@ -300,7 +306,7 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 	}
 
 	let ao = ray.origin - tri.A;
-	let dao = cross(ao, ray.dir);
+	let dao = cross(ao, ray.direction);
 
 	// calculate dist to triangle & barycentric coordinates of intersection point
 	let invDet = 1 / determinant;
@@ -320,7 +326,7 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 	hitRec.normal = tri.normalA * w + tri.normalB * u + tri.normalC * v;
 	hitRec.normal = normalize(hitRec.normal);
 
-	hitRec.front_face = dot(incidentRay.dir, hitRec.normal) < 0;
+	hitRec.front_face = dot(incidentRay.direction, hitRec.normal) < 0;
 	if(hitRec.front_face == false)
 	{
 		hitRec.normal = -hitRec.normal;
@@ -347,7 +353,7 @@ fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray,
 
 fn get_lights() -> bool {
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
-		let emission = materials[i32(quad_objs[i].material_id)].emissionColor;
+		let emission = materials[i32(quad_objs[i].material_id)].emission;
 
 		if(emission.x > 0.0) {
 			lights = quad_objs[i];
@@ -485,7 +491,7 @@ fn path_trace_deterministic() -> vec3f {
     for(var i = 0.0; i < sqrt_samples_per_pixel; i += 1.0) {
         for(var j = 0.0; j < sqrt_samples_per_pixel; j += 1.0) {
             let ray = ray_to_pixel(reciprocal_sqrt_samples_per_pixel * i, reciprocal_sqrt_samples_per_pixel * j);
-            result_color += ray_color_monte_carlo(ray);
+            result_color += ray_color_deterministic(ray);
             samplaes_taken += 1;
         }
     }
@@ -494,12 +500,98 @@ fn path_trace_deterministic() -> vec3f {
     return result_color;
 }
 
+struct RayMarchStep {
+    new_position: vec3f,
+    signed_distance: f32,
+}
+
+@must_use // expected normalized 'direction'
+fn sample_signed_distance(position: vec3f, direction: vec3f) -> RayMarchStep {
+    var record: RayMarchStep = RayMarchStep(position, MAX_FLOAT);
+    for (var i = u32(0); i < uniforms.sdf_count; i++) {
+        let sdf = sdf[i];
+
+        let local_position = transform_point(sdf.inverse_location, position);
+        let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
+        let local_distance = sdf_select(sdf.class_index, local_position);
+        let local_next = local_position + local_direction * local_distance;
+
+        let global_next = transform_point(sdf.location, local_next);
+        let global_offset = global_next - position;
+        let global_distance = length(global_offset) * sign(dot(global_offset, direction));
+
+        if (global_distance < record.signed_distance) {
+            record = RayMarchStep(global_next, global_distance);
+        }
+    }
+    return record;
+}
+
+@must_use // 'normal' is expected to be normalized
+fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
+	var occlusion: f32 = 0.0;
+    var fall_off: f32 = 1.0;
+    for(var i = 0; i < DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES; i++) {
+        let height = 0.01 + 0.12 * f32(i) / 4.0;
+        let step = sample_signed_distance(posision + height * normal, normal);
+        occlusion += (height - step.signed_distance) * fall_off;
+        fall_off *= 0.95;
+        if(occlusion > 0.35) {
+            break;
+        }
+    }
+    return clamp(1.0 - 3.0 * occlusion, 0.0, 1.0) * (0.5 + 0.5 * normal.y);
+}
+
+@must_use // 'to_light' expected to be normalized
+fn shadow(position: vec3f, to_light: vec3f, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
+    var result: f32 = 1.0;
+    var offset: f32 = min_ray_offset;
+    var next_point = position + to_light * offset;
+    for (var i = u32(0); i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
+        if (offset >= max_ray_offset) {
+            break;
+        }
+        let step = sample_signed_distance(next_point, to_light);
+        if(step.signed_distance < DETERMINISTIC_SHADOW_THRESHOLD) {
+            result = 0.0;
+            break;
+        }
+        next_point = step.new_position;
+        offset += step.signed_distance;
+    }
+    return result;
+}
+
 @must_use
-fn ray_color_deterministic(incident_ray : Ray) -> vec3f {
+fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
     var current_ray = incident_ray;
     var accumulated_radiance = vec3f(0.0);
 
     if(hitScene(current_ray)) {
+        let hit = hitRec;
+        if (hit.material.material_type == MATERIAL_LAMBERTIAN) {
+            let light_center = lights.Q + (lights.u + lights.v) * 0.5;
+            let to_light = light_center - hit.p;
+            let to_light_direction = normalize(to_light);
+
+            let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
+            let to_camera_direction = normalize(cam_origin - hit.p);
+            let reflected_light = reflect(-to_light_direction, hit.normal);
+            let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
+
+            let shadow = shadow(hit.p, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+            let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
+
+            let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
+            let specular = specular_fall_off * hit.material.specular;
+            let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
+            let emissive = hit.material.emission;
+
+            accumulated_radiance = mix(diffuse, specular, hit.material.specular_strength) * shadow + ambient + emissive;
+        } else {
+            accumulated_radiance = hit.material.albedo;
+        }
     } else {
         accumulated_radiance = BACKGROUND_COLOR;
     }
@@ -546,7 +638,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
-            hit_albedo = materials[u32(parallelogram.material_id)].color;
+            hit_albedo = materials[u32(parallelogram.material_id)].albedo;
             hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
@@ -556,14 +648,14 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         let sdf = sdf[i];
         if(hit_sdf(sdf, ray_tmin, closest_so_far, ray)){
             hit_uid = sdf.object_uid;
-            hit_albedo = materials[u32(sdf.material_id)].color;
+            hit_albedo = materials[u32(sdf.material_id)].albedo;
             hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
     }
 
     const leafNode = 2;		// fix this hardcoding later
-    var invDir = 1 / ray.dir;
+    var invDir = 1 / ray.direction;
     var toVisitOffset = 0;
     var curNodeIdx = 0;
     var node = bvh[curNodeIdx];
@@ -579,7 +671,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     let triangle = triangles[startPrim + j];
                     if(hit_triangle(triangle, ray_tmin, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
-                        hit_albedo = materials[u32(triangle.material_id)].color;
+                        hit_albedo = materials[u32(triangle.material_id)].albedo;
                         hit_normal = hitRec.normal;
                         closest_so_far = hitRec.t;
                     }
@@ -591,7 +683,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                 toVisitOffset--;
                 curNodeIdx = stack[toVisitOffset];
             } else {
-                if(ray.dir[i32(node.axis)] < 0) {
+                if(ray.direction[i32(node.axis)] < 0) {
                     stack[toVisitOffset] = curNodeIdx + 1;
                     toVisitOffset++;
                     curNodeIdx = i32(node.right_offset);
@@ -638,10 +730,8 @@ fn hitScene(ray : Ray) -> bool
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
 
-	for(var i = u32(0); i < uniforms.parallelograms_count; i++)
-	{
-		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
-		{
+	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
+		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray)) {
 			hit_anything = true;
 			closest_so_far = hitRec.t;
 		}
@@ -651,7 +741,7 @@ fn hitScene(ray : Ray) -> bool
 	// https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies#CompactBVHForTraversal
 
 	const leafNode = 2;		// fix this hardcoding later
-	var invDir = 1 / ray.dir;
+	var invDir = 1 / ray.direction;
 	var toVisitOffset = 0;
 	var curNodeIdx = 0;
 	var node = bvh[curNodeIdx];
@@ -659,14 +749,11 @@ fn hitScene(ray : Ray) -> bool
 	while(true) {
 		node = bvh[curNodeIdx];
 
-		if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir))
-		{
-			if(i32(node.prim_type) == leafNode)
-			{
+		if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir)) {
+			if(i32(node.prim_type) == leafNode) {
 				let startPrim = i32(node.prim_id);
 				let countPrim = i32(node.prim_count);
-				for(var j = 0; j < countPrim; j++)
-				{
+				for(var j = 0; j < countPrim; j++) {
 					if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray))
 					{
 						hit_anything = true;
@@ -674,34 +761,24 @@ fn hitScene(ray : Ray) -> bool
 					}
 				}
 
-				if(toVisitOffset == 0)
-				{
+				if(toVisitOffset == 0) {
 					break;
 				}
 				toVisitOffset--;
 				curNodeIdx = stack[toVisitOffset];
-			}
-
-			else
-			{
-				if(ray.dir[i32(node.axis)] < 0)
-				{
+			} else {
+				if(ray.direction[i32(node.axis)] < 0) {
 					stack[toVisitOffset] = curNodeIdx + 1;
 					toVisitOffset++;
 					curNodeIdx = i32(node.right_offset);
-				}
-				else
-				{
+				} else {
 					stack[toVisitOffset] = i32(node.right_offset);
 					toVisitOffset++;
 					curNodeIdx++;
 				}
 			}
-		}
-		else
-		{
-			if(toVisitOffset == 0)
-			{
+		} else {
+			if(toVisitOffset == 0) {
 				break;
 			}
 
@@ -709,8 +786,7 @@ fn hitScene(ray : Ray) -> bool
 			curNodeIdx = stack[toVisitOffset];
 		}
 
-		if(toVisitOffset >= STACK_SIZE)
-		{
+		if(toVisitOffset >= STACK_SIZE) {
 			break;
 		}
 	}
@@ -732,7 +808,7 @@ fn hitScene(ray : Ray) -> bool
 // 	var closest_so_far = MAX_FLOAT;
 // 	var hit_anything = false;
 
-// 	var invDir = 1 / ray.dir;
+// 	var invDir = 1 / ray.direction;
 // 	var i = 0;
 // 	while(i < uniforms.bvh_length && i != -1)
 // 	{
@@ -786,29 +862,26 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 	var acc_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
 	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
 
-	for(var i = 0; i < MAX_BOUNCES; i++)
-	{
-		if(hitScene(currRay) == false)
-		{
+	for(var i = 0; i < MAX_BOUNCES; i++) {
+		if(hitScene(currRay) == false) {
 			acc_radiance += (BACKGROUND_COLOR * throughput);
 			break;
 		}
 
 		// unidirectional light
-		var emissionColor = hitRec.material.emissionColor;
+		var emissionColor = hitRec.material.emission;
 		if(!hitRec.front_face) {
 			emissionColor = vec3f(0);
 		}
 
-		if(IMPORTANCE_SAMPLING)
-		{
+		if(IMPORTANCE_SAMPLING) {
 			// IMPORTANCE SAMPLING TOWARDS LIGHT
 			// diffuse scatter ray
 			let scatterred_surface = material_scatter(currRay);
 
 			if(scatterRec.skip_pdf) {
 				acc_radiance += emissionColor * throughput;
-				throughput *= mix(hitRec.material.color, hitRec.material.specularColor, doSpecular);
+				throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
 
 				currRay = scatterRec.skip_pdf_ray;
 				continue;
@@ -832,23 +905,19 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 			}
 
 			acc_radiance += emissionColor * throughput;
-			throughput *= ((lambertian_pdf * mix(hitRec.material.color, hitRec.material.specularColor, doSpecular)) / pdf);
+			throughput *= ((lambertian_pdf * mix(hitRec.material.albedo, hitRec.material.specular, doSpecular)) / pdf);
 			currRay = scattered;
-		}
-
-		else
-		{
+		} else {
 			let scattered = material_scatter(currRay);
 
 			acc_radiance += emissionColor * throughput;
-			throughput *= mix(hitRec.material.color, hitRec.material.specularColor, doSpecular);
+			throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
 
 			currRay = scattered;
 		}
 
 		// russian roulette
-		if(i > 2)
-		{
+		if(i > 2) {
 			let p = max(throughput.x, max(throughput.y, throughput.z));
 			if(rand2D() > p) {
 				break;
@@ -865,10 +934,9 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 
 var<private> doSpecular : f32;
 fn material_scatter(ray_in : Ray) -> Ray {
-
 	var scattered = Ray(vec3f(0), vec3f(0));
 	doSpecular = 0;
-	if(hitRec.material.material_type == LAMBERTIAN) {
+	if(hitRec.material.material_type == MATERIAL_LAMBERTIAN) {
 
 		let uvw = onb_build_from_w(hitRec.normal);
 		var diffuse_dir = cosine_sampling_wrt_Z();
@@ -876,9 +944,9 @@ fn material_scatter(ray_in : Ray) -> Ray {
 
 		scattered = Ray(hitRec.p, diffuse_dir);
 
-		doSpecular = select(0.0, 1.0, rand2D() < hitRec.material.specularStrength);
+		doSpecular = select(0.0, 1.0, rand2D() < hitRec.material.specular_strength);
 
-		var specular_dir = reflect(ray_in.dir, hitRec.normal);
+		var specular_dir = reflect(ray_in.direction, hitRec.normal);
 		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitRec.material.roughness));
 
 		scattered = Ray(hitRec.p, normalize(mix(diffuse_dir, specular_dir, doSpecular)));
@@ -890,22 +958,20 @@ fn material_scatter(ray_in : Ray) -> Ray {
 			scatterRec.skip_pdf_ray = scattered;
 		}
 	}
-
-	else if(hitRec.material.material_type == MIRROR) {
-		var reflected = reflect(ray_in.dir, hitRec.normal);
+	else if(hitRec.material.material_type == MATERIAL_MIRROR) {
+		var reflected = reflect(ray_in.direction, hitRec.normal);
 		scattered = Ray(hitRec.p, normalize(reflected + hitRec.material.roughness * uniform_random_in_unit_sphere()));
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-
-	else if(hitRec.material.material_type == GLASS) {
-		var ir = hitRec.material.eta;
+	else if(hitRec.material.material_type == MATERIAL_GLASS) {
+		var ir = hitRec.material.refractive_index_eta;
 		if(hitRec.front_face == true) {
 			ir = (1.0 / ir);
 		}
 
-		let unit_direction = ray_in.dir;
+		let unit_direction = ray_in.direction;
 		let cos_theta = min(dot(-unit_direction, hitRec.normal), 1.0);
 		let sin_theta = sqrt(1 - cos_theta*cos_theta);
 
@@ -926,16 +992,15 @@ fn material_scatter(ray_in : Ray) -> Ray {
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-
-	else if(hitRec.material.material_type == ISOTROPIC) {
-		let g = hitRec.material.specularStrength;
+	else if(hitRec.material.material_type == MATERIAL_ISOTROPIC) {
+		let g = hitRec.material.specular_strength;
 		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand2D())), 2.0)) / (2 * g);
 		let sin_hg = sqrt(1 - cos_hg * cos_hg);
 		let phi = 2 * PI * rand2D();
 
 		let hg_dir = vec3f(sin_hg * cos(phi), sin_hg * sin(phi), cos_hg);
 
-		let uvw = onb_build_from_w(ray_in.dir);
+		let uvw = onb_build_from_w(ray_in.direction);
 		scattered = Ray(hitRec.p, normalize(onb_get_local(hg_dir)));
 
 		scatterRec.skip_pdf = true;
@@ -993,7 +1058,7 @@ fn cosine_sampling_wrt_Z() -> vec3f {
 }
 
 fn lambertian_scattering_pdf(scattered : Ray) -> f32 {
-	let cos_theta = max(0.0, dot(hitRec.normal, scattered.dir));
+	let cos_theta = max(0.0, dot(hitRec.normal, scattered.direction));
 	return cos_theta / PI;
 }
 
@@ -1019,7 +1084,7 @@ fn onb_get_local(a : vec3f) -> vec3f {
 }
 
 fn onb_lambertian_scattering_pdf(scattered : Ray) -> f32 {
-	let cosine_theta = dot(normalize(scattered.dir), unit_w);
+	let cosine_theta = dot(normalize(scattered.direction), unit_w);
 	return max(0.0, cosine_theta/PI);
 }
 
@@ -1035,11 +1100,11 @@ fn get_random_on_quad_point(q : Parallelogram) -> vec3f {
 
 fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 
-	if(dot(ray.dir, quad.normal) > 0) {
+	if(dot(ray.direction, quad.normal) > 0) {
 		return MIN_FLOAT;
 	}
 
-	let denom = dot(quad.normal, ray.dir);
+	let denom = dot(quad.normal, ray.direction);
 
 	if(abs(denom) < 1e-8) {
 		return MIN_FLOAT;
@@ -1060,14 +1125,14 @@ fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 	}
 
 	var hitNormal = quad.normal;
-	let front_face = dot(ray.dir, quad.normal) < 0;
+	let front_face = dot(ray.direction, quad.normal) < 0;
 	if(front_face == false)
 	{
 		hitNormal = -hitNormal;
 	}
 
-	let distance_squared = t * t * length(ray.dir) * length(ray.dir);
-	let cosine = abs(dot(ray.dir, hitNormal) / length(ray.dir));
+	let distance_squared = t * t * length(ray.direction) * length(ray.direction);
+	let cosine = abs(dot(ray.direction, hitNormal) / length(ray.direction));
 
 	return (distance_squared / (cosine * length(cross(lights.u, lights.v))));
 }

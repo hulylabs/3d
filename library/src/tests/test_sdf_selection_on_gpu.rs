@@ -3,19 +3,19 @@ mod tests {
     use crate::geometry::alias::Vector;
     use crate::scene::sdf_warehouse::SdfWarehouse;
     use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
     use crate::tests::assert_utils::tests::assert_eq;
     use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
-    use crate::tests::gpu_code_execution::tests::execute_code;
+    use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use std::fmt::Write;
 
     #[test]
     fn test_sdf_selection_evaluation() {
-        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueName::new("identity_sphere".to_string()));
-        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueName::new("some_box".to_string()));
+        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueSdfClassName::new("identity_sphere".to_string()));
+        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueSdfClassName::new("some_box".to_string()));
         
         let mut registrator = SdfRegistrator::new();
         registrator.add(&sphere);
@@ -51,7 +51,7 @@ mod tests {
               6.0,
         ];
 
-        let actual_distances = execute_code(&input_points, the_code.as_str());
+        let actual_distances = execute_code(&input_points, the_code.as_str(), ExecutionConfig::default());
         
         assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }

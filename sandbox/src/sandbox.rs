@@ -131,6 +131,14 @@ impl Sandbox {
                     self.engine.use_monte_carlo_render();
                 } else if "n" == letter_key {
                     self.engine.use_deterministic_render();
+                } else if "+" == letter_key {
+                    self.world.move_light_z(1.0, self.engine.scene());
+                } else if "-" == letter_key {
+                    self.world.move_light_z(-1.0, self.engine.scene());
+                } else if "*" == letter_key {
+                    self.world.move_light_x(1.0, self.engine.scene());
+                } else if "/" == letter_key {
+                    self.world.move_light_x(-1.0, self.engine.scene());
                 } else if "1" == letter_key {
                     self.world.switch_to_ui_box_scene(self.engine.scene());
                 } else if "2" == letter_key {
@@ -138,7 +146,7 @@ impl Sandbox {
                 } else if "3" == letter_key {
                     self.world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
                 } else if "4" == letter_key {
-                    self.world.switch_to_smoth_operators_scene(self.engine.scene());
+                    self.world.switch_to_smooth_operators_scene(self.engine.scene());
                 }
             }
             _ => (),
@@ -158,7 +166,7 @@ impl Sandbox {
         let mut scene = Container::new(sdf_registrator);
         let materials = Materials::new(&mut scene);
         
-        let world = World::new(sdf_classes, materials);
+        let mut world = World::new(sdf_classes, materials);
         world.switch_to_ui_box_scene(&mut scene);
         let selected_object_material = world.selected_object_material();
         

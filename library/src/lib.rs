@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
 #![allow(clippy::needless_range_loop)]

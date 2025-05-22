@@ -263,7 +263,7 @@ impl BvhNode {
 pub(crate) mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
-    use crate::geometry::epsilon::DEFAULT_EPSILON;
+    use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
     use crate::geometry::fundamental_constants::VERTICES_IN_TRIANGLE;
     use crate::geometry::vertex::Vertex;
     use cgmath::{Zero, assert_abs_diff_eq};
@@ -289,7 +289,7 @@ pub(crate) mod tests {
 
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::new(), epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::new(), epsilon = DEFAULT_EPSILON_F64);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());
@@ -306,7 +306,7 @@ pub(crate) mod tests {
 
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
-        assert_abs_diff_eq!(system_under_test.bounding_box, triangle.bounding_box(), epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(system_under_test.bounding_box, triangle.bounding_box(), epsilon = DEFAULT_EPSILON_F64);
         assert_eq!(system_under_test.content.as_ref().unwrap().start_triangle_index(), 0);
         assert_eq!(system_under_test.content.as_ref().unwrap().triangles_count(), 1);
         assert!(system_under_test.hit_node.is_none());
@@ -330,7 +330,7 @@ pub(crate) mod tests {
 
         let system_under_test = ware.borrow();
 
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::merge(left.bounding_box(), right.bounding_box()), epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::merge(left.bounding_box(), right.bounding_box()), epsilon = DEFAULT_EPSILON_F64);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());
