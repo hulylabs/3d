@@ -122,6 +122,11 @@ impl Renderer {
         self.color_buffer_evaluation = ColorBufferEvaluation::new_deterministic(self.pipeline_ray_tracing_deterministic.clone());
         self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
     }
+    
+    #[must_use]
+    pub(crate) fn is_monte_carlo(&self) -> bool {
+        1 == self.color_buffer_evaluation.frame_counter_increment()
+    }
 
     #[must_use]
     fn update_buffer<T: GpuSerializationSize>(geometry_kind: &'static DataKind, buffer: &mut VersionedBuffer, resources: &Resources, scene: &Container, queue: &wgpu::Queue,) -> BufferUpdateStatus {

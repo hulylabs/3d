@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
 #![allow(clippy::needless_range_loop)]
@@ -229,15 +229,21 @@ impl Engine {
             // TODO: schedule surface reconfigure?
         }
 
-        for _ in 0..RAYS_ACCUMULATIONS_PER_FRAME {
+        if self.renderer.is_monte_carlo() {
+            for _ in 0..RAYS_ACCUMULATIONS_PER_FRAME {
+                self.renderer.accumulate_more_rays();
+            }   
+        } else {
             self.renderer.accumulate_more_rays();
-        }
+        } 
 
         #[cfg(feature = "denoiser")]
         {
-            self.denoising_measurer.start();
-            self.renderer.denoise_accumulated_image();
-            self.denoising_measurer.stop();
+            if self.renderer.is_monte_carlo() {
+                self.denoising_measurer.start();
+                self.renderer.denoise_accumulated_image();
+                self.denoising_measurer.stop();   
+            }
         }
 
         self.renderer.present(&surface_texture);

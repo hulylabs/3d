@@ -20,8 +20,10 @@ const BACKGROUND_COLOR = vec3f(0.1);
 
 const DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES = 5;
 const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 256;
-const DETERMINISTIC_SHADOW_THRESHOLD = 0.001;
+const DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD = 0.001;
+const DETERMINISTIC_SHADOW_THRESHOLD = 0.0001;
 const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
+const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0;
 
 const SAMPLES_COUNT_MONTE_CARLO = 1.0;
 const SAMPLES_COUNT_DETERMINISTIC = 1.0;
@@ -544,23 +546,37 @@ fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
 }
 
 @must_use // 'to_light' expected to be normalized
-fn shadow(position: vec3f, to_light: vec3f, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
+fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
     var result: f32 = 1.0;
     var offset: f32 = min_ray_offset;
+    var previous_signed_distance: f32 = MAX_FLOAT;
     var next_point = position + to_light * offset;
     for (var i = u32(0); i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
+        let step = sample_signed_distance(next_point, to_light);
+        if(step.signed_distance < DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD) {
+            return 0.0;
+        }
+
+        // https://www.shadertoy.com/view/lsKcDD - Sebastian Aaltonen, explanation: https://iquilezles.org/articles/rmshadows/
+        let signed_distance_sqr = step.signed_distance * step.signed_distance;
+        let y = signed_distance_sqr / (2.0 * previous_signed_distance);
+        let d = sqrt(signed_distance_sqr - y * y);
+
+        result = min(result, d * light_size / max(0.0, offset - y));
+        if (result < DETERMINISTIC_SHADOW_THRESHOLD) {
+            break;
+        }
+
+        offset += step.signed_distance;
         if (offset >= max_ray_offset) {
             break;
         }
-        let step = sample_signed_distance(next_point, to_light);
-        if(step.signed_distance < DETERMINISTIC_SHADOW_THRESHOLD) {
-            result = 0.0;
-            break;
-        }
+
+        previous_signed_distance = step.signed_distance;
         next_point = step.new_position;
-        offset += step.signed_distance;
     }
-    return result;
+    result = clamp(result, 0.0, 1.0);
+    return result * result * (3.0 - 2.0 * result);
 }
 
 @must_use
@@ -574,13 +590,14 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
             let light_center = lights.Q + (lights.u + lights.v) * 0.5;
             let to_light = light_center - hit.p;
             let to_light_direction = normalize(to_light);
+            let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
 
             let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
             let to_camera_direction = normalize(cam_origin - hit.p);
             let reflected_light = reflect(-to_light_direction, hit.normal);
             let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-            let shadow = shadow(hit.p, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+            let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
             let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
 
             let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;

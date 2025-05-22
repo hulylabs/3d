@@ -1,7 +1,4 @@
-﻿use std::env;
-use std::path::{Path, PathBuf};
-use cgmath::Deg;
-use log::error;
+﻿use cgmath::Deg;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
@@ -37,6 +34,9 @@ use library::sdf::sdf_union::SdfUnion;
 use library::sdf::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::sdf_vesica_segment::SdfVesicaSegment;
 use library::utils::object_uid::ObjectUid;
+use log::error;
+use std::env;
+use std::path::{Path, PathBuf};
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -553,35 +553,35 @@ impl World {
             self.sdf_classes.rectangular_box.name(),
             self.materials.silver_material);
         
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
-        //     self.sdf_classes.rectangular_box.name(),
-        //     self.materials.bright_red_material);
-        // 
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(1.5, 0.6, -1.0))*Affine::from_scale(0.25) ),
-        //     self.sdf_classes.sphere.name(),
-        //     self.materials.gold_metal);
-        // 
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(0.5, 0.0, 2.0))*Affine::from_scale(0.25) ),
-        //     self.sdf_classes.sphere.name(),
-        //     self.materials.blue_glass);
-        // 
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(0.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
-        //     self.sdf_classes.sphere.name(),
-        //     self.materials.blue_glass);
-        // 
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
-        //     self.sdf_classes.sphere.name(),
-        //     self.materials.green_mirror);
-        // 
-        // scene.add_sdf(
-        //     &(Affine::from_translation(Vector::new(0.0, 0.0, -1.0))*Affine::from_scale(0.25) ),
-        //     self.sdf_classes.sphere.name(),
-        //     self.materials.coral_material);
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
+            self.sdf_classes.rectangular_box.name(),
+            self.materials.bright_red_material);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.5, 0.6, -1.0))*Affine::from_scale(0.25) ),
+            self.sdf_classes.sphere.name(),
+            self.materials.gold_metal);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.5, 0.0, 2.0))*Affine::from_scale(0.25) ),
+            self.sdf_classes.sphere.name(),
+            self.materials.blue_glass);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            self.sdf_classes.sphere.name(),
+            self.materials.blue_glass);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            self.sdf_classes.sphere.name(),
+            self.materials.green_mirror);
+        
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.0, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            self.sdf_classes.sphere.name(),
+            self.materials.coral_material);
 
         self.make_common_scene_walls(scene);
 
@@ -592,42 +592,42 @@ impl World {
             exe_directory.join(file_name)
         }
 
-        // let mut meshes = MeshWarehouse::new();
-        // let cube_mesh_file = get_resource_path(Path::new("assets").join("cube.obj"));
-        // let cube_mesh_or_error = meshes.load(cube_mesh_file);
-        // 
-        // match cube_mesh_or_error {
-        //     Ok(cube_mesh) => {
-        //         let large_box_material = scene.materials().add(&Material::new()
-        //             .with_albedo(0.95, 0.95, 0.95)
-        //             .with_refractive_index_eta(2.5));
-        //         let large_box_location =
-        //             Transformation::new(
-        //                 Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) *
-        //                     Affine::from_nonuniform_scale(3.65, 0.8, 0.25));
-        //         scene.add_mesh(&meshes, cube_mesh, &large_box_location, large_box_material);
-        // 
-        //         {
-        //             let box_location =Transformation::new(
-        //                 Affine::from_translation(Vector::new(-0.4, 0.1, -1.0)) * Affine::from_scale(0.4));
-        //             scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.gold_metal);
-        //         }
-        // 
-        //         {
-        //             let box_location = Transformation::new(
-        //                 Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4));
-        //             scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.purple_glass);
-        //         }
-        // 
-        //         {
-        //             let box_location = Transformation::new(
-        //                 Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));
-        //             scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.red_glass);
-        //         }
-        //     },
-        //     Err(mesh_loading_error) => {
-        //         error!("failed to load cube mesh: {}", mesh_loading_error);
-        //     },
-        // }
+        let mut meshes = MeshWarehouse::new();
+        let cube_mesh_file = get_resource_path(Path::new("assets").join("cube.obj"));
+        let cube_mesh_or_error = meshes.load(cube_mesh_file);
+        
+        match cube_mesh_or_error {
+            Ok(cube_mesh) => {
+                let large_box_material = scene.materials().add(&Material::new()
+                    .with_albedo(0.95, 0.95, 0.95)
+                    .with_refractive_index_eta(2.5));
+                let large_box_location =
+                    Transformation::new(
+                        Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) *
+                            Affine::from_nonuniform_scale(3.65, 0.8, 0.25));
+                scene.add_mesh(&meshes, cube_mesh, &large_box_location, large_box_material);
+        
+                {
+                    let box_location =Transformation::new(
+                        Affine::from_translation(Vector::new(-0.4, 0.1, -1.0)) * Affine::from_scale(0.4));
+                    scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.gold_metal);
+                }
+        
+                {
+                    let box_location = Transformation::new(
+                        Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4));
+                    scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.purple_glass);
+                }
+        
+                {
+                    let box_location = Transformation::new(
+                        Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));
+                    scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.red_glass);
+                }
+            },
+            Err(mesh_loading_error) => {
+                error!("failed to load cube mesh: {}", mesh_loading_error);
+            },
+        }
     }
 }
