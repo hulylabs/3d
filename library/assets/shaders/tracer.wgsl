@@ -19,11 +19,13 @@ const BACKGROUND_COLOR = vec3f(0.1);
 
 const DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES = 5;
 const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 256;
-const DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD = 0.001;
-const DETERMINISTIC_SHADOW_THRESHOLD = 0.0001;
+const DETERMINISTIC_SHADOW_MIN_STEP = 0.005;
+const DETERMINISTIC_SHADOW_MAX_STEP = 0.50;
 const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
-const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0;
-const DETERMINISTIC_MAX_RAY_BOUNCES = 16;
+const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0; // bigger - crispier shadows
+const DETERMINISTIC_SHADOW_MARCHING_MIN = -1.0;
+const DETERMINISTIC_SHADOW_MARCHING_MAX = 1.0;
+const DETERMINISTIC_MAX_RAY_BOUNCES = 10;
 
 const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
 const MONTE_CARLO_STRATIFY_SAMLING = false;
@@ -1187,36 +1189,31 @@ fn rand_from_seed(seed: f32) -> f32  {
 
 @must_use // 'to_light' expected to be normalized
 fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
-    var result: f32 = 1.0;
+    /*
+    https://iquilezles.org/articles/rmshadows/ - the algorithm.
+    Main idea: account not only outer penumbra (ray close to object),
+    but also "inner penumbra" (ray barely inside the object).
+    */
+    var result: f32 = DETERMINISTIC_SHADOW_MARCHING_MAX;
     var offset: f32 = min_ray_offset;
-    var previous_signed_distance: f32 = MAX_FLOAT;
     var next_point = position + to_light * offset;
     for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
         let step = sample_signed_distance(next_point, to_light);
-        if(step.signed_distance < DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD) {
-            return 0.0;
-        }
 
-        // https://www.shadertoy.com/view/lsKcDD - Sebastian Aaltonen, explanation: https://iquilezles.org/articles/rmshadows/
-        let signed_distance_sqr = step.signed_distance * step.signed_distance;
-        let y = signed_distance_sqr / (2.0 * previous_signed_distance);
-        let d = sqrt(signed_distance_sqr - y * y);
-
-        result = min(result, d * light_size / max(0.0, offset - y));
-        if (result < DETERMINISTIC_SHADOW_THRESHOLD) {
+        result = min(result, step.signed_distance * light_size / offset);
+        if(result < DETERMINISTIC_SHADOW_MARCHING_MIN) {
             break;
         }
 
-        offset += step.signed_distance;
-        if (offset >= max_ray_offset) {
+        offset += clamp(step.signed_distance, DETERMINISTIC_SHADOW_MIN_STEP, DETERMINISTIC_SHADOW_MAX_STEP);
+        if(offset > max_ray_offset ) {
             break;
         }
 
-        previous_signed_distance = step.signed_distance;
-        next_point = step.new_position;
+        next_point = position + to_light * offset;
     }
-    result = clamp(result, 0.0, 1.0);
-    return result * result * (3.0 - 2.0 * result);
+    result = max(result, DETERMINISTIC_SHADOW_MARCHING_MIN);
+    return smoothstep(DETERMINISTIC_SHADOW_MARCHING_MIN, DETERMINISTIC_SHADOW_MARCHING_MAX, result);
 }
 
 struct RayMarchStep {
