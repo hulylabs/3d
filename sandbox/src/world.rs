@@ -246,7 +246,7 @@ impl Materials {
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(1.0, 0.5, 0.0)
                 .with_specular_strength(0.00001)
-                .with_roughness(-1.0 / 4.0)
+                .with_roughness(0.25)
                 .with_refractive_index_eta(0.0),
         );
 
@@ -569,7 +569,7 @@ impl World {
             self.materials.blue_glass);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            &(Affine::from_translation(Vector::new(0.5, 0.0, -0.88))*Affine::from_scale(0.1) ),
             self.sdf_classes.sphere.name(),
             self.materials.blue_glass);
         

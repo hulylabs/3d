@@ -828,7 +828,7 @@ mod tests {
     #[test]
     fn test_single_box_sdf_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
-        
+
         let mut registrator = SdfRegistrator::default();
         let test_box_name = UniqueSdfClassName::new("specimen".to_string());
         registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));

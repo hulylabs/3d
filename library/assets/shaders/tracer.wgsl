@@ -4,6 +4,7 @@ const PI = 3.1415926535897932385;
 
 const MIN_FLOAT = 0.0001;
 const MAX_FLOAT = 999999999.999;
+const SECONDARY_RAY_START_BIAS = 0.001;
 
 const MATERIAL_LAMBERTIAN = 0.0;
 const MATERIAL_MIRROR = 1.0;
@@ -24,12 +25,13 @@ const DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD = 0.001;
 const DETERMINISTIC_SHADOW_THRESHOLD = 0.0001;
 const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
 const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0;
+const DETERMINISTIC_MAX_RAY_BOUNCES = 16;
 
-const SAMPLES_COUNT_MONTE_CARLO = 1.0;
-const SAMPLES_COUNT_DETERMINISTIC = 1.0;
-const MAX_BOUNCES = 50;
-const STRATIFY = false;
-const IMPORTANCE_SAMPLING = true;
+const PIXEL_SIDE_SUBDIVISION_MONTE_CARLO = 1;
+const PIXEL_SIDE_SUBDIVISION_DETERMINISTIC = 4;
+const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
+const MONTE_CARLO_STRATIFY_SAMLING = false;
+const MONTE_CARLO_IMPORTANCE_SAMPLING = true;
 const STACK_SIZE = 20;
 const MAX_SDF_RAY_MARCH_STEPS = 120;
 
@@ -163,8 +165,7 @@ fn at(ray : Ray, t : f32) -> vec3f {
 
 // PCG prng
 // https://www.shadertoy.com/view/XlGcRh
-fn rand2D() -> f32
-{
+fn rand2D() -> f32 {
 	randState = randState * 747796405u + 2891336453u;
 	var word : u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
 	return f32((word >> 22u)^word) / 4294967295;
@@ -183,7 +184,12 @@ fn random_double(min : f32, max : f32) -> f32 {
 
 @must_use
 fn near_zero(v : vec3f) -> bool {
-	return (abs(v[0]) < MIN_FLOAT && abs(v[1]) < MIN_FLOAT && abs(v[2]) < MIN_FLOAT);
+	return near_zero_scalar(v[0]) && near_zero_scalar(v[1]) && near_zero_scalar(v[2]);
+}
+
+@must_use
+fn near_zero_scalar(v : f32) -> bool {
+	return abs(v) < MIN_FLOAT;
 }
 
 @must_use
@@ -485,19 +491,19 @@ fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
 
 @must_use
 fn path_trace_deterministic() -> vec3f {
-    var result_color = vec3f(0.0);
+    if (PIXEL_SIDE_SUBDIVISION_DETERMINISTIC == 1) {
+        return ray_color_deterministic(ray_to_pixel(0.5, 0.5));
+    }
 
-    let sqrt_samples_per_pixel = sqrt(SAMPLES_COUNT_DETERMINISTIC);
-    let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(i32(sqrt_samples_per_pixel));
-    var samplaes_taken = 0.0; // SAMPLES_COUNT_DETERMINISTIC may not be perfect square
-    for(var i = 0.0; i < sqrt_samples_per_pixel; i += 1.0) {
-        for(var j = 0.0; j < sqrt_samples_per_pixel; j += 1.0) {
-            let ray = ray_to_pixel(reciprocal_sqrt_samples_per_pixel * i, reciprocal_sqrt_samples_per_pixel * j);
+    var result_color = vec3f(0.0);
+    let sub_pixel_step = 1.0 / f32(PIXEL_SIDE_SUBDIVISION_DETERMINISTIC - 1);
+    for(var i = u32(0); i < PIXEL_SIDE_SUBDIVISION_DETERMINISTIC; i++) {
+        for(var j = u32(0); j < PIXEL_SIDE_SUBDIVISION_DETERMINISTIC; j++) {
+            let ray = ray_to_pixel(sub_pixel_step * f32(i), sub_pixel_step * f32(j));
             result_color += ray_color_deterministic(ray);
-            samplaes_taken += 1;
         }
     }
-    result_color /= samplaes_taken;
+    result_color /= f32(PIXEL_SIDE_SUBDIVISION_DETERMINISTIC * PIXEL_SIDE_SUBDIVISION_DETERMINISTIC);
 
     return result_color;
 }
@@ -551,7 +557,7 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
     var offset: f32 = min_ray_offset;
     var previous_signed_distance: f32 = MAX_FLOAT;
     var next_point = position + to_light * offset;
-    for (var i = u32(0); i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
+    for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
         let step = sample_signed_distance(next_point, to_light);
         if(step.signed_distance < DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD) {
             return 0.0;
@@ -580,37 +586,87 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
 }
 
 @must_use
+fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
+    let light_center = lights.Q + (lights.u + lights.v) * 0.5;
+    let to_light = light_center - hit.p;
+    let to_light_direction = normalize(to_light);
+    let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
+
+    let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
+    let to_camera_direction = normalize(cam_origin - hit.p);
+    let reflected_light = reflect(-to_light_direction, hit.normal);
+    let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
+
+    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+    let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
+
+    let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
+    let specular = specular_fall_off * hit.material.specular;
+    let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
+    let emissive = hit.material.emission;
+
+    let light_color = materials[u32(lights.material_id)].emission;
+    let reflected = mix(diffuse, specular, hit.material.specular_strength);
+
+    return reflected * light_color * shadow + ambient + emissive;
+}
+
+@must_use
+fn rand_from_seed(seed: f32) -> f32  {
+    return fract(sin(seed) * 43758.5453123);
+}
+
+@must_use
+fn reflection_roughness_addition(ray_direction: vec3f, ray_origin: vec3f, extra_seed: f32) -> vec3f {
+    let phi = rand_from_seed((ray_direction.x + ray_origin.x + 0.357) * extra_seed) * 2.0 * PI;
+	let theta = acos(2.0 * rand_from_seed((ray_direction.y + ray_origin.y + 16.35647) * extra_seed) - 1.0);
+	let x = sin(theta) * cos(phi);
+	let y = sin(theta) * sin(phi);
+	let z = cos(theta);
+	return vec3f(x, y, z);
+}
+
+@must_use
+fn evaluate_reflection(incident: vec3f, normal: vec3f, hit_position: vec3f, roughness: f32) -> vec3f {
+    let perfect = reflect(incident, normal);
+
+    if (near_zero_scalar(roughness)) {
+        return perfect;
+    }
+
+    let randomization = reflection_roughness_addition(normal, hit_position, incident.z) * roughness;
+    return normalize(perfect + randomization);
+}
+
+@must_use
 fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
     var current_ray = incident_ray;
     var accumulated_radiance = vec3f(0.0);
+    var throughput = vec3f(1.0);
 
-    if(hitScene(current_ray)) {
-        let hit = hitRec;
-        if (hit.material.material_type == MATERIAL_LAMBERTIAN) {
-            let light_center = lights.Q + (lights.u + lights.v) * 0.5;
-            let to_light = light_center - hit.p;
-            let to_light_direction = normalize(to_light);
-            let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
-
-            let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
-            let to_camera_direction = normalize(cam_origin - hit.p);
-            let reflected_light = reflect(-to_light_direction, hit.normal);
-            let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
-
-            let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
-            let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
-
-            let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
-            let specular = specular_fall_off * hit.material.specular;
-            let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
-            let emissive = hit.material.emission;
-
-            accumulated_radiance = mix(diffuse, specular, hit.material.specular_strength) * shadow + ambient + emissive;
-        } else {
-            accumulated_radiance = hit.material.albedo;
+    for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
+        if (hitScene(current_ray) == false) {
+            accumulated_radiance += BACKGROUND_COLOR * throughput;
+            break;
         }
-    } else {
-        accumulated_radiance = BACKGROUND_COLOR;
+
+        if (hitRec.material.material_type == MATERIAL_LAMBERTIAN) {
+            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec);
+            break;
+        }
+
+        if (hitRec.material.material_type == MATERIAL_MIRROR) {
+            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hitRec.material.roughness);
+            current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
+            throughput *= hitRec.material.albedo;
+        } else if (hitRec.material.material_type == MATERIAL_GLASS) {
+            let stochastic = false;
+            current_ray = glass_scatter(hitRec, current_ray.direction, stochastic);
+            throughput *= hitRec.material.albedo;
+        } else {
+            accumulated_radiance += hitRec.material.albedo;
+            break;
+        }
     }
 
     return accumulated_radiance;
@@ -618,28 +674,25 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 
 @must_use
 fn path_trace_monte_carlo() -> vec3f {
+	const samples_count = PIXEL_SIDE_SUBDIVISION_MONTE_CARLO * PIXEL_SIDE_SUBDIVISION_MONTE_CARLO;
 	var result_color = vec3f(0.0);
-
-	if(STRATIFY) {
-		let sqrt_samples_per_pixel = sqrt(SAMPLES_COUNT_MONTE_CARLO);
-		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(i32(sqrt_samples_per_pixel));
-		var samplaes_taken = 0.0; // SAMPLES_COUNT_MONTE_CARLO may not be perfect square
-
-		for(var i = 0.0; i < sqrt_samples_per_pixel; i += 1.0) {
-			for(var j = 0.0; j < sqrt_samples_per_pixel; j += 1.0) {
-                let ray = ray_to_pixel(reciprocal_sqrt_samples_per_pixel * (i + rand2D()), reciprocal_sqrt_samples_per_pixel * (j + rand2D()));
+	if(MONTE_CARLO_STRATIFY_SAMLING) {
+		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(PIXEL_SIDE_SUBDIVISION_MONTE_CARLO);
+		for(var i = 0; i < PIXEL_SIDE_SUBDIVISION_MONTE_CARLO; i++) {
+			for(var j = 0; j < PIXEL_SIDE_SUBDIVISION_MONTE_CARLO; j++) {
+                let x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand2D());
+                let y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand2D());
+                let ray = ray_to_pixel(x, y);
 				result_color += ray_color_monte_carlo(ray);
-				samplaes_taken += 1;
 			}
 		}
-		result_color /= samplaes_taken;
 	} else {
-		for(var i = 0; i < i32(SAMPLES_COUNT_MONTE_CARLO); i += 1) {
+		for(var i = 0; i < samples_count; i++) {
 		    let ray = ray_to_pixel(rand2D(), rand2D());
 			result_color += ray_color_monte_carlo(ray);
 		}
-		result_color /= SAMPLES_COUNT_MONTE_CARLO;
 	}
+	result_color /= f32(samples_count);
 
 	return result_color;
 }
@@ -879,7 +932,7 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 	var acc_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
 	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
 
-	for(var i = 0; i < MAX_BOUNCES; i++) {
+	for(var i = 0; i < MONTE_CARLO_MAX_RAY_BOUNCES; i++) {
 		if(hitScene(currRay) == false) {
 			acc_radiance += (BACKGROUND_COLOR * throughput);
 			break;
@@ -891,7 +944,7 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 			emissionColor = vec3f(0);
 		}
 
-		if(IMPORTANCE_SAMPLING) {
+		if(MONTE_CARLO_IMPORTANCE_SAMPLING) {
 			// IMPORTANCE SAMPLING TOWARDS LIGHT
 			// diffuse scatter ray
 			let scatterred_surface = material_scatter(currRay);
@@ -983,28 +1036,8 @@ fn material_scatter(ray_in : Ray) -> Ray {
 		scatterRec.skip_pdf_ray = scattered;
 	}
 	else if(hitRec.material.material_type == MATERIAL_GLASS) {
-		var ir = hitRec.material.refractive_index_eta;
-		if(hitRec.front_face == true) {
-			ir = (1.0 / ir);
-		}
-
-		let unit_direction = ray_in.direction;
-		let cos_theta = min(dot(-unit_direction, hitRec.normal), 1.0);
-		let sin_theta = sqrt(1 - cos_theta*cos_theta);
-
-		var direction = vec3f(0);
-		if(ir * sin_theta > 1.0 || reflectance(cos_theta, ir) > rand2D()) {
-			direction = reflect(unit_direction, hitRec.normal);
-		}
-		else {
-			direction = refract(unit_direction, hitRec.normal, ir);
-		}
-
-		if(near_zero(direction)) {
-			direction = hitRec.normal;
-		}
-
-		scattered = Ray(hitRec.p, direction);
+		let stochastic = true;
+		scattered = glass_scatter(hitRec, ray_in.direction, stochastic);
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
@@ -1025,6 +1058,39 @@ fn material_scatter(ray_in : Ray) -> Ray {
 	}
 
 	return scattered;
+}
+
+@must_use
+fn glass_scatter(hit: HitRecord, in_ray_direction: vec3f, stochastic: bool) -> Ray {
+    var ir = hit.material.refractive_index_eta;
+    if(hit.front_face) {
+        ir = (1.0 / ir);
+    }
+
+    let unit_direction = in_ray_direction;
+    let cos_theta = min(dot(-unit_direction, hit.normal), 1.0);
+    let sin_theta = sqrt(1 - cos_theta*cos_theta);
+
+    var direction = vec3f(0.0);
+    if(ir * sin_theta > 1.0) {
+        direction = reflect(unit_direction, hit.normal);
+    } else {
+        if (stochastic) {
+            if (reflectance(cos_theta, ir) > rand2D()) {
+                direction = reflect(unit_direction, hit.normal);
+            } else {
+                direction = refract(unit_direction, hit.normal, ir);
+            }
+        } else {
+            direction = refract(unit_direction, hit.normal, ir);
+        }
+    }
+
+    if(near_zero(direction)) {
+        direction = hit.normal;
+    }
+
+    return Ray(hit.p + SECONDARY_RAY_START_BIAS * direction, direction);
 }
 
 /// importanceSampling
