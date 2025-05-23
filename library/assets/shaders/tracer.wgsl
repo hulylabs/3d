@@ -1,5 +1,3 @@
-/// header
-
 const PI = 3.1415926535897932385;
 
 const MIN_FLOAT = 0.0001;
@@ -164,7 +162,7 @@ fn at(ray : Ray, t : f32) -> vec3f {
 
 // PCG prng
 // https://www.shadertoy.com/view/XlGcRh
-fn rand2D() -> f32 {
+fn rand_0_1() -> f32 {
 	randState = randState * 747796405u + 2891336453u;
 	var word : u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
 	return f32((word >> 22u)^word) / 4294967295;
@@ -172,13 +170,13 @@ fn rand2D() -> f32 {
 
 // random numbers from a normal distribution
 fn randNormalDist() -> f32 {
-	let theta = 2 * PI * rand2D();
-	let rho = sqrt(-2 * log(rand2D()));
+	let theta = 2 * PI * rand_0_1();
+	let rho = sqrt(-2 * log(rand_0_1()));
 	return rho * cos(theta);
 }
 
 fn random_double(min : f32, max : f32) -> f32 {
-	return min + (max - min) * rand2D();
+	return min + (max - min) * rand_0_1();
 }
 
 @must_use
@@ -358,7 +356,7 @@ fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray,
 	return t_max > t_min;
 }
 
-fn get_lights() -> bool {
+fn get_lights() {
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
 		let emission = materials[i32(quad_objs[i].material_id)].emission;
 
@@ -367,14 +365,11 @@ fn get_lights() -> bool {
 			break;
 		}
 	}
-
-	return true;
 }
 
 // ACES approximation for tone mapping
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/):
-fn aces_approx(v : vec3f) -> vec3f
-{
+fn aces_approx(v : vec3f) -> vec3f {
     let v1 = v * 0.6f;
     const a = 2.51f;
     const b = 0.03f;
@@ -459,22 +454,6 @@ fn make_common_color_evaluation_setup(pixel_index: u32) {
 	}
 }
 
-@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_deterministic(
-    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
-
-	let pixel_index = evaluate_pixel_index(global_invocation_id, num_workgroups);
-
-    if (pixel_outside_frame_buffer(pixel_index)) {
-        return;
-    }
-
-	make_common_color_evaluation_setup(pixel_index);
-
-	let traced_color = path_trace_deterministic();
-	pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
-}
-
 /// shootRay
 
 /*
@@ -489,189 +468,6 @@ fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
 }
 
 @must_use
-fn path_trace_deterministic() -> vec3f {
-    if (uniforms.pixel_side_subdivision == 1) {
-        return ray_color_deterministic(ray_to_pixel(0.5, 0.5));
-    }
-
-    var result_color = vec3f(0.0);
-    let sub_pixel_step = 1.0 / f32(uniforms.pixel_side_subdivision - 1);
-    for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
-        for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
-            let ray = ray_to_pixel(sub_pixel_step * f32(i), sub_pixel_step * f32(j));
-            result_color += ray_color_deterministic(ray);
-        }
-    }
-    result_color /= f32(uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision);
-
-    return result_color;
-}
-
-struct RayMarchStep {
-    new_position: vec3f,
-    signed_distance: f32,
-}
-
-@must_use // expected normalized 'direction'
-fn sample_signed_distance(position: vec3f, direction: vec3f) -> RayMarchStep {
-    var record: RayMarchStep = RayMarchStep(position, MAX_FLOAT);
-    for (var i = u32(0); i < uniforms.sdf_count; i++) {
-        let sdf = sdf[i];
-
-        let local_position = transform_point(sdf.inverse_location, position);
-        let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
-        let local_distance = sdf_select(sdf.class_index, local_position);
-        let local_next = local_position + local_direction * local_distance;
-
-        let global_next = transform_point(sdf.location, local_next);
-        let global_offset = global_next - position;
-        let global_distance = length(global_offset) * sign(dot(global_offset, direction));
-
-        if (global_distance < record.signed_distance) {
-            record = RayMarchStep(global_next, global_distance);
-        }
-    }
-    return record;
-}
-
-@must_use // 'normal' is expected to be normalized
-fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
-	var occlusion: f32 = 0.0;
-    var fall_off: f32 = 1.0;
-    for(var i = 0; i < DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES; i++) {
-        let height = 0.01 + 0.12 * f32(i) / 4.0;
-        let step = sample_signed_distance(posision + height * normal, normal);
-        occlusion += (height - step.signed_distance) * fall_off;
-        fall_off *= 0.95;
-        if(occlusion > 0.35) {
-            break;
-        }
-    }
-    return clamp(1.0 - 3.0 * occlusion, 0.0, 1.0) * (0.5 + 0.5 * normal.y);
-}
-
-@must_use // 'to_light' expected to be normalized
-fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
-    var result: f32 = 1.0;
-    var offset: f32 = min_ray_offset;
-    var previous_signed_distance: f32 = MAX_FLOAT;
-    var next_point = position + to_light * offset;
-    for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
-        let step = sample_signed_distance(next_point, to_light);
-        if(step.signed_distance < DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD) {
-            return 0.0;
-        }
-
-        // https://www.shadertoy.com/view/lsKcDD - Sebastian Aaltonen, explanation: https://iquilezles.org/articles/rmshadows/
-        let signed_distance_sqr = step.signed_distance * step.signed_distance;
-        let y = signed_distance_sqr / (2.0 * previous_signed_distance);
-        let d = sqrt(signed_distance_sqr - y * y);
-
-        result = min(result, d * light_size / max(0.0, offset - y));
-        if (result < DETERMINISTIC_SHADOW_THRESHOLD) {
-            break;
-        }
-
-        offset += step.signed_distance;
-        if (offset >= max_ray_offset) {
-            break;
-        }
-
-        previous_signed_distance = step.signed_distance;
-        next_point = step.new_position;
-    }
-    result = clamp(result, 0.0, 1.0);
-    return result * result * (3.0 - 2.0 * result);
-}
-
-@must_use
-fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
-    let light_center = lights.Q + (lights.u + lights.v) * 0.5;
-    let to_light = light_center - hit.p;
-    let to_light_direction = normalize(to_light);
-    let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
-
-    let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
-    let to_camera_direction = normalize(cam_origin - hit.p);
-    let reflected_light = reflect(-to_light_direction, hit.normal);
-    let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
-
-    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
-    let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
-
-    let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
-    let specular = specular_fall_off * hit.material.specular;
-    let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
-    let emissive = hit.material.emission;
-
-    let light_color = materials[u32(lights.material_id)].emission;
-    let reflected = mix(diffuse, specular, hit.material.specular_strength);
-
-    return reflected * light_color * shadow + ambient + emissive;
-}
-
-@must_use
-fn rand_from_seed(seed: f32) -> f32  {
-    return fract(sin(seed) * 43758.5453123);
-}
-
-@must_use
-fn reflection_roughness_addition(ray_direction: vec3f, ray_origin: vec3f, extra_seed: f32) -> vec3f {
-    let phi = rand_from_seed((ray_direction.x + ray_origin.x + 0.357) * extra_seed) * 2.0 * PI;
-	let theta = acos(2.0 * rand_from_seed((ray_direction.y + ray_origin.y + 16.35647) * extra_seed) - 1.0);
-	let x = sin(theta) * cos(phi);
-	let y = sin(theta) * sin(phi);
-	let z = cos(theta);
-	return vec3f(x, y, z);
-}
-
-@must_use
-fn evaluate_reflection(incident: vec3f, normal: vec3f, hit_position: vec3f, roughness: f32) -> vec3f {
-    let perfect = reflect(incident, normal);
-
-    if (near_zero_scalar(roughness)) {
-        return perfect;
-    }
-
-    let randomization = reflection_roughness_addition(normal, hit_position, incident.z) * roughness;
-    return normalize(perfect + randomization);
-}
-
-@must_use
-fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
-    var current_ray = incident_ray;
-    var accumulated_radiance = vec3f(0.0);
-    var throughput = vec3f(1.0);
-
-    for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
-        if (hitScene(current_ray) == false) {
-            accumulated_radiance += BACKGROUND_COLOR * throughput;
-            break;
-        }
-
-        if (hitRec.material.material_type == MATERIAL_LAMBERTIAN) {
-            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec);
-            break;
-        }
-
-        if (hitRec.material.material_type == MATERIAL_MIRROR) {
-            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hitRec.material.roughness);
-            current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
-            throughput *= hitRec.material.albedo;
-        } else if (hitRec.material.material_type == MATERIAL_GLASS) {
-            let stochastic = false;
-            current_ray = glass_scatter(hitRec, current_ray.direction, stochastic);
-            throughput *= hitRec.material.albedo;
-        } else {
-            accumulated_radiance += hitRec.material.albedo;
-            break;
-        }
-    }
-
-    return accumulated_radiance;
-}
-
-@must_use
 fn path_trace_monte_carlo() -> vec3f {
 	let samples_count = uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision;
 	var result_color = vec3f(0.0);
@@ -679,15 +475,15 @@ fn path_trace_monte_carlo() -> vec3f {
 		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(uniforms.pixel_side_subdivision);
 		for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
 			for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
-                let x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand2D());
-                let y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand2D());
+                let x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand_0_1());
+                let y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand_0_1());
                 let ray = ray_to_pixel(x, y);
 				result_color += ray_color_monte_carlo(ray);
 			}
 		}
 	} else {
 		for(var i = u32(0); i < samples_count; i++) {
-		    let ray = ray_to_pixel(rand2D(), rand2D());
+		    let ray = ray_to_pixel(rand_0_1(), rand_0_1());
 			result_color += ray_color_monte_carlo(ray);
 		}
 	}
@@ -960,7 +756,7 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 			let scattered_light = get_random_on_quad(lights, hitRec.p);
 
 			var scattered = scattered_light;
-			var rand = rand2D();
+			var rand = rand_0_1();
 			if(rand > 0.2) {
 				scattered = scatterred_surface;
 			}
@@ -988,7 +784,7 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 		// russian roulette
 		if(i > 2) {
 			let p = max(throughput.x, max(throughput.y, throughput.z));
-			if(rand2D() > p) {
+			if(rand_0_1() > p) {
 				break;
 			}
 
@@ -1013,7 +809,7 @@ fn material_scatter(ray_in : Ray) -> Ray {
 
 		scattered = Ray(hitRec.p, diffuse_dir);
 
-		doSpecular = select(0.0, 1.0, rand2D() < hitRec.material.specular_strength);
+		doSpecular = select(0.0, 1.0, rand_0_1() < hitRec.material.specular_strength);
 
 		var specular_dir = reflect(ray_in.direction, hitRec.normal);
 		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitRec.material.roughness));
@@ -1043,9 +839,9 @@ fn material_scatter(ray_in : Ray) -> Ray {
 	}
 	else if(hitRec.material.material_type == MATERIAL_ISOTROPIC) {
 		let g = hitRec.material.specular_strength;
-		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand2D())), 2.0)) / (2 * g);
+		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand_0_1())), 2.0)) / (2 * g);
 		let sin_hg = sqrt(1 - cos_hg * cos_hg);
-		let phi = 2 * PI * rand2D();
+		let phi = 2 * PI * rand_0_1();
 
 		let hg_dir = vec3f(sin_hg * cos(phi), sin_hg * sin(phi), cos_hg);
 
@@ -1075,7 +871,7 @@ fn glass_scatter(hit: HitRecord, in_ray_direction: vec3f, stochastic: bool) -> R
         direction = reflect(unit_direction, hit.normal);
     } else {
         if (stochastic) {
-            if (reflectance(cos_theta, ir) > rand2D()) {
+            if (reflectance(cos_theta, ir) > rand_0_1()) {
                 direction = reflect(unit_direction, hit.normal);
             } else {
                 direction = refract(unit_direction, hit.normal, ir);
@@ -1101,8 +897,8 @@ fn reflectance(cosine : f32, ref_idx : f32) -> f32 {
 }
 
 fn uniform_random_in_unit_sphere() -> vec3f {
-	let phi = rand2D() * 2.0 * PI;
-	let theta = acos(2.0 * rand2D() - 1.0);
+	let phi = rand_0_1() * 2.0 * PI;
+	let theta = acos(2.0 * rand_0_1() - 1.0);
 
 	let x = sin(theta) * cos(phi);
 	let y = sin(theta) * sin(phi);
@@ -1112,7 +908,7 @@ fn uniform_random_in_unit_sphere() -> vec3f {
 }
 
 fn random_in_unit_disk() -> vec3f {
-	let theta = 2 * PI * rand2D();
+	let theta = 2 * PI * rand_0_1();
 	return vec3f(cos(theta), sin(theta), 0);
 }
 
@@ -1128,8 +924,8 @@ fn cosine_sampling_hemisphere() -> vec3f {
 
 // generates a random direction weighted by PDF = cos_theta / PI relative to z axis
 fn cosine_sampling_wrt_Z() -> vec3f {
-	let r1 = rand2D();
-	let r2 = rand2D();
+	let r1 = rand_0_1();
+	let r2 = rand_0_1();
 
 	let phi = 2 * PI * r1;
 	let x = cos(phi) * sqrt(r2);
@@ -1171,12 +967,12 @@ fn onb_lambertian_scattering_pdf(scattered : Ray) -> f32 {
 }
 
 fn get_random_on_quad(q : Parallelogram, origin : vec3f) -> Ray {
-	let p = q.Q + (rand2D() * q.u) + (rand2D() * q.v);
+	let p = q.Q + (rand_0_1() * q.u) + (rand_0_1() * q.v);
 	return Ray(origin, normalize(p - origin));
 }
 
 fn get_random_on_quad_point(q : Parallelogram) -> vec3f {
-	let p = q.Q + (rand2D() * q.u) + (rand2D() * q.v);
+	let p = q.Q + (rand_0_1() * q.u) + (rand_0_1() * q.v);
 	return p;
 }
 
@@ -1219,7 +1015,9 @@ fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 	return (distance_squared / (cosine * length(cross(lights.u, lights.v))));
 }
 
-/// vertex
+//===================================================================
+/// final image output (aka resolve): tone mapping + gamma correction
+//===================================================================
 
 const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     vec2<f32>(-1.0, -1.0),
@@ -1235,8 +1033,7 @@ const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     return vec4<f32>(full_screen_quad_positions[in_vertex_index], 0.0, 1.0);
 }
 
-/// fragment
-
+@must_use
 fn pixel_global_index(pixel_position: vec2f) -> u32 {
     return u32(pixel_position.y) * uniforms.frame_buffer_size.x + u32(pixel_position.x);
 }
@@ -1248,9 +1045,219 @@ fn pixel_global_index(pixel_position: vec2f) -> u32 {
     color = aces_approx(color.xyz);
     color = pow(color.xyz, vec3f(1.0/2.2));
 
-    if(uniforms.if_reset_frame_buffer == 1) {
+    if(1 == uniforms.if_reset_frame_buffer) {
         pixel_color_buffer[i] = vec4f(0.0);
     }
 
     return vec4f(color, 1);
+}
+
+//===================================================================
+/// deterministic ray tracing
+//===================================================================
+
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_deterministic(
+    @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>,
+) {
+
+	let pixel_index = evaluate_pixel_index(global_invocation_id, num_workgroups);
+
+    if (pixel_outside_frame_buffer(pixel_index)) {
+        return;
+    }
+
+	make_common_color_evaluation_setup(pixel_index);
+
+	let traced_color = path_trace_deterministic();
+	pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
+}
+
+@must_use
+fn path_trace_deterministic() -> vec3f {
+    if (uniforms.pixel_side_subdivision == 1) {
+        return ray_color_deterministic(ray_to_pixel(0.5, 0.5));
+    }
+
+    var result_color = vec3f(0.0);
+    let sub_pixel_step = 1.0 / f32(uniforms.pixel_side_subdivision - 1);
+    for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
+        for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
+            let ray = ray_to_pixel(sub_pixel_step * f32(i), sub_pixel_step * f32(j));
+            result_color += ray_color_deterministic(ray);
+        }
+    }
+    result_color /= f32(uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision);
+
+    return result_color;
+}
+
+@must_use
+fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
+    var accumulated_radiance = vec3f(0.0);
+
+    var current_ray = incident_ray;
+    var throughput = vec3f(1.0);
+    for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
+        if (hitScene(current_ray) == false) {
+            accumulated_radiance += BACKGROUND_COLOR * throughput;
+            break;
+        }
+
+        if (MATERIAL_LAMBERTIAN == hitRec.material.material_type) {
+            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec);
+            break;
+        }
+
+        if (MATERIAL_MIRROR == hitRec.material.material_type) {
+            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hitRec.material.roughness);
+            current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
+            throughput *= hitRec.material.albedo;
+        } else if (MATERIAL_GLASS == hitRec.material.material_type) {
+            let stochastic = false;
+            current_ray = glass_scatter(hitRec, current_ray.direction, stochastic);
+            throughput *= hitRec.material.albedo;
+        } else {
+            accumulated_radiance += hitRec.material.albedo;
+            break;
+        }
+    }
+
+    return accumulated_radiance;
+}
+
+@must_use
+fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
+    let light_center = lights.Q + (lights.u + lights.v) * 0.5;
+    let to_light = light_center - hit.p;
+    let to_light_direction = normalize(to_light);
+    let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
+
+    let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
+    let to_camera_direction = normalize(cam_origin - hit.p);
+    let reflected_light = reflect(-to_light_direction, hit.normal);
+    let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
+
+    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+    let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
+
+    let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
+    let specular = specular_fall_off * hit.material.specular;
+    let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
+    let emissive = hit.material.emission;
+
+    let light_color = materials[u32(lights.material_id)].emission;
+    let reflected = mix(diffuse, specular, hit.material.specular_strength);
+
+    return reflected * light_color * shadow + ambient + emissive;
+}
+
+@must_use
+fn evaluate_reflection(incident: vec3f, normal: vec3f, hit_position: vec3f, roughness: f32) -> vec3f {
+    let perfect = reflect(incident, normal);
+
+    if (near_zero_scalar(roughness)) {
+        return perfect;
+    }
+
+    let randomization = reflection_roughness_addition(normal, hit_position, incident.z) * roughness;
+    return normalize(perfect + randomization);
+}
+
+/*
+The randomization code below is from https://www.shadertoy.com/view/3sc3z4
+The rand() function declared above gives not so random values — routhness
+looks bad with it
+*/
+
+@must_use
+fn reflection_roughness_addition(ray_direction: vec3f, ray_origin: vec3f, extra_seed: f32) -> vec3f {
+    let phi = rand_from_seed((ray_direction.x + ray_origin.x + 0.357) * extra_seed) * 2.0 * PI;
+	let theta = acos(2.0 * rand_from_seed((ray_direction.y + ray_origin.y + 16.35647) * extra_seed) - 1.0);
+	let x = sin(theta) * cos(phi);
+	let y = sin(theta) * sin(phi);
+	let z = cos(theta);
+	return vec3f(x, y, z);
+}
+
+@must_use
+fn rand_from_seed(seed: f32) -> f32  {
+    return fract(sin(seed) * 43758.5453123);
+}
+
+@must_use // 'to_light' expected to be normalized
+fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
+    var result: f32 = 1.0;
+    var offset: f32 = min_ray_offset;
+    var previous_signed_distance: f32 = MAX_FLOAT;
+    var next_point = position + to_light * offset;
+    for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
+        let step = sample_signed_distance(next_point, to_light);
+        if(step.signed_distance < DETERMINISTIC_SHADOW_DISTANCE_THRESHOLD) {
+            return 0.0;
+        }
+
+        // https://www.shadertoy.com/view/lsKcDD - Sebastian Aaltonen, explanation: https://iquilezles.org/articles/rmshadows/
+        let signed_distance_sqr = step.signed_distance * step.signed_distance;
+        let y = signed_distance_sqr / (2.0 * previous_signed_distance);
+        let d = sqrt(signed_distance_sqr - y * y);
+
+        result = min(result, d * light_size / max(0.0, offset - y));
+        if (result < DETERMINISTIC_SHADOW_THRESHOLD) {
+            break;
+        }
+
+        offset += step.signed_distance;
+        if (offset >= max_ray_offset) {
+            break;
+        }
+
+        previous_signed_distance = step.signed_distance;
+        next_point = step.new_position;
+    }
+    result = clamp(result, 0.0, 1.0);
+    return result * result * (3.0 - 2.0 * result);
+}
+
+struct RayMarchStep {
+    new_position: vec3f,
+    signed_distance: f32,
+}
+
+@must_use // expected normalized 'direction'
+fn sample_signed_distance(position: vec3f, direction: vec3f) -> RayMarchStep {
+    var record: RayMarchStep = RayMarchStep(position, MAX_FLOAT);
+    for (var i = u32(0); i < uniforms.sdf_count; i++) {
+        let sdf = sdf[i];
+
+        let local_position = transform_point(sdf.inverse_location, position);
+        let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
+        let local_distance = sdf_select(sdf.class_index, local_position);
+        let local_next = local_position + local_direction * local_distance;
+
+        let global_next = transform_point(sdf.location, local_next);
+        let global_offset = global_next - position;
+        let global_distance = length(global_offset) * sign(dot(global_offset, direction));
+
+        if (global_distance < record.signed_distance) {
+            record = RayMarchStep(global_next, global_distance);
+        }
+    }
+    return record;
+}
+
+@must_use // 'normal' is expected to be normalized
+fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
+	var occlusion: f32 = 0.0;
+    var fall_off: f32 = 1.0;
+    for(var i = 0; i < DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES; i++) {
+        let height = 0.01 + 0.12 * f32(i) / 4.0;
+        let step = sample_signed_distance(posision + height * normal, normal);
+        occlusion += (height - step.signed_distance) * fall_off;
+        fall_off *= 0.95;
+        if(occlusion > 0.35) {
+            break;
+        }
+    }
+    return clamp(1.0 - 3.0 * occlusion, 0.0, 1.0) * (0.5 + 0.5 * normal.y);
 }
