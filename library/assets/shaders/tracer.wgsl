@@ -1160,7 +1160,7 @@ fn evaluate_reflection(incident: vec3f, normal: vec3f, hit_position: vec3f, roug
         return perfect;
     }
 
-    let randomization = reflection_roughness_addition(normal, hit_position, incident.z) * roughness;
+    let randomization = reflection_roughness_addition(hit_position, incident.z) * roughness;
     return normalize(perfect + randomization);
 }
 
@@ -1171,9 +1171,9 @@ looks bad with it
 */
 
 @must_use
-fn reflection_roughness_addition(ray_direction: vec3f, ray_origin: vec3f, extra_seed: f32) -> vec3f {
-    let phi = rand_from_seed((ray_direction.x + ray_origin.x + 0.357) * extra_seed) * 2.0 * PI;
-	let theta = acos(2.0 * rand_from_seed((ray_direction.y + ray_origin.y + 16.35647) * extra_seed) - 1.0);
+fn reflection_roughness_addition(position: vec3f, extra_seed: f32) -> vec3f {
+    let phi = rand_from_seed((rand_0_1() + position.x + 0.357) * extra_seed) * 2.0 * PI;
+	let theta = acos(2.0 * rand_from_seed((rand_0_1() + position.y + 16.35647) * extra_seed) - 1.0);
 	let x = sin(theta) * cos(phi);
 	let y = sin(theta) * sin(phi);
 	let z = cos(theta);

@@ -141,12 +141,16 @@ impl Sandbox {
                     self.world.move_light_x(-1.0, self.engine.scene());
                 } else if "1" == letter_key {
                     self.world.switch_to_ui_box_scene(self.engine.scene());
+                    self.selected_object = None;
                 } else if "2" == letter_key {
                     self.world.switch_to_sdf_exhibition_scene(self.engine.scene());
+                    self.selected_object = None;
                 } else if "3" == letter_key {
                     self.world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
+                    self.selected_object = None;
                 } else if "4" == letter_key {
                     self.world.switch_to_smooth_operators_scene(self.engine.scene());
+                    self.selected_object = None;
                 }
             }
             _ => (),
