@@ -27,8 +27,6 @@ const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
 const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0;
 const DETERMINISTIC_MAX_RAY_BOUNCES = 16;
 
-const PIXEL_SIDE_SUBDIVISION_MONTE_CARLO = 1;
-const PIXEL_SIDE_SUBDIVISION_DETERMINISTIC = 4;
 const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
 const MONTE_CARLO_STRATIFY_SAMLING = false;
 const MONTE_CARLO_IMPORTANCE_SAMPLING = true;
@@ -77,6 +75,7 @@ struct Uniforms {
 	sdf_count: u32,
 	triangles_count: u32,
 	bvh_length: u32,
+	pixel_side_subdivision: u32, // anti-aliasing level: bigger value -> slower render -> less jagged edges
 }
 
 struct Ray {
@@ -491,19 +490,19 @@ fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
 
 @must_use
 fn path_trace_deterministic() -> vec3f {
-    if (PIXEL_SIDE_SUBDIVISION_DETERMINISTIC == 1) {
+    if (uniforms.pixel_side_subdivision == 1) {
         return ray_color_deterministic(ray_to_pixel(0.5, 0.5));
     }
 
     var result_color = vec3f(0.0);
-    let sub_pixel_step = 1.0 / f32(PIXEL_SIDE_SUBDIVISION_DETERMINISTIC - 1);
-    for(var i = u32(0); i < PIXEL_SIDE_SUBDIVISION_DETERMINISTIC; i++) {
-        for(var j = u32(0); j < PIXEL_SIDE_SUBDIVISION_DETERMINISTIC; j++) {
+    let sub_pixel_step = 1.0 / f32(uniforms.pixel_side_subdivision - 1);
+    for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
+        for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
             let ray = ray_to_pixel(sub_pixel_step * f32(i), sub_pixel_step * f32(j));
             result_color += ray_color_deterministic(ray);
         }
     }
-    result_color /= f32(PIXEL_SIDE_SUBDIVISION_DETERMINISTIC * PIXEL_SIDE_SUBDIVISION_DETERMINISTIC);
+    result_color /= f32(uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision);
 
     return result_color;
 }
@@ -674,12 +673,12 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 
 @must_use
 fn path_trace_monte_carlo() -> vec3f {
-	const samples_count = PIXEL_SIDE_SUBDIVISION_MONTE_CARLO * PIXEL_SIDE_SUBDIVISION_MONTE_CARLO;
+	let samples_count = uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision;
 	var result_color = vec3f(0.0);
 	if(MONTE_CARLO_STRATIFY_SAMLING) {
-		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(PIXEL_SIDE_SUBDIVISION_MONTE_CARLO);
-		for(var i = 0; i < PIXEL_SIDE_SUBDIVISION_MONTE_CARLO; i++) {
-			for(var j = 0; j < PIXEL_SIDE_SUBDIVISION_MONTE_CARLO; j++) {
+		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(uniforms.pixel_side_subdivision);
+		for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
+			for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
                 let x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand2D());
                 let y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand2D());
                 let ray = ray_to_pixel(x, y);
@@ -687,7 +686,7 @@ fn path_trace_monte_carlo() -> vec3f {
 			}
 		}
 	} else {
-		for(var i = 0; i < samples_count; i++) {
+		for(var i = u32(0); i < samples_count; i++) {
 		    let ray = ray_to_pixel(rand2D(), rand2D());
 			result_color += ray_color_monte_carlo(ray);
 		}

@@ -49,8 +49,8 @@ mod tests {
                 .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
                 .add_dummy_binding_group(1, vec![])
                 .add_binding_group(0, vec![], vec![
-                    // the only value we need is sdf instances count which is 1
-                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 44])),
+                    // the only value we need (in uniforms) is sdf instances count which is 1
+                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 48])),
                 ])
                 .add_binding_group(2, vec![], vec![
                     BindGroupSlot::new(1, buffer.backend()),

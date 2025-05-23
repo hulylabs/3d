@@ -75,6 +75,7 @@ impl Renderer {
             sdf_count: 0,
             triangles_count: 0,
             bvh_length: 0,
+            pixel_side_subdivision: 1,
         };
 
         let mut scene = scene_container;
@@ -113,14 +114,16 @@ impl Renderer {
         &mut self.scene
     }
     
-    pub(crate) fn monte_carlo_mode(&mut self) {
+    pub(crate) fn monte_carlo_mode(&mut self, antialiasing_level: u32) {
         self.color_buffer_evaluation = ColorBufferEvaluation::new_monte_carlo(self.pipeline_ray_tracing_monte_carlo.clone());
         self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
+        self.uniforms.set_pixel_side_subdivision(antialiasing_level);
     }
     
-    pub(crate) fn deterministic_mode(&mut self) {
+    pub(crate) fn deterministic_mode(&mut self, antialiasing_level: u32) {
         self.color_buffer_evaluation = ColorBufferEvaluation::new_deterministic(self.pipeline_ray_tracing_deterministic.clone());
         self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
+        self.uniforms.set_pixel_side_subdivision(antialiasing_level);
     }
     
     #[must_use]
@@ -583,6 +586,7 @@ struct Uniforms {
     sdf_count: u32,
     triangles_count: u32,
     bvh_length: u32,
+    pixel_side_subdivision: u32,
 }
 
 impl Uniforms {
@@ -608,7 +612,12 @@ impl Uniforms {
         self.frame_buffer_size.area()
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
+    fn set_pixel_side_subdivision(&mut self, level: u32) {
+        let level: u32 = if 0 == level { 1 } else { level };
+        self.pixel_side_subdivision = level;
+    }
+
+    const SERIALIZED_QUARTET_COUNT: usize = 4 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -631,7 +640,8 @@ impl Uniforms {
         self.camera.serialize_into(&mut result);
 
         result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.triangles_count, self.bvh_length);
-
+        result.write_quartet_u32(self.pixel_side_subdivision, 0, 0, 0);
+        
         debug_assert!(result.object_fully_written());
         result
     }
@@ -665,6 +675,7 @@ mod tests {
     const DEFAULT_SDF_COUNT: u32 = 6;
     const DEFAULT_TRIANGLES_COUNT: u32 = 7;
     const DEFAULT_BVH_LENGTH: u32 = 8;
+    const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
 
     #[must_use]
     fn make_test_uniforms_instance() -> Uniforms {
@@ -681,6 +692,7 @@ mod tests {
             sdf_count: DEFAULT_SDF_COUNT,
             triangles_count: DEFAULT_TRIANGLES_COUNT,
             bvh_length: DEFAULT_BVH_LENGTH,
+            pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
         }
     }
 
@@ -698,6 +710,7 @@ mod tests {
     const SLOT_SDF_COUNT: usize = 41;
     const SLOT_TRIANGLES_COUNT: usize = 42;
     const SLOT_BVH_LENGTH: usize = 43;
+    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 44;
 
     #[test]
     fn test_uniforms_reset_frame_accumulation() {
@@ -789,6 +802,7 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
         assert_eq!(actual_state_floats[SLOT_TRIANGLES_COUNT].to_bits(), DEFAULT_TRIANGLES_COUNT);
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
+        assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
     }
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
@@ -806,7 +820,11 @@ mod tests {
         let mut scene = Container::new(SdfRegistrator::default());
         let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
-        scene.add_parallelogram(Point::new(-0.5, -0.5, 0.0), Vector::new(1.0, 0.0, 0.0), Vector::new(0.0, 1.0, 0.0), test_material);
+        scene.add_parallelogram(
+            Point::new(-0.5, -0.5, 0.0), 
+            Vector::new(1.0, 0.0, 0.0), 
+            Vector::new(0.0, 1.0, 0.0), 
+            test_material);
 
         let context = create_headless_wgpu_context();
 
@@ -845,7 +863,8 @@ mod tests {
         let mut system_under_test
             = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, TEST_FRAME_BUFFER_SIZE)
             .expect("render instantiation has failed");
-        system_under_test.deterministic_mode();
+        const ANTIALIASING_LEVEL: u32 = 1;
+        system_under_test.deterministic_mode(ANTIALIASING_LEVEL);
 
         system_under_test.accumulate_more_rays();
         system_under_test.copy_noisy_pixels_to_cpu();

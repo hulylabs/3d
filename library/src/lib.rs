@@ -44,6 +44,9 @@ pub const RAYS_ACCUMULATIONS_PER_FRAME: usize = 10;
 #[cfg(not(feature = "denoiser"))]
 pub const RAYS_ACCUMULATIONS_PER_FRAME: usize = 1;
 
+const PIXEL_SUBDIVISION_MONTE_CARLO: u32 = 2;
+const PIXEL_SUBDIVISION_DETERMINISTIC: u32 = 4;
+
 pub struct Engine {
     /*Actually, we do not need any synchronization stuff; our code is
     single-threaded. But due to the design of the wgpu function, we
@@ -294,11 +297,11 @@ impl Engine {
     }
     
     pub fn use_monte_carlo_render(&mut self) {
-        self.renderer.monte_carlo_mode();
+        self.renderer.monte_carlo_mode(PIXEL_SUBDIVISION_MONTE_CARLO);
     }
     
     pub fn use_deterministic_render(&mut self) {
-        self.renderer.deterministic_mode();
+        self.renderer.deterministic_mode(PIXEL_SUBDIVISION_DETERMINISTIC);
     }
 }
 
