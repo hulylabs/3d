@@ -2,7 +2,7 @@
 use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
-use crate::gpu::color_buffer_evaluation::ColorBufferEvaluation;
+use crate::gpu::color_buffer_evaluation::ColorBufferEvaluationStrategy;
 use crate::gpu::compute_pipeline::ComputePipeline;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
@@ -37,6 +37,12 @@ mod denoiser {
     pub(super) use std::path::Path;
 }
 
+#[derive(PartialEq, Copy, Clone)]
+pub(crate) enum RenderKind {
+    MonteCarlo,
+    Deterministic,
+}
+
 pub(crate) struct Renderer {
     context: Rc<Context>,
     resources: Resources,
@@ -44,10 +50,11 @@ pub(crate) struct Renderer {
     uniforms: Uniforms,
     pipeline_ray_tracing_monte_carlo: Rc<RefCell<ComputePipeline>>,
     pipeline_ray_tracing_deterministic: Rc<RefCell<ComputePipeline>>,
-    color_buffer_evaluation: ColorBufferEvaluation,
+    color_buffer_evaluation: ColorBufferEvaluationStrategy,
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
     scene: Container,
+    render_kind: RenderKind,
     
     #[cfg(feature = "denoiser")]
     denoiser: denoiser::Denoiser,
@@ -57,6 +64,8 @@ impl Renderer {
     const WORK_GROUP_SIZE_X: u32 = 8;
     const WORK_GROUP_SIZE_Y: u32 = 8;
     const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
+    
+    const DEFAULT_RENDER_KIND: RenderKind = RenderKind::MonteCarlo;
     
     pub(crate) fn new(
         context: Rc<Context>,
@@ -90,7 +99,7 @@ impl Renderer {
         let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingDeterministic)));
         let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
         
-        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module);
+        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module, Self::DEFAULT_RENDER_KIND);
 
         Ok(Self {
             context,
@@ -99,10 +108,11 @@ impl Renderer {
             uniforms,
             pipeline_ray_tracing_monte_carlo: ray_tracing_monte_carlo.clone(),
             pipeline_ray_tracing_deterministic: ray_tracing_deterministic.clone(),
-            color_buffer_evaluation: ColorBufferEvaluation::new_monte_carlo(ray_tracing_monte_carlo.clone()),
+            color_buffer_evaluation: ColorBufferEvaluationStrategy::new_monte_carlo(ray_tracing_monte_carlo.clone()),
             pipeline_surface_attributes: object_id,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
+            render_kind: Self::DEFAULT_RENDER_KIND,
             
             #[cfg(feature = "denoiser")]
             denoiser: denoiser::Denoiser::new(),
@@ -114,21 +124,29 @@ impl Renderer {
         &mut self.scene
     }
     
-    pub(crate) fn monte_carlo_mode(&mut self, antialiasing_level: u32) {
-        self.color_buffer_evaluation = ColorBufferEvaluation::new_monte_carlo(self.pipeline_ray_tracing_monte_carlo.clone());
+    pub(crate) fn set_kind(&mut self, flavour: RenderKind, antialiasing_level: u32) {
+        if self.render_kind == flavour {
+            return;
+        }
+        
+        self.render_kind = flavour;
+        self.color_buffer_evaluation = match flavour {
+            RenderKind::MonteCarlo => {
+                ColorBufferEvaluationStrategy::new_monte_carlo(self.pipeline_ray_tracing_monte_carlo.clone())
+            }
+            RenderKind::Deterministic => {
+                ColorBufferEvaluationStrategy::new_deterministic(self.pipeline_ray_tracing_deterministic.clone())
+            }
+        };
+        
         self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
         self.uniforms.set_pixel_side_subdivision(antialiasing_level);
-    }
-    
-    pub(crate) fn deterministic_mode(&mut self, antialiasing_level: u32) {
-        self.color_buffer_evaluation = ColorBufferEvaluation::new_deterministic(self.pipeline_ray_tracing_deterministic.clone());
-        self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
-        self.uniforms.set_pixel_side_subdivision(antialiasing_level);
+        Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization, flavour);
     }
     
     #[must_use]
     pub(crate) fn is_monte_carlo(&self) -> bool {
-        1 == self.color_buffer_evaluation.frame_counter_increment()
+        self.render_kind == RenderKind::MonteCarlo
     }
 
     #[must_use]
@@ -303,7 +321,7 @@ impl Renderer {
         });
     }
 
-    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> RasterizationPipeline {
+    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule, flavour: RenderKind) -> RasterizationPipeline {
         let mut rasterization_pipeline = RasterizationPipeline::new(resources.create_rasterization_pipeline(module));
 
         let uniforms_binding_index=  0;
@@ -314,12 +332,12 @@ impl Renderer {
         ;
         rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
 
-        Self::setup_frame_buffers_bindings_for_rasterization(context, buffers, &mut rasterization_pipeline);
+        Self::setup_frame_buffers_bindings_for_rasterization(context, buffers, &mut rasterization_pipeline, flavour);
 
         rasterization_pipeline
     }
-
-    fn setup_frame_buffers_bindings_for_rasterization(context: &Context, buffers: &Buffers, rasterization_pipeline: &mut RasterizationPipeline) {
+    
+    fn setup_frame_buffers_bindings_for_rasterization(context: &Context, buffers: &Buffers, rasterization_pipeline: &mut RasterizationPipeline, flavour: RenderKind) {
         let label = Some("rasterization pipeline frame buffers group");
 
         let bind_group_layout = rasterization_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
@@ -327,9 +345,15 @@ impl Renderer {
         let mut bind_group_builder = BindGroupBuilder::new(Self::FRAME_BUFFERS_GROUP_INDEX, label, bind_group_layout);
         
         if cfg!(feature = "denoiser") {
-            bind_group_builder
-                .add_entry(0, buffers.denoised_beauty_image.gpu_render_target())
-            ;    
+            if flavour == RenderKind::Deterministic {
+                bind_group_builder
+                    .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                ;   
+            } else {
+                bind_group_builder
+                    .add_entry(0, buffers.denoised_beauty_image.gpu_render_target())
+                ;
+            }
         } else {
             bind_group_builder
                 .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
@@ -352,7 +376,7 @@ impl Renderer {
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
-            Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization);
+            Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization, self.render_kind);
         } else {
             self.buffers.ray_tracing_frame_buffer.invalidate_cpu_copies();
         }
@@ -864,7 +888,7 @@ mod tests {
             = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, TEST_FRAME_BUFFER_SIZE)
             .expect("render instantiation has failed");
         const ANTIALIASING_LEVEL: u32 = 1;
-        system_under_test.deterministic_mode(ANTIALIASING_LEVEL);
+        system_under_test.set_kind(RenderKind::Deterministic, ANTIALIASING_LEVEL);
 
         system_under_test.accumulate_more_rays();
         system_under_test.copy_noisy_pixels_to_cpu();

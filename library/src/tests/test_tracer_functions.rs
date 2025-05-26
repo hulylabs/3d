@@ -22,6 +22,7 @@ mod tests {
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::{Pod, Zeroable};
     use std::fmt::Write;
+    use cgmath::Matrix4;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
 
     #[repr(C)]
@@ -29,6 +30,14 @@ mod tests {
     struct PositionAndDirection {
         position: PodVector,
         direction: PodVector,
+    }
+    
+    #[repr(C)]
+    #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+    struct ShadowInput {
+        position: PodVector,
+        to_light: PodVector,
+        traverse_parameters: PodVector, // x - light size, y - min_ray_offset, z - max_ray_offset
     }
 
     const DATA_BINDING_GROUP: u32 = 3;
@@ -38,10 +47,72 @@ mod tests {
         fn with_position_and_direction_type(self: ShaderFunction) -> ShaderFunction {
             self.with_custom_type(
                 TypeDeclaration::new("PositionAndDirection", "position", "vec4f")
-                    .with_field("direction", "vec4f"))
+                    .with_field("direction", "vec4f")
+            )
         }
     }
-    
+
+    #[test]
+    fn test_shadow() {
+        let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
+
+        let shader_code = generate_code_for(&identity_box_class);
+
+        let template = ShaderFunction::new("ShadowInput", "f32", "shadow")
+            .with_custom_type(
+                TypeDeclaration::new("ShadowInput", "position", "vec4f")
+                    .with_field("to_light", "vec4f")
+                    .with_field("light_size", "f32")
+                    .with_field("min_ray_offset", "f32")
+                    .with_field("max_ray_offset", "f32")
+            )
+            .with_binding_group(DATA_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(shader_code);
+
+        let function_execution = make_executable(&template,
+        create_argument_formatter!("{argument}.position.xyz, {argument}.to_light.xyz, {argument}.light_size, {argument}.min_ray_offset, {argument}.max_ray_offset"));
+
+        /*
+        case 1:               case 2:
+              * - light         * - light 
+        |----------|            
+        |          |            
+        |          |            
+        |__________|           
+                                
+             * - position       * - position 
+        ________________________________________
+        */
+        
+        let instance_transformation = Affine::from_nonuniform_scale(1.0, 3.0, 1.0);
+        let buffer = make_serialized_sdf(instance_transformation);
+        let execution_config = config_sdf_tracing(buffer);
+
+        let test_input = [
+            ShadowInput {
+                position:            PodVector::new(0.0, -1.0, 0.0),
+                to_light:            PodVector::new(0.0,  1.0, 1.0),
+                traverse_parameters: PodVector::new(1.0,  0.0, 8.0), 
+            },
+
+            ShadowInput {
+                position:            PodVector::new(10.0, -1.0, 0.0),
+                to_light:            PodVector::new( 0.0,  1.0, 1.0),
+                traverse_parameters: PodVector::new( 1.0,  0.0, 3.0),
+            },
+        ];
+        
+        let expected_output: Vec<f32> = vec![
+            0.0,
+            1.0,
+        ];
+
+        let actual_output = execute_code::<ShadowInput, f32>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
+
+        assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
+    }
+
     #[test]
     fn test_perfect_reflection_evaluation() {
         /* The main objective here is to test the 'evaluate_reflection' function with the
@@ -58,7 +129,7 @@ mod tests {
             );
 
         let function_execution = make_executable(&template, 
-            create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
+        create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
 
         let execution_config = {
             let mut ware = ExecutionConfig::new();
@@ -90,7 +161,6 @@ mod tests {
         let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
-
     }
     
     #[test]
@@ -106,30 +176,11 @@ mod tests {
             .with_additional_shader_code(shader_code);
 
         let function_execution = make_executable(&template, 
-            create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
+        create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
 
         let instance_transformation = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
-        let sdf_instance = SdfInstance::new(instance_transformation, SdfClassIndex(0), Linkage::new(ObjectUid(0), MaterialIndex(0)));
-        let mut buffer = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
-        sdf_instance.serialize_into(&mut buffer);
-        
-        let mut execution_config = {
-            let mut ware = ExecutionConfig::new();
-            ware
-                .set_data_binding_group(DATA_BINDING_GROUP)
-                .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
-                .add_dummy_binding_group(1, vec![])
-                .add_binding_group(0, vec![], vec![
-                    // the only value we need (in uniforms) is sdf instances count which is 1
-                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 48])),
-                ])
-            ;
-            ware
-        };
-        
-        execution_config.add_binding_group(2, vec![], vec![
-            BindGroupSlot::new(1, buffer.backend()),
-        ]);
+        let buffer = make_serialized_sdf(instance_transformation);
+        let execution_config = config_sdf_tracing(buffer);
         
         let test_input = [
             PositionAndDirection {
@@ -163,6 +214,35 @@ mod tests {
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
+    #[must_use]
+    fn config_sdf_tracing(buffer: GpuReadySerializationBuffer) -> ExecutionConfig {
+        let mut execution_config = {
+            let mut ware = ExecutionConfig::new();
+            ware
+                .set_data_binding_group(DATA_BINDING_GROUP)
+                .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
+                .add_dummy_binding_group(1, vec![])
+                .add_binding_group(0, vec![], vec![
+                    // the only value we need (in uniforms) is sdf instances count which is 1
+                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 48])),
+                ])
+            ;
+            ware
+        };
+        execution_config.add_binding_group(2, vec![], vec![
+            BindGroupSlot::new(1, buffer.backend()),
+        ]);
+        execution_config
+    }
+    
+    #[must_use]
+    fn make_serialized_sdf(instance_transformation: Matrix4<f64>) -> GpuReadySerializationBuffer {
+        let sdf_instance = SdfInstance::new(instance_transformation, SdfClassIndex(0), Linkage::new(ObjectUid(0), MaterialIndex(0)));
+        let mut buffer = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
+        sdf_instance.serialize_into(&mut buffer);
+        buffer
+    }
+    
     #[must_use]
     fn generate_code_for(sdf: &NamedSdf) -> String {
         let mut registrator = SdfRegistrator::new();

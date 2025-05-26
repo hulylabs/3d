@@ -2,13 +2,13 @@
 use std::rc::Rc;
 use crate::gpu::compute_pipeline::ComputePipeline;
 
-pub(super) struct ColorBufferEvaluation {
+pub(super) struct ColorBufferEvaluationStrategy {
     ray_tracing_pipeline: Rc<RefCell<ComputePipeline>>,
     frame_counter_increment: u32,
     frame_counter_default: u32,
 }
 
-impl ColorBufferEvaluation {
+impl ColorBufferEvaluationStrategy {
     #[must_use]
     pub(super) fn new_monte_carlo(pipeline: Rc<RefCell<ComputePipeline>>) -> Self {
         Self { ray_tracing_pipeline: pipeline, frame_counter_increment: 1, frame_counter_default: 0, }

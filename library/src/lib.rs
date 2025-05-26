@@ -26,7 +26,7 @@ use thiserror::Error;
 use wgpu::{Adapter, Trace};
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::render::Renderer;
+use crate::gpu::render::{RenderKind, Renderer};
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
@@ -297,11 +297,11 @@ impl Engine {
     }
     
     pub fn use_monte_carlo_render(&mut self) {
-        self.renderer.monte_carlo_mode(PIXEL_SUBDIVISION_MONTE_CARLO);
+        self.renderer.set_kind(RenderKind::MonteCarlo, PIXEL_SUBDIVISION_MONTE_CARLO);
     }
     
     pub fn use_deterministic_render(&mut self) {
-        self.renderer.deterministic_mode(PIXEL_SUBDIVISION_DETERMINISTIC);
+        self.renderer.set_kind(RenderKind::Deterministic, PIXEL_SUBDIVISION_DETERMINISTIC);
     }
 }
 

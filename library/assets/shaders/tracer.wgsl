@@ -1189,11 +1189,10 @@ fn rand_from_seed(seed: f32) -> f32  {
 
 @must_use // 'to_light' expected to be normalized
 fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
-    /*
-    https://iquilezles.org/articles/rmshadows/ - the algorithm.
+    /* https://iquilezles.org/articles/rmshadows/ - the algorithm.
     Main idea: account not only outer penumbra (ray close to object),
-    but also "inner penumbra" (ray barely inside the object).
-    */
+    but also "inner penumbra" (ray barely inside the object). */
+    
     var result: f32 = DETERMINISTIC_SHADOW_MARCHING_MAX;
     var offset: f32 = min_ray_offset;
     var next_point = position + to_light * offset;
@@ -1206,7 +1205,7 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
         }
 
         offset += clamp(step.signed_distance, DETERMINISTIC_SHADOW_MIN_STEP, DETERMINISTIC_SHADOW_MAX_STEP);
-        if(offset > max_ray_offset ) {
+        if(offset > max_ray_offset) {
             break;
         }
 
