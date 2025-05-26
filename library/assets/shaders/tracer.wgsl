@@ -1165,11 +1165,9 @@ fn evaluate_reflection(incident: vec3f, normal: vec3f, hit_position: vec3f, roug
     return normalize(perfect + randomization);
 }
 
-/*
-The randomization code below is from https://www.shadertoy.com/view/3sc3z4
+/* The randomization code below is from https://www.shadertoy.com/view/3sc3z4
 The rand() function declared above gives not so random values — routhness
-looks bad with it
-*/
+looks bad with it. */
 
 @must_use
 fn reflection_roughness_addition(position: vec3f, extra_seed: f32) -> vec3f {
