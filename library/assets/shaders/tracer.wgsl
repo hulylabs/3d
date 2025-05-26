@@ -25,6 +25,7 @@ const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
 const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0; // bigger - crispier shadows
 const DETERMINISTIC_SHADOW_MARCHING_MIN = -1.0;
 const DETERMINISTIC_SHADOW_MARCHING_MAX = 1.0;
+const DETERMINISTIC_SHADOW_FLOOR = 0.6;
 const DETERMINISTIC_MAX_RAY_BOUNCES = 10;
 
 const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
@@ -864,7 +865,7 @@ fn glass_scatter(hit: HitRecord, in_ray_direction: vec3f, stochastic: bool) -> R
     }
 
     let unit_direction = in_ray_direction;
-    let cos_theta = min(dot(-unit_direction, hit.normal), 1.0);
+    let cos_theta = min(-dot(unit_direction, hit.normal), 1.0);
     let sin_theta = sqrt(1 - cos_theta*cos_theta);
 
     var direction = vec3f(0.0);
@@ -1100,7 +1101,7 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
     var current_ray = incident_ray;
     var throughput = vec3f(1.0);
     for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
-        if (hitScene(current_ray) == false) {
+        if (false == hitScene(current_ray)) {
             accumulated_radiance += BACKGROUND_COLOR * throughput;
             break;
         }
@@ -1140,6 +1141,8 @@ fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
     let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+    // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
+    let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
     let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
 
     let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
@@ -1150,7 +1153,7 @@ fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let light_color = materials[u32(lights.material_id)].emission;
     let reflected = mix(diffuse, specular, hit.material.specular_strength);
 
-    return reflected * light_color * shadow + ambient + emissive;
+    return reflected * light_color * shadow_lightened + ambient + emissive;
 }
 
 @must_use
