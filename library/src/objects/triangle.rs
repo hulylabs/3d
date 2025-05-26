@@ -182,6 +182,6 @@ mod tests {
             expected_linkage.material_index().0 as f32,
         ];
 
-        assert_eq!(actual_state.backend(), cast_slice(&expected));
+        assert_eq!(actual_state.backend(), cast_slice::<f32, u8>(&expected));
     }
 }

@@ -21,6 +21,7 @@ mod tests {
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::{Pod, Zeroable};
     use std::fmt::Write;
+    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
 
     #[repr(C)]
     #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -33,10 +34,19 @@ mod tests {
     fn test_sample_signed_distance() {
         let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
 
-        let mut shader_code = generate_code_for(&identity_box_class);
+        let shader_code = generate_code_for(&identity_box_class);
+
+        const DATA_BINDING_GROUP: u32 = 3;
         
-        shader_code.write_str(WHOLE_TRACER_GPU_CODE).expect("shader tracer code base code concatenation has failed");
-        shader_code.write_str(FUNCTION_EXECUTOR).expect("shader entry point code concatenation has failed");
+        let template = ShaderFunction::new("PositionAndDirection", "RayMarchStep", "sample_signed_distance")
+            .with_custom_type(
+                TypeDeclaration::new("PositionAndDirection", "position", "vec4f")
+                    .with_field("direction", "vec4f"))
+            .with_binding_group(DATA_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(shader_code);
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
 
         let instance_transformation = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
         let sdf_instance = SdfInstance::new(instance_transformation, SdfClassIndex(0), Linkage::new(ObjectUid(0), MaterialIndex(0)));
@@ -45,7 +55,7 @@ mod tests {
         
         let execution_config = {
             let mut ware = ExecutionConfig::new(); ware
-                .set_data_binding_group(3)
+                .set_data_binding_group(DATA_BINDING_GROUP)
                 .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
                 .add_dummy_binding_group(1, vec![])
                 .add_binding_group(0, vec![], vec![
@@ -86,12 +96,10 @@ mod tests {
             PodVector {x: -1.0, y: -2.0, z: -3.0, w:  0.0,},
         ];
         
-        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), shader_code.as_str(), execution_config);
+        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
         
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
-
-    const FUNCTION_EXECUTOR: &str = include_str!("test_tracer_functions.wgsl");
     
     #[must_use]
     fn generate_code_for(sdf: &NamedSdf) -> String {

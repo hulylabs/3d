@@ -104,7 +104,7 @@ impl ComputeRoutineEntryPoint {
             ComputeRoutineEntryPoint::ShaderObjectId => Some("compute_object_id_buffer"),
             ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
             ComputeRoutineEntryPoint::ShaderRayTracingDeterministic => Some("compute_color_buffer_deterministic"),
-            #[cfg(test)] ComputeRoutineEntryPoint::TestDefault => Some("test_entry_point"),
+            #[cfg(test)] ComputeRoutineEntryPoint::TestDefault => Some("main"),
             #[cfg(test)] ComputeRoutineEntryPoint::Default => None,
         }
     }

@@ -32,6 +32,7 @@ mod tests {
     use cgmath::Deg;
     use std::fmt::Write;
     use std::rc::Rc;
+    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[test]
     fn test_sdf_union_spheres() {
@@ -491,16 +492,12 @@ mod tests {
     
     #[must_use]
     fn execute_function(input: &[PodVector], function_name: FunctionName, function_code: String) -> Vec<f32> {
-        let mut function_execution = make_function_execution(function_name);
-        function_execution.write_str(function_code.as_str()).expect("shader code concatenation has failed");
+
+        let template = ShaderFunction::new("vec4f", "f32", function_name.0.as_str())
+            .with_additional_shader_code(function_code.as_str());
+        
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz"));
 
         execute_code(input, function_execution.as_str(), ExecutionConfig::default())
-    }
-
-    const FUNCTION_EXECUTOR: &str = include_str!("point_function_executor.wgsl");
-
-    #[must_use]
-    fn make_function_execution(name: FunctionName) -> String {
-        FUNCTION_EXECUTOR.to_string().replace("_FUNCTION_NAME_SLOT_TO_BE_FILLED_", name.0.as_str())
     }
 }

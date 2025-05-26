@@ -11,6 +11,7 @@ mod tests {
     use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use std::fmt::Write;
+    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[test]
     fn test_sdf_selection_evaluation() {
@@ -26,8 +27,8 @@ mod tests {
         let sphere_index = warehouse.index_for_name(sphere.name()).unwrap();
         let box_index = warehouse.index_for_name(a_box.name()).unwrap();
 
-        let mut the_code = warehouse.sdf_classes_code().to_string();
-        the_code.write_str(FUNCTION_EXECUTOR).expect("shader code concatenation has failed");
+        let template = ShaderFunction::new("vec4f", "f32", "sdf_select")
+            .with_additional_shader_code(warehouse.sdf_classes_code().to_string());
 
         let input_points = [
             PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
@@ -51,10 +52,10 @@ mod tests {
               6.0,
         ];
 
-        let actual_distances = execute_code(&input_points, the_code.as_str(), ExecutionConfig::default());
+        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz"));
+
+        let actual_distances = execute_code(&input_points, function_execution.as_str(), ExecutionConfig::default());
         
         assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }
-    
-    const FUNCTION_EXECUTOR: &str = include_str!("sdf_function_executor.wgsl");
 }

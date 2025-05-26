@@ -236,7 +236,7 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
         let candidate = at(local_ray, local_t);
         let signed_distance = sdf_select(sdf.class_index, candidate);
         let t_scaled = 0.0001 * local_t;
-        if(abs(signed_distance)<t_scaled) {
+        if(abs(signed_distance) < t_scaled) {
             hitRec.p = transform_point(sdf.location, at(local_ray, local_t));
             hitRec.t = length(hitRec.p - ray.origin);
             hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(candidate, sdf)));
@@ -466,7 +466,7 @@ lower left pixel corner -> 0.5, 0.5 gives pixel's center;
 fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
     let s = uniforms.frame_buffer_aspect * (2 * ((pixelCoords.x + sub_pixel_x) * uniforms.inverted_frame_buffer_size.x) - 1);
     let t = -1 * (2 * ((pixelCoords.y + sub_pixel_y) * uniforms.inverted_frame_buffer_size.y) - 1);
-    return getCameraRay(s, t);
+    return get_camera_ray(s, t);
 }
 
 @must_use
@@ -579,15 +579,14 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
 var<private> fovFactor : f32;
 var<private> cam_origin : vec3f;
 
-fn getCameraRay(s : f32, t : f32) -> Ray {
+fn get_camera_ray(s : f32, t : f32) -> Ray {
 	let eye_to_pixel_direction = (uniforms.view_matrix * vec4f(vec3f(s, t, -fovFactor), 0.0)).xyz;
-
 	let pixel_world_space = vec4(cam_origin + eye_to_pixel_direction, 1.0);
-	let ray_origin_world_space = uniforms.view_ray_origin_matrix * pixel_world_space;
 
-	let ray = Ray(ray_origin_world_space.xyz, normalize((pixel_world_space - ray_origin_world_space).xyz));
+	let ray_origin_world_space = (uniforms.view_ray_origin_matrix * pixel_world_space).xyz;
+	let direction = normalize(pixel_world_space.xyz - ray_origin_world_space);
 
-	return ray;
+	return Ray(ray_origin_world_space, direction);
 }
 
 /// hitRay
