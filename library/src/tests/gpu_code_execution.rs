@@ -1,6 +1,6 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use crate::gpu::compute_pipeline::ComputePipeline;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
@@ -32,7 +32,7 @@ pub(crate) mod tests {
     pub(crate) struct ExecutionConfig {
         data_binding_group: u32,
         entry_point: ComputeRoutineEntryPoint,
-        bind_groups: Vec<BindGroup>,
+        bind_groups: HashMap<u32, BindGroup>,
     }
     
     impl ExecutionConfig {
@@ -40,7 +40,7 @@ pub(crate) mod tests {
             Self { 
                 data_binding_group: 0, 
                 entry_point: ComputeRoutineEntryPoint::Default,
-                bind_groups: Vec::new(),
+                bind_groups: HashMap::new(),
             }
         }
 
@@ -51,7 +51,7 @@ pub(crate) mod tests {
 
         pub(crate) fn add_dummy_binding_group(&mut self, binding_group: u32, slots: Vec<u32>) -> &mut Self {
             assert_ne!(self.data_binding_group, binding_group, "can't stab test data binding group");
-            self.bind_groups.push(BindGroup {
+            self.bind_groups.insert(binding_group, BindGroup {
                 index: binding_group, 
                 dummy_slots: slots.into_iter().collect(), 
                 slots: Vec::new()
@@ -61,7 +61,7 @@ pub(crate) mod tests {
 
         pub(crate) fn add_binding_group(&mut self, binding_group: u32, slots_to_stab: Vec<u32>, slots: Vec<BindGroupSlot>) -> &mut Self {
             assert_ne!(self.data_binding_group, binding_group, "can't set test data binding group");
-            self.bind_groups.push(BindGroup {
+            self.bind_groups.insert(binding_group, BindGroup {
                 index: binding_group, 
                 dummy_slots: slots_to_stab.into_iter().collect(), 
                 slots
@@ -102,7 +102,7 @@ pub(crate) mod tests {
 
         let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
         let dummy_buffer = resources.create_buffer("dummy", universal_usage, &vec![0_u8; 256]);
-        for group in config.bind_groups {
+        for (_, group) in config.bind_groups {
             pipeline.setup_bind_group(group.index, None, context.device(), |bind_group|{
                 for slot in group.dummy_slots {
                     bind_group.add_entry(slot, dummy_buffer.clone());

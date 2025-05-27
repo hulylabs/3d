@@ -299,12 +299,9 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 // https://stackoverflow.com/questions/42740765/
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/moller-trumbore-ray-triangle-intersection.html
-fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bool {
-
-	let ray = Ray(incidentRay.origin, incidentRay.direction);
-
-	let AB = tri.B - tri.A;
-	let AC = tri.C - tri.A;
+fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
+	let AB = triangle.B - triangle.A;
+	let AC = triangle.C - triangle.A;
 	let normal = cross(AB, AC);
 	let determinant = -dot(ray.direction, normal);
 
@@ -313,7 +310,7 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 		return false;
 	}
 
-	let ao = ray.origin - tri.A;
+	let ao = ray.origin - triangle.A;
 	let dao = cross(ao, ray.direction);
 
 	// calculate dist to triangle & barycentric coordinates of intersection point
@@ -323,24 +320,22 @@ fn hit_triangle(tri : Triangle, tmin : f32, tmax : f32, incidentRay : Ray) -> bo
 	let v = -dot(AB, dao) * invDet;
 	let w = 1 - u - v;
 
-	if(dst < tmin || dst > tmax || u < tmin || v < tmin || w < tmin)
-	{
+	if(dst < tmin || dst > tmax || u < tmin || v < tmin || w < tmin) {
 		return false;
 	}
 
 	hitRec.t = dst;
-	hitRec.p = at(incidentRay, dst);
+	hitRec.p = at(ray, dst);
 
-	hitRec.normal = tri.normalA * w + tri.normalB * u + tri.normalC * v;
+	hitRec.normal = triangle.normalA * w + triangle.normalB * u + triangle.normalC * v;
 	hitRec.normal = normalize(hitRec.normal);
 
-	hitRec.front_face = dot(incidentRay.direction, hitRec.normal) < 0;
-	if(hitRec.front_face == false)
-	{
+	hitRec.front_face = dot(ray.direction, hitRec.normal) < 0;
+	if(hitRec.front_face == false) {
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[i32(tri.material_id)];
+	hitRec.material = materials[i32(triangle.material_id)];
 
 	return true;
 }
@@ -592,7 +587,7 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 
 /// hitRay
 
-fn hitScene(ray : Ray) -> bool
+fn hit_scene(ray : Ray) -> bool
 {
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
@@ -730,7 +725,7 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
 
 	for(var i = 0; i < MONTE_CARLO_MAX_RAY_BOUNCES; i++) {
-		if(hitScene(currRay) == false) {
+		if(hit_scene(currRay) == false) {
 			acc_radiance += (BACKGROUND_COLOR * throughput);
 			break;
 		}
@@ -1101,7 +1096,7 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
     var current_ray = incident_ray;
     var throughput = vec3f(1.0);
     for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
-        if (false == hitScene(current_ray)) {
+        if (false == hit_scene(current_ray)) {
             accumulated_radiance += BACKGROUND_COLOR * throughput;
             break;
         }
@@ -1192,7 +1187,7 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
     /* https://iquilezles.org/articles/rmshadows/ - the algorithm.
     Main idea: account not only outer penumbra (ray close to object),
     but also "inner penumbra" (ray barely inside the object). */
-    
+
     var result: f32 = DETERMINISTIC_SHADOW_MARCHING_MAX;
     var offset: f32 = min_ray_offset;
     var next_point = position + to_light * offset;

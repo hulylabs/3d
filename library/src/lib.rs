@@ -15,24 +15,25 @@ mod gpu;
 mod tests;
 pub mod sdf;
 
-use std::cmp::max;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
-use winit::window::Window;
-use log::info;
-use thiserror::Error;
-use wgpu::{Adapter, Trace};
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::render::{RenderKind, Renderer};
+use crate::gpu::render::Renderer;
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::sliding_time_frame::SlidingTimeFrame;
 use crate::utils::time_throttled_logger::TimeThrottledInfoLogger;
+use log::info;
+use std::cmp::max;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use thiserror::Error;
+use wgpu::{Adapter, Trace};
+use winit::window::Window;
+use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -150,7 +151,16 @@ impl Engine {
         let output_surface_format = surface_capabilities.formats[0];
 
         let frame_buffer_size = FrameBufferSize::new(max(1, window_pixels_size.width), max(1, window_pixels_size.height));
-        let renderer = Renderer::new(context.clone(), scene, camera, output_surface_format, frame_buffer_size)
+        let renderer 
+            = Renderer::new(
+                context.clone(), 
+                scene, 
+                camera, 
+                output_surface_format, 
+                frame_buffer_size, 
+                RenderStrategyId::Deterministic, 
+                PIXEL_SUBDIVISION_DETERMINISTIC,
+            )
             .map_err(|e| EngineInstantiationError::InternalError {what: e.to_string()})?;
 
         let ware = Engine {
@@ -297,11 +307,11 @@ impl Engine {
     }
     
     pub fn use_monte_carlo_render(&mut self) {
-        self.renderer.set_kind(RenderKind::MonteCarlo, PIXEL_SUBDIVISION_MONTE_CARLO);
+        self.renderer.set_render_strategy(RenderStrategyId::MonteCarlo, PIXEL_SUBDIVISION_MONTE_CARLO);
     }
     
     pub fn use_deterministic_render(&mut self) {
-        self.renderer.set_kind(RenderKind::Deterministic, PIXEL_SUBDIVISION_DETERMINISTIC);
+        self.renderer.set_render_strategy(RenderStrategyId::Deterministic, PIXEL_SUBDIVISION_DETERMINISTIC);
     }
 }
 

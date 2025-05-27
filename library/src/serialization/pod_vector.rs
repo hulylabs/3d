@@ -17,6 +17,10 @@ impl PodVector {
     pub(crate) fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z, w: 0.0 }
     }
+    #[must_use] #[cfg(test)]
+    pub(crate) fn new_full(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self { x, y, z, w, }
+    }
 }
 
 impl Display for PodVector {
