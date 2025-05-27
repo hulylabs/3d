@@ -2,7 +2,7 @@ const PI = 3.1415926535897932385;
 
 const MIN_FLOAT = 0.0001;
 const MAX_FLOAT = 999999999.999;
-const SECONDARY_RAY_START_BIAS = 0.001;
+const SECONDARY_RAY_START_BIAS = 0.0005;
 
 const MATERIAL_LAMBERTIAN = 0.0;
 const MATERIAL_MIRROR = 1.0;
@@ -238,7 +238,7 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
         let signed_distance = sdf_select(sdf.class_index, candidate);
         let t_scaled = 0.0001 * local_t;
         if(abs(signed_distance) < t_scaled) {
-            hitRec.p = transform_point(sdf.location, at(local_ray, local_t));
+            hitRec.p = transform_point(sdf.location, candidate);
             hitRec.t = length(hitRec.p - ray.origin);
             hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(candidate, sdf)));
             hitRec.front_face = sdf_select(sdf.class_index, local_ray.origin) >= 0;
@@ -285,10 +285,10 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	}
 
 	hitRec.t = t;
-	hitRec.p = intersection;
+	hitRec.p = quad.Q + quad.v * beta + quad.u * alpha;
 	hitRec.normal = quad.normal;
-	hitRec.front_face = dot(ray.direction, hitRec.normal) < 0;
-	if(hitRec.front_face == false)
+	hitRec.front_face = denom < 0.0;
+	if(false == hitRec.front_face)
 	{
 		hitRec.normal = -hitRec.normal;
 	}
@@ -325,7 +325,7 @@ fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
 	}
 
 	hitRec.t = dst;
-	hitRec.p = at(ray, dst);
+	hitRec.p = triangle.A * w + triangle.B * u + triangle.C * v;
 
 	hitRec.normal = triangle.normalA * w + triangle.normalB * u + triangle.normalC * v;
 	hitRec.normal = normalize(hitRec.normal);
@@ -718,64 +718,63 @@ fn hit_scene(ray : Ray) -> bool
 
 // https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing#Implementation
 
-fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
+fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 
-	var currRay = incidentRay;
-	var acc_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
+	var current_ray = incident_ray;
+	var accumulated_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
 	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
 
 	for(var i = 0; i < MONTE_CARLO_MAX_RAY_BOUNCES; i++) {
-		if(hit_scene(currRay) == false) {
-			acc_radiance += (BACKGROUND_COLOR * throughput);
+		if(hit_scene(current_ray) == false) {
+			accumulated_radiance += (BACKGROUND_COLOR * throughput);
 			break;
 		}
 
-		// unidirectional light
-		var emissionColor = hitRec.material.emission;
+		var emission_color = hitRec.material.emission;
 		if(!hitRec.front_face) {
-			emissionColor = vec3f(0);
+			emission_color = vec3f(0.0);
 		}
 
 		if(MONTE_CARLO_IMPORTANCE_SAMPLING) {
-			// IMPORTANCE SAMPLING TOWARDS LIGHT
-			// diffuse scatter ray
-			let scatterred_surface = material_scatter(currRay);
+			let scatterred_surface = material_scatter(current_ray);
 
 			if(scatterRec.skip_pdf) {
-				acc_radiance += emissionColor * throughput;
+				accumulated_radiance += emission_color * throughput;
 				throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
 
-				currRay = scatterRec.skip_pdf_ray;
+				current_ray = scatterRec.skip_pdf_ray;
+				current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
 				continue;
 			}
 
-			// ray sampled towards light
-			let scattered_light = get_random_on_quad(lights, hitRec.p);
-
-			var scattered = scattered_light;
-			var rand = rand_0_1();
-			if(rand > 0.2) {
+            const LIGHT_SAMPLING_PROBABILITY = 0.2;
+			var scattered: Ray;
+			if(rand_0_1() > LIGHT_SAMPLING_PROBABILITY) {
 				scattered = scatterred_surface;
+			} else {
+			    scattered = get_random_on_quad(lights, hitRec.p);
 			}
 
 			let lambertian_pdf = onb_lambertian_scattering_pdf(scattered);
 			let light_pdf = light_pdf(scattered, lights);
-			let pdf = 0.2 * light_pdf + 0.8 * lambertian_pdf;
+			let pdf = LIGHT_SAMPLING_PROBABILITY * light_pdf + (1.0 - LIGHT_SAMPLING_PROBABILITY) * lambertian_pdf;
 
 			if(pdf <= 0.00001) {
-				return emissionColor * throughput;
+				return emission_color * throughput;
 			}
 
-			acc_radiance += emissionColor * throughput;
+			accumulated_radiance += emission_color * throughput;
 			throughput *= ((lambertian_pdf * mix(hitRec.material.albedo, hitRec.material.specular, doSpecular)) / pdf);
-			currRay = scattered;
+			current_ray = scattered;
+			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
 		} else {
-			let scattered = material_scatter(currRay);
+			let scattered = material_scatter(current_ray);
 
-			acc_radiance += emissionColor * throughput;
+			accumulated_radiance += emission_color * throughput;
 			throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
 
-			currRay = scattered;
+			current_ray = scattered;
+			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
 		}
 
 		// russian roulette
@@ -789,14 +788,14 @@ fn ray_color_monte_carlo(incidentRay : Ray) -> vec3f {
 		}
 	}
 
-	return acc_radiance;
+	return accumulated_radiance;
 }
 
 /// scatterRay
 
 var<private> doSpecular : f32;
 fn material_scatter(ray_in : Ray) -> Ray {
-	var scattered = Ray(vec3f(0), vec3f(0));
+	var scattered = Ray(vec3f(0.0), vec3f(0.0));
 	doSpecular = 0;
 	if(hitRec.material.material_type == MATERIAL_LAMBERTIAN) {
 
@@ -882,7 +881,7 @@ fn glass_scatter(hit: HitRecord, in_ray_direction: vec3f, stochastic: bool) -> R
         direction = hit.normal;
     }
 
-    return Ray(hit.p + SECONDARY_RAY_START_BIAS * direction, direction);
+    return Ray(hit.p, direction);
 }
 
 /// importanceSampling
@@ -1113,6 +1112,7 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
         } else if (MATERIAL_GLASS == hitRec.material.material_type) {
             let stochastic = false;
             current_ray = glass_scatter(hitRec, current_ray.direction, stochastic);
+            current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
             throughput *= hitRec.material.albedo;
         } else {
             accumulated_radiance += hitRec.material.albedo;
