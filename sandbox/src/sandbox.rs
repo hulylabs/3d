@@ -14,6 +14,7 @@ use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
 use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
+use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulWorld};
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -35,8 +36,9 @@ struct SelectedObject {
 
 pub(super) struct Sandbox {
     engine: Engine,
-    world: World,
-
+    tech_world: World,
+    beautiful_world: BeautifulWorld,
+    
     left_mouse_down: bool,
     last_cursor_position: Option<(f64, f64)>,
 
@@ -132,24 +134,33 @@ impl Sandbox {
                 } else if "n" == letter_key {
                     self.engine.use_deterministic_render();
                 } else if "+" == letter_key {
-                    self.world.move_light_z(1.0, self.engine.scene());
+                    self.tech_world.move_light_z(1.0, self.engine.scene());
                 } else if "-" == letter_key {
-                    self.world.move_light_z(-1.0, self.engine.scene());
+                    self.tech_world.move_light_z(-1.0, self.engine.scene());
                 } else if "*" == letter_key {
-                    self.world.move_light_x(1.0, self.engine.scene());
+                    self.tech_world.move_light_x(1.0, self.engine.scene());
                 } else if "/" == letter_key {
-                    self.world.move_light_x(-1.0, self.engine.scene());
+                    self.tech_world.move_light_x(-1.0, self.engine.scene());
                 } else if "1" == letter_key {
-                    self.world.switch_to_ui_box_scene(self.engine.scene());
+                    self.tech_world.switch_to_ui_box_scene(self.engine.scene());
                     self.selected_object = None;
                 } else if "2" == letter_key {
-                    self.world.switch_to_sdf_exhibition_scene(self.engine.scene());
+                    self.tech_world.switch_to_sdf_exhibition_scene(self.engine.scene());
                     self.selected_object = None;
                 } else if "3" == letter_key {
-                    self.world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
+                    self.tech_world.switch_to_constructive_solid_geometry_sample_scene(self.engine.scene());
                     self.selected_object = None;
                 } else if "4" == letter_key {
-                    self.world.switch_to_smooth_operators_scene(self.engine.scene());
+                    self.tech_world.switch_to_smooth_operators_scene(self.engine.scene());
+                    self.selected_object = None;
+                } else if "5" == letter_key {
+                    self.beautiful_world.create_crystal_palace_scene(self.engine.scene());
+                    self.selected_object = None;
+                } else if "6" == letter_key {
+                    self.beautiful_world.create_underwater_treasure_scene(self.engine.scene());
+                    self.selected_object = None;
+                } else if "7" == letter_key {
+                    self.beautiful_world.create_zen_garden_scene(self.engine.scene());
                     self.selected_object = None;
                 }
             }
@@ -165,14 +176,18 @@ impl Sandbox {
         let camera = make_default_camera();
         
         let mut sdf_registrator = SdfRegistrator::default();
-        let sdf_classes = SdfClasses::new(&mut sdf_registrator);
+        let tech_sdf_classes = SdfClasses::new(&mut sdf_registrator);
+        let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);
         
         let mut scene = Container::new(sdf_registrator);
-        let materials = Materials::new(&mut scene);
+        let tech_materials = Materials::new(&mut scene);
+        let beautiful_materials = BeautifulMaterials::new(&mut scene);
         
-        let mut world = World::new(sdf_classes, materials);
-        world.switch_to_ui_box_scene(&mut scene);
-        let selected_object_material = world.selected_object_material();
+        let mut tech_world = World::new(tech_sdf_classes, tech_materials);
+        tech_world.switch_to_ui_box_scene(&mut scene);
+        let selected_object_material = tech_world.selected_object_material();
+        
+        let beautiful_world = BeautifulWorld::new(beautiful_sdf_classes, beautiful_materials);
         
         let engine = pollster::block_on(Engine::new(window.clone(), scene, camera))?;
         
@@ -181,7 +196,8 @@ impl Sandbox {
         
         Ok(Self { 
             engine,
-            world,
+            tech_world,
+            beautiful_world,
             left_mouse_down: false, 
             last_cursor_position: None, 
             selected_object: None,

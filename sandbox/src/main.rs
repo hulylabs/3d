@@ -2,6 +2,7 @@
 
 mod sandbox;
 mod world;
+mod beautiful_world;
 
 use std::env;
 use std::sync::Arc;

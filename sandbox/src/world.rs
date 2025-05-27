@@ -37,6 +37,7 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
+use crate::beautiful_world::{BeautifulSdfClasses, BeautifulWorld};
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -370,7 +371,9 @@ pub(super) struct World {
 impl World {
     #[must_use]
     pub(super) fn new(sdf_classes: SdfClasses, materials: Materials) -> Self {
-        Self { sdf_classes, materials, light_panel: None, light_panel_z: -1.0, light_panel_x: -1.0  }
+        Self { 
+            sdf_classes, materials, light_panel: None, light_panel_z: -1.0, light_panel_x: -1.0,
+        }
     }
 
     #[must_use]
