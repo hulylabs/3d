@@ -37,7 +37,6 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
-use crate::beautiful_world::{BeautifulSdfClasses, BeautifulWorld};
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
