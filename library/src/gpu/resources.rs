@@ -25,7 +25,7 @@ impl Resources {
     }
 
     #[must_use]
-    fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
+    pub(crate) fn create_buffer(&self, label: &str, usage: BufferUsages, buffer_data: &[u8]) -> Rc<wgpu::Buffer> {
         let buffer = self.context.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
             contents: buffer_data,
@@ -76,7 +76,7 @@ impl Resources {
     }
     
     #[must_use]
-    pub(crate) fn create_compute_pipeline(&self, routine: ComputeRoutine, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
+    pub(crate) fn create_compute_pipeline(&self, routine: ComputeRoutineEntryPoint, module: &wgpu::ShaderModule) -> wgpu::ComputePipeline {
         self.context.device().create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: routine.name(),
             compilation_options: Default::default(),
@@ -88,19 +88,24 @@ impl Resources {
     }
 }
 
-pub(crate) enum ComputeRoutine {
-    ShaderRayTracingEntryPoint,
-    ShaderObjectIdEntryPoint,
+pub(crate) enum ComputeRoutineEntryPoint {
+    ShaderObjectId,
+    
+    ShaderRayTracingMonteCarlo,
+    ShaderRayTracingDeterministic,
     
     #[cfg(test)] Default,
+    #[cfg(test)] TestDefault,
 }
 
-impl ComputeRoutine {
+impl ComputeRoutineEntryPoint {
     fn name(&self) -> Option<&'static str> {
         match self {
-            ComputeRoutine::ShaderObjectIdEntryPoint => Some("compute_object_id_buffer"),
-            ComputeRoutine::ShaderRayTracingEntryPoint => Some("compute_color_buffer"),
-            #[cfg(test)] ComputeRoutine::Default => None,
+            ComputeRoutineEntryPoint::ShaderObjectId => Some("compute_object_id_buffer"),
+            ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
+            ComputeRoutineEntryPoint::ShaderRayTracingDeterministic => Some("compute_color_buffer_deterministic"),
+            #[cfg(test)] ComputeRoutineEntryPoint::TestDefault => Some("main"),
+            #[cfg(test)] ComputeRoutineEntryPoint::Default => None,
         }
     }
 }

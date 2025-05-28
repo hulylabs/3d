@@ -73,7 +73,7 @@ pub(crate) mod constants {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::epsilon::DEFAULT_EPSILON;
+    use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
     use cgmath::{assert_abs_diff_eq, InnerSpace, Rad};
     use std::f64::consts::PI;
     
@@ -104,7 +104,7 @@ mod tests {
 
         let actual_vector = system_under_test.of_surface_vector(victim_vector);
 
-        assert_abs_diff_eq!(actual_vector, expected_vector, epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(actual_vector, expected_vector, epsilon = DEFAULT_EPSILON_F64);
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
 
         let actual_point = victim_point.transform(&system_under_test);
 
-        assert_abs_diff_eq!(actual_point, expected_point, epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(actual_point, expected_point, epsilon = DEFAULT_EPSILON_F64);
     }
 
     #[test]
@@ -135,6 +135,6 @@ mod tests {
 
         let actual_vector = victim_vector.transform(&system_under_test);
 
-        assert_abs_diff_eq!(actual_vector, expected_vector, epsilon = DEFAULT_EPSILON);
+        assert_abs_diff_eq!(actual_vector, expected_vector, epsilon = DEFAULT_EPSILON_F64);
     }
 }

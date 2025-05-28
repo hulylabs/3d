@@ -1,19 +1,19 @@
 ﻿use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
-use crate::sdf::named_sdf::UniqueName;
+use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::sdf::shader_code::{format_sdf_selection, format_sdf_selection_function_opening, };
 use std::collections::HashMap;
 use std::fmt::Write;
 
 pub(crate) struct SdfWarehouse {
-    index_from_name: HashMap<UniqueName, SdfClassIndex>,
+    index_from_name: HashMap<UniqueSdfClassName, SdfClassIndex>,
     sdf_classes_code: String,
 }
 
 impl SdfWarehouse {
     #[must_use]
     pub(crate) fn new(sdf_classes: SdfRegistrator) -> Self {
-        let mut index_from_name: HashMap<UniqueName, SdfClassIndex> = HashMap::new();
+        let mut index_from_name: HashMap<UniqueSdfClassName, SdfClassIndex> = HashMap::new();
         let mut shader_code = String::new();
         let mut sdf_selection_uber_function = format_sdf_selection_function_opening();
         
@@ -34,7 +34,7 @@ impl SdfWarehouse {
         Self { index_from_name, sdf_classes_code: shader_code }
     }
     
-    pub(crate) fn index_for_name(&self, name: &UniqueName) -> Option<&SdfClassIndex> {
+    pub(crate) fn index_for_name(&self, name: &UniqueSdfClassName) -> Option<&SdfClassIndex> {
         self.index_from_name.get(name)
     }
 

@@ -1,6 +1,6 @@
 ﻿use crate::sdf::dfs;
 use crate::sdf::function_body_dossier::FunctionBodyDossier;
-use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use crate::sdf::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
 use crate::sdf::shader_code_dossier::ShaderCodeDossier;
 use crate::sdf::shader_function_name::FunctionName;
@@ -11,12 +11,12 @@ use std::collections::HashMap;
 pub struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
     uid_generator: UidGenerator,
-    registered: HashMap<UniqueName, NamedSdf>,
+    registered: HashMap<UniqueSdfClassName, NamedSdf>,
 }
 
 pub(crate) struct SdfCodeGenerator {
     sdf_bodies: FunctionBodyDossier,
-    registered: HashMap<UniqueName, NamedSdf>,
+    registered: HashMap<UniqueSdfClassName, NamedSdf>,
 }
 
 impl SdfCodeGenerator {
@@ -29,7 +29,7 @@ impl SdfCodeGenerator {
     }
 
     #[must_use]
-    pub(crate) fn registrations(&self) -> &HashMap<UniqueName, NamedSdf> {
+    pub(crate) fn registrations(&self) -> &HashMap<UniqueSdfClassName, NamedSdf> {
         &self.registered
     }
     
@@ -131,7 +131,7 @@ impl Default for SdfRegistrator {
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
-    use crate::sdf::named_sdf::UniqueName;
+    use crate::sdf::named_sdf::UniqueSdfClassName;
     use crate::sdf::sdf_base::Sdf;
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_identical_names_registration_attempt() {
-        let name = UniqueName::new("the_name".to_string());
+        let name = UniqueSdfClassName::new("the_name".to_string());
         let named = NamedSdf::new(make_dummy_sdf(), name.clone());
 
         let mut registrator_under_test = SdfRegistrator::new();
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_single_one_node_sdf() {
         let geometry = make_dummy_sdf();
-        let name = UniqueName::new("the_name".to_string());
+        let name = UniqueSdfClassName::new("the_name".to_string());
         let named = NamedSdf::new(geometry.clone(), name.clone());
         
         let mut registrator_under_test = SdfRegistrator::new();
@@ -174,10 +174,10 @@ mod tests {
     fn test_two_same_one_node_sdf() {
         let geometry = make_dummy_sdf();
         
-        let first_name = UniqueName::new("the_first".to_string());
+        let first_name = UniqueSdfClassName::new("the_first".to_string());
         let first_named = NamedSdf::new(geometry.clone(), first_name.clone());
         
-        let second_name = UniqueName::new("the_second".to_string());
+        let second_name = UniqueSdfClassName::new("the_second".to_string());
         let second_named = NamedSdf::new(geometry.clone(), second_name.clone());
 
         let mut registrator_under_test = SdfRegistrator::new();
@@ -210,7 +210,7 @@ mod tests {
             SdfSphere::new_offset(29.0, Point::new(31.0, 37.0, 41.0)),
         );
 
-        let name = UniqueName::new("the_name".to_string());
+        let name = UniqueSdfClassName::new("the_name".to_string());
 
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
@@ -244,7 +244,7 @@ mod tests {
             SdfSphere::new(17.0),
         );
 
-        let name = UniqueName::new("test".to_string());
+        let name = UniqueSdfClassName::new("test".to_string());
         
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
@@ -276,7 +276,7 @@ mod tests {
             ),
         );
 
-        let name = UniqueName::new("test".to_string());
+        let name = UniqueSdfClassName::new("test".to_string());
 
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
@@ -293,7 +293,7 @@ mod tests {
     }
     
     #[must_use]
-    fn generate_code(sdf: Rc<dyn Sdf>, name: UniqueName) -> (FunctionName, String, SdfCodeGenerator) {
+    fn generate_code(sdf: Rc<dyn Sdf>, name: UniqueSdfClassName) -> (FunctionName, String, SdfCodeGenerator) {
         let named = NamedSdf::new(sdf, name);
         let mut registrator_under_test = SdfRegistrator::default();
         

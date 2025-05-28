@@ -1,13 +1,13 @@
 ﻿use derive_more::Display;
-use crate::sdf::named_sdf::UniqueName;
+use crate::sdf::named_sdf::UniqueSdfClassName;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Display)]
 #[display("{}", _0)]
 pub(crate) struct FunctionName(pub String);
 
-impl From<&UniqueName> for FunctionName {
+impl From<&UniqueSdfClassName> for FunctionName {
     #[must_use]
-    fn from(value: &UniqueName) -> Self {
+    fn from(value: &UniqueSdfClassName) -> Self {
         FunctionName(format!("sdf_{}", value))
     }
 }
@@ -30,7 +30,7 @@ mod tests {
     #[test]
     fn test_from_unique_name() {
         let name = "my_shape";
-        let system_under_test = FunctionName::from(&UniqueName::new(name.to_string()));
+        let system_under_test = FunctionName::from(&UniqueSdfClassName::new(name.to_string()));
         assert_eq!(system_under_test.0, "sdf_my_shape");
     }
 

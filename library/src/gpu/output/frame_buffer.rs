@@ -51,7 +51,7 @@ impl FrameBuffer {
         }
     }
 
-    #[cfg(feature = "denoiser")]
+    #[cfg(any(test, feature = "denoiser"))]
     pub(crate) fn copy_pixel_colors_from_gpu(&mut self) -> impl Future<Output = ()> {
         self.noisy_pixel_color.read_cpu_copy()
     }
@@ -88,6 +88,11 @@ impl FrameBuffer {
     #[must_use] #[cfg(feature = "denoiser")]
     pub(crate) fn denoiser_input(&mut self) -> (&mut Vec<PodVector>, &Vec<PodVector>, &Vec<PodVector>) {
         (self.noisy_pixel_color.mutable_cpu_copy(), self.albedo.cpu_copy(), self.normal.cpu_copy())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn noisy_pixel_color_at_cpu(&self) -> &Vec<PodVector> {
+        self.noisy_pixel_color.cpu_copy()
     }
     
     #[must_use]

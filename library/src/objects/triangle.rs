@@ -1,5 +1,5 @@
 use crate::geometry::aabb::Aabb;
-use crate::geometry::epsilon::DEFAULT_EPSILON;
+use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
@@ -65,7 +65,7 @@ impl AbsDiffEq for Triangle {
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
-        DEFAULT_EPSILON
+        DEFAULT_EPSILON_F64
     }
 
     #[must_use]
@@ -182,6 +182,6 @@ mod tests {
             expected_linkage.material_index().0 as f32,
         ];
 
-        assert_eq!(actual_state.backend(), cast_slice(&expected));
+        assert_eq!(actual_state.backend(), cast_slice::<f32, u8>(&expected));
     }
 }

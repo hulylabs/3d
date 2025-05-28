@@ -1,5 +1,5 @@
 ﻿use crate::geometry::alias::{Point, Vector};
-use crate::geometry::epsilon::DEFAULT_EPSILON;
+use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use cgmath::AbsDiffEq;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -13,7 +13,7 @@ impl AbsDiffEq for Vertex {
 
     #[must_use]
     fn default_epsilon() -> Self::Epsilon {
-        DEFAULT_EPSILON
+        DEFAULT_EPSILON_F64
     }
 
     #[must_use]

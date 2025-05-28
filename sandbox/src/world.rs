@@ -1,7 +1,4 @@
-﻿use std::env;
-use std::path::{Path, PathBuf};
-use cgmath::Deg;
-use log::error;
+﻿use cgmath::Deg;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
@@ -11,7 +8,7 @@ use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
 use library::sdf::code_generator::SdfRegistrator;
 use library::sdf::cut_hollow_sphere::SdfCutHollowSphere;
-use library::sdf::named_sdf::{NamedSdf, UniqueName};
+use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
 use library::sdf::sdf_box_frame::SdfBoxFrame;
 use library::sdf::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
@@ -36,6 +33,10 @@ use library::sdf::sdf_triangular_prism::SdfTriangularPrism;
 use library::sdf::sdf_union::SdfUnion;
 use library::sdf::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::sdf_vesica_segment::SdfVesicaSegment;
+use library::utils::object_uid::ObjectUid;
+use log::error;
+use std::env;
+use std::path::{Path, PathBuf};
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -67,22 +68,22 @@ pub(super) struct SdfClasses {
 impl SdfClasses {
     #[must_use]
     pub(super) fn new(registrator: &mut SdfRegistrator) -> Self {
-        let rectangular_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.02)), UniqueName::new("button".to_string()));
+        let rectangular_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.24)), UniqueSdfClassName::new("button".to_string()));
         registrator.add(&rectangular_box);
 
-        let sphere = NamedSdf::new(SdfSphere::new(1.0), UniqueName::new("bubble".to_string()));
+        let sphere = NamedSdf::new(SdfSphere::new(1.0), UniqueSdfClassName::new("bubble".to_string()));
         registrator.add(&sphere);
         
-        let identity_box = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), UniqueName::new("id_box".to_string()));
+        let identity_box = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), UniqueSdfClassName::new("id_box".to_string()));
         registrator.add(&identity_box);
 
-        let identity_box_frame = NamedSdf::new(SdfBoxFrame::new(Vector::new(1.0, 1.0, 1.0), 0.1), UniqueName::new("id_box_frame".to_string()));
+        let identity_box_frame = NamedSdf::new(SdfBoxFrame::new(Vector::new(1.0, 1.0, 1.0), 0.1), UniqueSdfClassName::new("id_box_frame".to_string()));
         registrator.add(&identity_box_frame);
         
         let xz_torus = {
             let major_radius = 2.0;
             let minor_radius = 1.0;
-            NamedSdf::new(SdfTorusXz::new(major_radius, minor_radius), UniqueName::new("torus".to_string()))
+            NamedSdf::new(SdfTorusXz::new(major_radius, minor_radius), UniqueSdfClassName::new("torus".to_string()))
         };
         registrator.add(&xz_torus);
 
@@ -90,26 +91,26 @@ impl SdfClasses {
             let major_radius = 2.0;
             let minor_radius = 1.0;
             let cut_angle = Deg(110.0);
-            NamedSdf::new(SdfCappedTorusXy::new(cut_angle, major_radius, minor_radius), UniqueName::new("capped_torus".to_string()))
+            NamedSdf::new(SdfCappedTorusXy::new(cut_angle, major_radius, minor_radius), UniqueSdfClassName::new("capped_torus".to_string()))
         };
         registrator.add(&capped_xy_torus);
         
-        let round_box = NamedSdf::new(SdfRoundBox::new(Vector::new(1.5, 1.0, 1.0), 0.4), UniqueName::new("round_box".to_string()));
+        let round_box = NamedSdf::new(SdfRoundBox::new(Vector::new(1.5, 1.0, 1.0), 0.4), UniqueSdfClassName::new("round_box".to_string()));
         registrator.add(&round_box);
 
-        let link = NamedSdf::new(SdfLink::new(1.0, 0.5, 0.3), UniqueName::new("link".to_string()));
+        let link = NamedSdf::new(SdfLink::new(1.0, 0.5, 0.3), UniqueSdfClassName::new("link".to_string()));
         registrator.add(&link);
         
-        let cone = NamedSdf::new(SdfCone::new(Deg(45.0), 1.0), UniqueName::new("cone".to_string()));
+        let cone = NamedSdf::new(SdfCone::new(Deg(45.0), 1.0), UniqueSdfClassName::new("cone".to_string()));
         registrator.add(&cone);
         
-        let hex_prism = NamedSdf::new(SdfHexPrism::new(1.0, 1.0), UniqueName::new("hex_prism".to_string()));
+        let hex_prism = NamedSdf::new(SdfHexPrism::new(1.0, 1.0), UniqueSdfClassName::new("hex_prism".to_string()));
         registrator.add(&hex_prism);
         
-        let triangular_prism = NamedSdf::new(SdfTriangularPrism::new(1.0, 1.0), UniqueName::new("tri_prism".to_string()));
+        let triangular_prism = NamedSdf::new(SdfTriangularPrism::new(1.0, 1.0), UniqueSdfClassName::new("tri_prism".to_string()));
         registrator.add(&triangular_prism);
         
-        let capsule = NamedSdf::new(SdfCapsule::new(Point::new(-1.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), 1.0), UniqueName::new("capsule".to_string()));
+        let capsule = NamedSdf::new(SdfCapsule::new(Point::new(-1.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0), 1.0), UniqueSdfClassName::new("capsule".to_string()));
         registrator.add(&capsule);
 
         let cylinder_cross = NamedSdf::new(
@@ -120,29 +121,29 @@ impl SdfClasses {
                     SdfCappedCylinderAlongAxis::new(Axis::Z, 1.0, 0.2),
                 ),
             ),
-            UniqueName::new("cylinder_cross".to_string())
+            UniqueSdfClassName::new("cylinder_cross".to_string())
         );
         registrator.add(&cylinder_cross);
 
-        let solid_angle = NamedSdf::new(SdfSolidAngle::new(Deg(45.0), 1.0), UniqueName::new("solid_angle".to_string()));
+        let solid_angle = NamedSdf::new(SdfSolidAngle::new(Deg(45.0), 1.0), UniqueSdfClassName::new("solid_angle".to_string()));
         registrator.add(&solid_angle);
 
-        let cut_hollow_sphere = NamedSdf::new(SdfCutHollowSphere::new(1.0, 0.3, 0.05), UniqueName::new("cut_hollow_sphere".to_string()));
+        let cut_hollow_sphere = NamedSdf::new(SdfCutHollowSphere::new(1.0, 0.3, 0.05), UniqueSdfClassName::new("cut_hollow_sphere".to_string()));
         registrator.add(&cut_hollow_sphere);
 
-        let round_cone = NamedSdf::new(SdfRoundCone::new(0.5, 0.1, 1.0), UniqueName::new("round_cone".to_string()));
+        let round_cone = NamedSdf::new(SdfRoundCone::new(0.5, 0.1, 1.0), UniqueSdfClassName::new("round_cone".to_string()));
         registrator.add(&round_cone);
 
-        let vesica_segment = NamedSdf::new(SdfVesicaSegment::new(0.3, Point::new(-1.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)), UniqueName::new("vesica_segment".to_string()));
+        let vesica_segment = NamedSdf::new(SdfVesicaSegment::new(0.3, Point::new(-1.0, 0.0, 0.0), Point::new(1.0, 0.0, 0.0)), UniqueSdfClassName::new("vesica_segment".to_string()));
         registrator.add(&vesica_segment);
 
-        let octahedron = NamedSdf::new(SdfOctahedron::new(1.0), UniqueName::new("octahedron".to_string()));
+        let octahedron = NamedSdf::new(SdfOctahedron::new(1.0), UniqueSdfClassName::new("octahedron".to_string()));
         registrator.add(&octahedron);
 
-        let rhombus = NamedSdf::new(SdfRhombus::new(1.0, 1.0, 0.1, 0.1), UniqueName::new("rhombus".to_string()));
+        let rhombus = NamedSdf::new(SdfRhombus::new(1.0, 1.0, 0.1, 0.1), UniqueSdfClassName::new("rhombus".to_string()));
         registrator.add(&rhombus);
 
-        let pyramid = NamedSdf::new(SdfPyramid::new(1.0), UniqueName::new("pyramid".to_string()));
+        let pyramid = NamedSdf::new(SdfPyramid::new(1.0), UniqueSdfClassName::new("pyramid".to_string()));
         registrator.add(&pyramid);
 
         let csg_example_sdf =
@@ -160,14 +161,14 @@ impl SdfClasses {
                     ),
                 ),
             );
-        let csg_example = NamedSdf::new(csg_example_sdf, UniqueName::new("csg_example".to_string()));
+        let csg_example = NamedSdf::new(csg_example_sdf, UniqueSdfClassName::new("csg_example".to_string()));
         registrator.add(&csg_example);
         
         let union_smooth = NamedSdf::new(SdfUnionSmooth::new(
             SdfSphere::new_offset(1.0, Point::new(-0.9, 0.0, 0.0)),
             SdfSphere::new_offset(1.0, Point::new( 0.9, 0.0, 0.0)),
             0.25,
-        ), UniqueName::new("union_smooth".to_string()));
+        ), UniqueSdfClassName::new("union_smooth".to_string()));
         registrator.add(&union_smooth);
         
         let subtraction_smooth = NamedSdf::new(
@@ -180,7 +181,7 @@ impl SdfClasses {
                 SdfSphere::new_offset(0.5, Point::new( -0.9, 0.0, 0.0)),
             0.25,
             ),
-            UniqueName::new("subtraction_smooth".to_string())
+            UniqueSdfClassName::new("subtraction_smooth".to_string())
         );
         registrator.add(&subtraction_smooth);
 
@@ -188,7 +189,7 @@ impl SdfClasses {
             SdfSphere::new_offset(1.0, Point::new(-0.2, 0.0, 0.0)),
             SdfSphere::new_offset(1.0, Point::new( 0.2, 0.0, 0.0)),
             0.25,
-        ), UniqueName::new("intersection_smooth".to_string()));
+        ), UniqueSdfClassName::new("intersection_smooth".to_string()));
         registrator.add(&intersection_smooth);
             
         Self { 
@@ -245,7 +246,7 @@ impl Materials {
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(1.0, 0.5, 0.0)
                 .with_specular_strength(0.00001)
-                .with_roughness(-1.0 / 4.0)
+                .with_roughness(0.25)
                 .with_refractive_index_eta(0.0),
         );
 
@@ -360,12 +361,18 @@ impl Materials {
 pub(super) struct World {
     sdf_classes: SdfClasses,
     materials: Materials,
+    
+    light_panel: Option<ObjectUid>,
+    light_panel_z: f64,
+    light_panel_x: f64,
 }
 
 impl World {
     #[must_use]
     pub(super) fn new(sdf_classes: SdfClasses, materials: Materials) -> Self {
-        Self { sdf_classes, materials }
+        Self { 
+            sdf_classes, materials, light_panel: None, light_panel_z: -1.0, light_panel_x: -1.0,
+        }
     }
 
     #[must_use]
@@ -373,14 +380,37 @@ impl World {
         self.materials.selected_object_material
     }
 
-    fn make_common_scene_walls(&self, scene: &mut Container) {
-        scene.add_parallelogram(Point::new(-1.0, 1.0, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light_material);
+    pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Container) {
+        self.light_panel_z += sign * 0.01;
+        self.invalidate_light_panel(scene);
+    }
+    
+    pub(super) fn move_light_x(&mut self, sign: f64, scene: &mut Container) {
+        self.light_panel_x += sign * 0.01;
+        self.invalidate_light_panel(scene);
+    }
+
+    fn invalidate_light_panel(&mut self, scene: &mut Container) {
+        if let Some(light_panel) = self.light_panel {
+            scene.delete(light_panel);
+        }
+        self.make_light_panel(scene);
+    }
+
+    fn make_light_panel(&mut self, scene: &mut Container) {
+        self.light_panel = Some(
+            scene.add_parallelogram(Point::new(self.light_panel_x, 1.0, self.light_panel_z), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light_material)
+        );
+    }
+
+    fn make_common_scene_walls(&mut self, scene: &mut Container) {
+        self.make_light_panel(scene);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
     }
 
-    pub(super) fn switch_to_constructive_solid_geometry_sample_scene(&self, scene: &mut Container) {
+    pub(super) fn switch_to_constructive_solid_geometry_sample_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -391,7 +421,7 @@ impl World {
             self.materials.blue_material);
     }
 
-    pub(super) fn switch_to_smoth_operators_scene(&self, scene: &mut Container) {
+    pub(super) fn switch_to_smooth_operators_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -412,7 +442,7 @@ impl World {
             self.materials.green_mirror);
     }
 
-    pub(super) fn switch_to_sdf_exhibition_scene(&self, scene: &mut Container) {
+    pub(super) fn switch_to_sdf_exhibition_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -517,39 +547,39 @@ impl World {
             self.materials.blue_material);
     }
     
-    pub(super) fn switch_to_ui_box_scene(&self, scene: &mut Container) {
+    pub(super) fn switch_to_ui_box_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.7, 0.2, -0.7))*Affine::from_angle_z(Deg(-30.0))),
             self.sdf_classes.rectangular_box.name(),
             self.materials.silver_material);
-
+        
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
             self.sdf_classes.rectangular_box.name(),
             self.materials.bright_red_material);
-
+        
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, 0.6, -1.0))*Affine::from_scale(0.25) ),
             self.sdf_classes.sphere.name(),
             self.materials.gold_metal);
-
+        
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.5, 0.0, 2.0))*Affine::from_scale(0.25) ),
             self.sdf_classes.sphere.name(),
             self.materials.blue_glass);
-
+        
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            &(Affine::from_translation(Vector::new(0.5, 0.0, -0.88))*Affine::from_scale(0.1) ),
             self.sdf_classes.sphere.name(),
             self.materials.blue_glass);
-
+        
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
             self.sdf_classes.sphere.name(),
             self.materials.green_mirror);
-
+        
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, 0.0, -1.0))*Affine::from_scale(0.25) ),
             self.sdf_classes.sphere.name(),
@@ -567,7 +597,7 @@ impl World {
         let mut meshes = MeshWarehouse::new();
         let cube_mesh_file = get_resource_path(Path::new("assets").join("cube.obj"));
         let cube_mesh_or_error = meshes.load(cube_mesh_file);
-
+        
         match cube_mesh_or_error {
             Ok(cube_mesh) => {
                 let large_box_material = scene.materials().add(&Material::new()
@@ -578,19 +608,19 @@ impl World {
                         Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) *
                             Affine::from_nonuniform_scale(3.65, 0.8, 0.25));
                 scene.add_mesh(&meshes, cube_mesh, &large_box_location, large_box_material);
-
+        
                 {
                     let box_location =Transformation::new(
                         Affine::from_translation(Vector::new(-0.4, 0.1, -1.0)) * Affine::from_scale(0.4));
                     scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.gold_metal);
                 }
-
+        
                 {
                     let box_location = Transformation::new(
                         Affine::from_translation(Vector::new(0.9, -0.4, -1.0)) * Affine::from_scale(0.4));
                     scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.purple_glass);
                 }
-
+        
                 {
                     let box_location = Transformation::new(
                         Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));

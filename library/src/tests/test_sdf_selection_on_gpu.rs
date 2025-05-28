@@ -3,19 +3,20 @@ mod tests {
     use crate::geometry::alias::Vector;
     use crate::scene::sdf_warehouse::SdfWarehouse;
     use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueName};
+    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
     use crate::tests::assert_utils::tests::assert_eq;
     use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
-    use crate::tests::gpu_code_execution::tests::execute_code;
+    use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use std::fmt::Write;
+    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[test]
     fn test_sdf_selection_evaluation() {
-        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueName::new("identity_sphere".to_string()));
-        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueName::new("some_box".to_string()));
+        let sphere = NamedSdf::new(SdfSphere::new(17.0), UniqueSdfClassName::new("identity_sphere".to_string()));
+        let a_box = NamedSdf::new(SdfBox::new(Vector::new(2.0, 3.0, 5.0)), UniqueSdfClassName::new("some_box".to_string()));
         
         let mut registrator = SdfRegistrator::new();
         registrator.add(&sphere);
@@ -26,8 +27,8 @@ mod tests {
         let sphere_index = warehouse.index_for_name(sphere.name()).unwrap();
         let box_index = warehouse.index_for_name(a_box.name()).unwrap();
 
-        let mut the_code = warehouse.sdf_classes_code().to_string();
-        the_code.write_str(FUNCTION_EXECUTOR).expect("shader code concatenation has failed");
+        let template = ShaderFunction::new("vec4f", "f32", "sdf_select")
+            .with_additional_shader_code(warehouse.sdf_classes_code().to_string());
 
         let input_points = [
             PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
@@ -51,10 +52,10 @@ mod tests {
               6.0,
         ];
 
-        let actual_distances = execute_code(&input_points, the_code.as_str());
+        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz"));
+
+        let actual_distances = execute_code(&input_points, function_execution.as_str(), ExecutionConfig::default());
         
         assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }
-    
-    const FUNCTION_EXECUTOR: &str = include_str!("sdf_function_executor.wgsl");
 }
