@@ -1,30 +1,30 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
-use crate::objects::triangle::Triangle;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use strum::EnumCount;
+use crate::bvh::proxy::SceneObjectProxy;
 use crate::geometry::utils::MaxAxis;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 struct BvhNodeContent {
-    start_primitive_index: usize,
+    primitive_index: usize,
 }
 
 impl BvhNodeContent {
     #[must_use]
-    fn new(start_primitive_index: usize) -> Self {
+    fn new(primitive_index: usize) -> Self {
         Self {
-            start_primitive_index,
+            primitive_index,
         }
     }
     
     #[must_use]
     fn primitive_index(&self) -> usize {
-        self.start_primitive_index
+        self.primitive_index
     }
 }
 
@@ -83,7 +83,7 @@ impl BvhNode {
     }
 
     #[must_use]
-    pub(super) fn make_for(support: &mut [Triangle]) -> Rc<RefCell<BvhNode>> {
+    pub(super) fn make_for(support: &mut [SceneObjectProxy]) -> Rc<RefCell<BvhNode>> {
         if support.is_empty() {
             return Rc::new(RefCell::new(BvhNode::new()));
         }
@@ -112,7 +112,7 @@ impl BvhNode {
 
     // TODO: rewrite without recursion!
 
-    fn build_hierarchy(support: &mut [Triangle], start_inclusive: usize, end_inclusive: usize) -> Rc<RefCell<BvhNode>> {
+    fn build_hierarchy(support: &mut [SceneObjectProxy], start_inclusive: usize, end_inclusive: usize) -> Rc<RefCell<BvhNode>> {
         assert!(start_inclusive <= end_inclusive);
         assert!(support.len() > start_inclusive);
         assert!(support.len() > end_inclusive);
@@ -120,17 +120,14 @@ impl BvhNode {
         let mut node = BvhNode::new();
 
         for i in start_inclusive..=end_inclusive {
-            node.bounding_box = Aabb::merge(node.bounding_box, support[i].bounding_box());
+            node.bounding_box = Aabb::merge(node.bounding_box, support[i].aabb());
         }
 
         let axis = node.bounding_box.extent().max_axis();
         let comparator = BvhNode::COMPARATORS[axis as usize];
 
         let span = end_inclusive - start_inclusive;
-
-        if 0 == span {
-            node.content = Some(BvhNodeContent::new(start_inclusive));
-        } else {
+        if 0 < span {
             let mut subarray = support[start_inclusive..=end_inclusive].to_vec();
             subarray.sort_by(comparator);
 
@@ -148,6 +145,9 @@ impl BvhNode {
                 node.left.as_ref().unwrap().borrow().bounding_box,
                 node.right.as_ref().unwrap().borrow().bounding_box,
             );
+        } else {
+            let object_index = support[start_inclusive].host_container_index();
+            node.content = Some(BvhNodeContent::new(object_index));
         }
 
         Rc::new(RefCell::new(node))
@@ -173,29 +173,29 @@ impl BvhNode {
     }
 
     #[must_use]
-    fn box_compare(left: &Triangle, right: &Triangle, axis: Axis) -> Ordering {
-        let left_axis_value = left.bounding_box().axis(axis).0;
-        let right_axis_value = right.bounding_box().axis(axis).0;
+    fn box_compare(left: &SceneObjectProxy, right: &SceneObjectProxy, axis: Axis) -> Ordering {
+        let left_axis_value = left.aabb().axis(axis).0;
+        let right_axis_value = right.aabb().axis(axis).0;
 
         left_axis_value.partial_cmp(&right_axis_value).unwrap_or(Ordering::Equal)
     }
 
     #[must_use]
-    fn box_x_compare(left: &Triangle, right: &Triangle) -> Ordering {
+    fn box_x_compare(left: &SceneObjectProxy, right: &SceneObjectProxy) -> Ordering {
         BvhNode::box_compare(left, right, Axis::X)
     }
 
     #[must_use]
-    fn box_y_compare(left: &Triangle, right: &Triangle) -> Ordering {
+    fn box_y_compare(left: &SceneObjectProxy, right: &SceneObjectProxy) -> Ordering {
         BvhNode::box_compare(left, right, Axis::Y)
     }
 
     #[must_use]
-    fn box_z_compare(left: &Triangle, right: &Triangle) -> Ordering {
+    fn box_z_compare(left: &SceneObjectProxy, right: &SceneObjectProxy) -> Ordering {
         BvhNode::box_compare(left, right, Axis::Z)
     }
 
-    const COMPARATORS: [fn(&Triangle, &Triangle) -> Ordering; Axis::COUNT] = [
+    const COMPARATORS: [fn(&SceneObjectProxy, &SceneObjectProxy) -> Ordering; Axis::COUNT] = [
         BvhNode::box_x_compare,
         BvhNode::box_y_compare,
         BvhNode::box_z_compare,
@@ -255,6 +255,8 @@ pub(crate) mod tests {
     use strum::EnumCount;
     use crate::objects::common_properties::{Linkage, ObjectUid};
     use crate::objects::material_index::MaterialIndex;
+    use crate::objects::triangle::Triangle;
+    use crate::scene::bvh_proxies::proxy_of_triangle;
 
     #[must_use]
     pub(crate) fn make_triangle(vertex_data: [f64; VERTICES_IN_TRIANGLE * Axis::COUNT]) -> Triangle {
@@ -285,7 +287,7 @@ pub(crate) mod tests {
     #[test]
     fn test_single_triangle_support() {
         let triangle = make_triangle([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
-        let ware = BvhNode::make_for(&mut vec![triangle]);
+        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &triangle)]);
 
         let system_under_test = ware.borrow();
 
@@ -310,7 +312,7 @@ pub(crate) mod tests {
             0.0 - axis_offset.x, 1.0 - axis_offset.y, 0.0 - axis_offset.z,
             0.0 - axis_offset.x, 0.0 - axis_offset.y, 1.0 - axis_offset.z,
         ]);
-        let ware = BvhNode::make_for(&mut vec![left, right]);
+        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &left), proxy_of_triangle(0, &right)]);
 
         let system_under_test = ware.borrow();
 

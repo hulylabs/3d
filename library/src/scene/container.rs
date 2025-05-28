@@ -1,4 +1,5 @@
 ﻿use crate::bvh::builder::build_serialized_bvh;
+use crate::bvh::proxy::SceneObjectProxy;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
@@ -6,17 +7,17 @@ use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
-use crate::scene::gpu_ready_triangles::GpuReadyTriangles;
+use crate::scene::bvh_proxies::SceneObjects;
 use crate::scene::materials_warehouse::MaterialsWarehouse;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::scene::monolithic::Monolithic;
 use crate::scene::scene_object::SceneObject;
-use crate::sdf::code_generator::SdfRegistrator;
-use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::scene::sdf_warehouse::SdfWarehouse;
 use crate::scene::statistics::Statistics;
 use crate::scene::triangulated::Triangulated;
 use crate::scene::version::Version;
+use crate::sdf::code_generator::SdfRegistrator;
+use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::utils::object_uid::ObjectUid;
@@ -147,10 +148,17 @@ impl Container {
     }
     
     #[must_use]
-    pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
-        let bvh = build_serialized_bvh(&mut self.triangles);
-        let triangles = serialize_batch(&self.triangles);
-        GpuReadyTriangles::new(triangles, bvh)
+    pub(crate) fn evaluate_serialized_triangles(&self) -> GpuReadySerializationBuffer {
+        serialize_batch(&self.triangles)
+    }
+
+    #[must_use]
+    pub(crate) fn evaluate_serialized_bvh(&self) -> GpuReadySerializationBuffer {
+        let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
+        
+        self.triangles.make_proxies(&mut objects_to_tree);
+        
+        build_serialized_bvh(&mut objects_to_tree)
     }
 
     #[must_use]
@@ -165,10 +173,25 @@ impl Container {
     }
 
     #[must_use]
+    pub(crate) fn triangles_count(&self) -> usize {
+        self.triangles.len()
+    }
+
+    #[must_use]
+    pub(crate) fn bvh_inhabited(&self) -> bool {
+        self.bvh_object_count() > 0
+    }
+
+    #[must_use]
     pub(crate) fn data_version(&self, kind: DataKind) -> Version {
         self.per_object_kind_statistics[kind as usize].data_version()
     }
 
+    #[must_use]
+    fn bvh_object_count(&self) -> usize {
+        self.triangles.len() + self.count_of_a_kind(DataKind::Sdf)
+    }
+    
     #[must_use]
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
@@ -447,8 +470,8 @@ mod tests {
         assert_eq!(system_under_test.material_of(to_be_kept_three), dummy_material);
 
         let triangles_in_a_cube = 12;
-        let mut serialized_triangles = system_under_test.evaluate_serialized_triangles();
-        assert_eq!(serialized_triangles.extract_geometry().total_slots_count(), expected_mesh_count * triangles_in_a_cube);
+        let serialized_triangles = system_under_test.evaluate_serialized_triangles();
+        assert_eq!(serialized_triangles.total_slots_count(), expected_mesh_count * triangles_in_a_cube);
     }
 
     #[test]

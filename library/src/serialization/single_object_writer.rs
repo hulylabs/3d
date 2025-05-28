@@ -38,7 +38,7 @@ impl<'a> SingleObjectWriter<'a> {
         WritingCode: FnOnce(&mut SingleQuartetWriter),
     {
         {
-            let mut writer = SingleQuartetWriter::new(&mut self.storage, self.write_pointer);
+            let mut writer = SingleQuartetWriter::new(self.storage, self.write_pointer);
             execute_writing(&mut writer);
         }
         self.write_pointer += QUARTET_SIZE_BYTES;

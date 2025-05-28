@@ -44,12 +44,7 @@ impl GpuReadySerializationBuffer {
 
         result
     }
-
-    #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.backend.is_empty()
-    }
-
+    
     #[must_use]
     fn backend_size_bytes(objects_count_capacity: usize, quartets_per_object: usize) -> usize {
         objects_count_capacity * quartets_per_object * QUARTET_SIZE_BYTES

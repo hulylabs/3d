@@ -88,8 +88,8 @@ impl Renderer {
         let shader_code = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
         let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
         
-        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo)));
-        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::ShaderRayTracingDeterministic)));
+        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::RayTracingMonteCarlo)));
+        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::RayTracingDeterministic)));
         let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
 
         let default_strategy = ColorBufferEvaluationStrategy::new_monte_carlo(ray_tracing_monte_carlo.clone());
@@ -152,6 +152,26 @@ impl Renderer {
     }
     
     #[must_use]
+    fn serialize_triangles(scene: &Container) -> (GpuReadySerializationBuffer, u32) {
+        if scene.triangles_count() > 0 {
+            (scene.evaluate_serialized_triangles(), scene.triangles_count() as u32)
+        } else {
+            (Self::make_empty_buffer_marker::<Triangle>(), 0)
+        }
+    }
+    
+    #[must_use]
+    fn serialize_bvh(scene: &Container) -> (GpuReadySerializationBuffer, u32) {
+        if scene.bvh_inhabited() {
+            let bvh = scene.evaluate_serialized_bvh();
+            let count = bvh.total_slots_count() as u32;
+            (bvh, count)
+        } else {
+            (Self::make_empty_buffer_marker::<BvhNode>(), 0)
+        }
+    }
+    
+    #[must_use]
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
         let mut composite_status = BuffersUpdateStatus::new();
 
@@ -162,23 +182,14 @@ impl Renderer {
         
         let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
         if self.buffers.triangles.version_diverges(triangles_set_version) {
-            let mut serialized_triangles = self.scene.evaluate_serialized_triangles();
-            let no_triangles = serialized_triangles.empty();
             
-            let (triangles, bvh)
-                = if no_triangles
-                    { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) }
-                        else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
-
-            if no_triangles {
-                self.uniforms.triangles_count = 0;
-                self.uniforms.bvh_length = 0;
-            } else {
-                self.uniforms.triangles_count = triangles.total_slots_count() as u32;
-                self.uniforms.bvh_length = bvh.total_slots_count() as u32;   
-            }
+            let (serialized_triangles, serialized_triangles_count) = Self::serialize_triangles(self.scene());
+            self.uniforms.triangles_count = serialized_triangles_count;
             
-            composite_status.merge_geometry(self.buffers.triangles.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || triangles));
+            let (bvh, bvh_length) = Self::serialize_bvh(self.scene());
+            self.uniforms.bvh_length = bvh_length;
+            
+            composite_status.merge_geometry(self.buffers.triangles.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || serialized_triangles));
             composite_status.merge_geometry(self.buffers.bvh.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || bvh));
         }
         
@@ -214,27 +225,17 @@ impl Renderer {
     }
     
     fn init_buffers(scene: &mut Container, context: &Context, uniforms: &mut Uniforms, resources: &Resources) -> Buffers {
-        let mut serialized_triangles = scene.evaluate_serialized_triangles();
-        let no_triangles = serialized_triangles.empty();
-        
-        let (triangles, bvh) 
-            = if no_triangles
-                { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) } 
-                    else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
+        let (serialized_triangles, serialized_triangles_count) = Self::serialize_triangles(scene);
+        uniforms.triangles_count = serialized_triangles_count;
+
+        let (bvh, bvh_length) = Self::serialize_bvh(scene);
+        uniforms.bvh_length = bvh_length;
 
         let materials = if scene.materials().count() > 0
             { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
         uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
-
-        if no_triangles {
-            uniforms.triangles_count = 0;
-            uniforms.bvh_length = 0;
-        } else {
-            uniforms.triangles_count = triangles.total_slots_count() as u32;
-            uniforms.bvh_length = bvh.total_slots_count() as u32;
-        }
         
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
@@ -245,7 +246,7 @@ impl Renderer {
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
-            triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || triangles),
+            triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
             bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
         }
     }
@@ -256,7 +257,7 @@ impl Renderer {
 
     #[must_use]
     fn create_object_id_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
-        let pipeline = resources.create_compute_pipeline(ComputeRoutineEntryPoint::ShaderObjectId, module);
+        let pipeline = resources.create_compute_pipeline(ComputeRoutineEntryPoint::ObjectId, module);
         Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(device, buffers, pipeline);
         })

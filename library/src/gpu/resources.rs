@@ -89,10 +89,10 @@ impl Resources {
 }
 
 pub(crate) enum ComputeRoutineEntryPoint {
-    ShaderObjectId,
-    
-    ShaderRayTracingMonteCarlo,
-    ShaderRayTracingDeterministic,
+    ObjectId,
+
+    RayTracingMonteCarlo,
+    RayTracingDeterministic,
     
     #[cfg(test)] Default,
     #[cfg(test)] TestDefault,
@@ -101,9 +101,9 @@ pub(crate) enum ComputeRoutineEntryPoint {
 impl ComputeRoutineEntryPoint {
     fn name(&self) -> Option<&'static str> {
         match self {
-            ComputeRoutineEntryPoint::ShaderObjectId => Some("compute_object_id_buffer"),
-            ComputeRoutineEntryPoint::ShaderRayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
-            ComputeRoutineEntryPoint::ShaderRayTracingDeterministic => Some("compute_color_buffer_deterministic"),
+            ComputeRoutineEntryPoint::ObjectId => Some("compute_object_id_buffer"),
+            ComputeRoutineEntryPoint::RayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
+            ComputeRoutineEntryPoint::RayTracingDeterministic => Some("compute_color_buffer_deterministic"),
             #[cfg(test)] ComputeRoutineEntryPoint::TestDefault => Some("main"),
             #[cfg(test)] ComputeRoutineEntryPoint::Default => None,
         }
