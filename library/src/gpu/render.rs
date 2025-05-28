@@ -195,7 +195,7 @@ impl Renderer {
     }
     #[must_use]
     fn make_empty_buffer_marker<T: GpuSerializationSize>() -> GpuReadySerializationBuffer {
-        GpuReadySerializationBuffer::make_filled(1, T::SERIALIZED_QUARTET_COUNT, -1.0_f32)
+        GpuReadySerializationBuffer::make_filled(1, T::SERIALIZED_QUARTET_COUNT, 0.0_f32)
     }
     
     #[must_use]
@@ -215,9 +215,10 @@ impl Renderer {
     
     fn init_buffers(scene: &mut Container, context: &Context, uniforms: &mut Uniforms, resources: &Resources) -> Buffers {
         let mut serialized_triangles = scene.evaluate_serialized_triangles();
+        let no_triangles = serialized_triangles.empty();
         
         let (triangles, bvh) 
-            = if serialized_triangles.empty()
+            = if no_triangles
                 { (Self::make_empty_buffer_marker::<Triangle>(), Self::make_empty_buffer_marker::<BvhNode>()) } 
                     else { (serialized_triangles.extract_geometry(), serialized_triangles.extract_bvh()) };
 
@@ -226,8 +227,14 @@ impl Renderer {
         
         uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
-        uniforms.triangles_count = triangles.total_slots_count() as u32;
-        uniforms.bvh_length = bvh.total_slots_count() as u32;
+
+        if no_triangles {
+            uniforms.triangles_count = 0;
+            uniforms.bvh_length = 0;
+        } else {
+            uniforms.triangles_count = triangles.total_slots_count() as u32;
+            uniforms.bvh_length = bvh.total_slots_count() as u32;
+        }
         
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
@@ -685,7 +692,8 @@ mod tests {
     use crate::serialization::pod_vector::PodVector;
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
-
+    use rstest::rstest;
+    use crate::tests::assert_utils::tests::assert_all_items_equal;
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
@@ -832,7 +840,37 @@ mod tests {
     const TEST_COLOR_G: f32 = 0.5;
     const TEST_COLOR_B: f32 = 1.0;
 
-    // #[test]
+    #[must_use]
+    fn make_render(scene: Container, camera: Camera, strategy: RenderStrategyId, antialiasing_level: u32, context: Rc<Context>) -> Renderer {
+        let presentation_format = TextureFormat::Rgba8Unorm;
+        Renderer::new(context.clone(), scene, camera, presentation_format, TEST_FRAME_BUFFER_SIZE, strategy, antialiasing_level)
+            .expect("render instantiation has failed")
+    }
+    
+    #[rstest]
+    #[case(RenderStrategyId::MonteCarlo)]
+    #[case(RenderStrategyId::Deterministic)]
+    fn test_empty_scene_rendering(#[case] strategy: RenderStrategyId) {
+        let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
+        let scene = Container::new(SdfRegistrator::default());
+        let context = create_headless_wgpu_context();
+
+        const ANTIALIASING_LEVEL: u32 = 1;
+        let mut system_under_test = make_render(scene, camera, strategy, ANTIALIASING_LEVEL, context.clone());
+
+        system_under_test.accumulate_more_rays();
+        system_under_test.copy_noisy_pixels_to_cpu();
+        
+        assert_empty_color_buffer(&mut system_under_test);
+        assert_empty_ids_buffer(&mut system_under_test);
+        
+        #[cfg(feature = "denoiser")]
+        {
+            assert_normals_and_albedo_are_empty(&mut system_under_test);
+        }
+    }
+    
+    #[test]
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
@@ -848,13 +886,10 @@ mod tests {
         let context = create_headless_wgpu_context();
 
         const ANTIALIASING_LEVEL: u32 = 1;
-        let presentation_format = TextureFormat::Rgba8Unorm;
-        let mut system_under_test 
-            = Renderer::new(context.clone(), scene, camera, presentation_format, TEST_FRAME_BUFFER_SIZE, RenderStrategyId::MonteCarlo, ANTIALIASING_LEVEL)
-                .expect("render instantiation has failed");
+        let mut system_under_test = make_render(scene, camera, RenderStrategyId::MonteCarlo, ANTIALIASING_LEVEL, context.clone());
 
         system_under_test.accumulate_more_rays();
-
+        
         assert_parallelogram_ids_in_center(&mut system_under_test, "single_parallelogram");
         
         #[cfg(feature = "denoiser")] 
@@ -864,7 +899,7 @@ mod tests {
         }
     }
 
-    // #[test]
+    #[test]
     fn test_single_box_sdf_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
 
@@ -882,9 +917,7 @@ mod tests {
         let context = create_headless_wgpu_context();
 
         const ANTIALIASING_LEVEL: u32 = 1;
-        let mut system_under_test
-            = Renderer::new(context.clone(), scene, camera, TextureFormat::Rgba8Unorm, TEST_FRAME_BUFFER_SIZE, RenderStrategyId::Deterministic, ANTIALIASING_LEVEL)
-                .expect("render instantiation has failed");
+        let mut system_under_test = make_render(scene, camera, RenderStrategyId::Deterministic, ANTIALIASING_LEVEL, context.clone());
         
         system_under_test.accumulate_more_rays();
         system_under_test.copy_noisy_pixels_to_cpu();
@@ -927,6 +960,23 @@ mod tests {
         assert_parallelogram_vector_data_in_center(normal_map, parallelogram_normal, background_normal, "single_parallelogram_normals");
     }
 
+    fn assert_empty_color_buffer(system_under_test: &mut Renderer) {
+        let colors = system_under_test.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
+        assert_all_items_equal(colors, PodVector { x: 0.1, y: 0.1, z: 0.1, w: 1.0 });
+    }
+    
+    fn assert_empty_ids_buffer(system_under_test: &mut Renderer) {
+        let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
+        assert_all_items_equal(object_id_map, 0);
+    }
+
+    #[cfg(feature = "denoiser")]
+    fn assert_normals_and_albedo_are_empty(system_under_test: &mut Renderer) {
+        let (_, albedo, normal_map) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
+        assert_all_items_equal(albedo, PodVector { x: 0.0, y: 0.0, z: 0.0, w: 1.0 });
+        assert_all_items_equal(normal_map, PodVector { x: 0.0, y: 0.0, z: 0.0, w: 0.0 });
+    }
+    
     fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer, file_identity: &str) {
         let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
 

@@ -1,8 +1,10 @@
-const PI = 3.1415926535897932385;
+const PI: f32 = 3.1415926535897932385;
 
-const MIN_FLOAT = 0.0001;
-const MAX_FLOAT = 999999999.999;
-const SECONDARY_RAY_START_BIAS = 0.0005;
+const MIN_FLOAT: f32 = 0.0001;
+const MAX_FLOAT: f32 = 999999999.999;
+
+const SECONDARY_RAY_START_BIAS: f32 = 0.0005;
+const RAY_PARAMETER_MIN: f32 = 0.000001;
 
 const MATERIAL_LAMBERTIAN = 0.0;
 const MATERIAL_MIRROR = 1.0;
@@ -14,9 +16,9 @@ const PRIMITIVE_TYPE_SDF: u32 = 1;
 const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
 const NULL_POINTER_LINK: i32 = -1;
 
-const WORK_GROUP_SIZE_X = 8;
-const WORK_GROUP_SIZE_Y = 8;
-const WORK_GROUP_SIZE_Z = 1;
+const WORK_GROUP_SIZE_X: u32 = 8;
+const WORK_GROUP_SIZE_Y: u32 = 8;
+const WORK_GROUP_SIZE_Z: u32 = 1;
 const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GROUP_SIZE_Z);
 
 const BACKGROUND_COLOR = vec3f(0.1);
@@ -56,8 +58,6 @@ var<private> pixelCoords: vec2f;
 var<private> hitRec: HitRecord;
 var<private> scatterRec: ScatterRecord;
 var<private> lights: Parallelogram;
-var<private> ray_tmin: f32 = 0.000001;
-var<private> ray_tmax: f32 = MAX_FLOAT;
 
 struct Uniforms {
 	frame_buffer_size: vec2u,
@@ -166,7 +166,7 @@ fn at(ray : Ray, t : f32) -> vec3f {
 // https://www.shadertoy.com/view/XlGcRh
 fn rand_0_1() -> f32 {
 	randState = randState * 747796405u + 2891336453u;
-	var word : u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
+	var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
 	return f32((word >> 22u)^word) / 4294967295;
 }
 
@@ -498,7 +498,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
-        if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
+        if(hit_quad(parallelogram, RAY_PARAMETER_MIN, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
             hit_material_id = parallelogram.material_id;
             hit_normal = hitRec.normal;
@@ -508,7 +508,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
 
     for(var i = u32(0); i < uniforms.sdf_count; i++){
         let sdf = sdf[i];
-        if(hit_sdf(sdf, ray_tmin, closest_so_far, ray)){
+        if(hit_sdf(sdf, RAY_PARAMETER_MIN, closest_so_far, ray)){
             hit_uid = sdf.object_uid;
             hit_material_id = sdf.material_id;
             hit_normal = hitRec.normal;
@@ -523,10 +523,10 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         let max_index = i32(uniforms.bvh_length);
         while (node_index < max_index && NULL_POINTER_LINK != node_index) {
             let node = bvh[node_index];
-            if(hit_aabb(node.aabb_min, node.aabb_max, ray_tmin, closest_so_far, ray, inverted_ray_dir)) {
+            if(hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray, inverted_ray_dir)) {
                 if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
                     let triangle = triangles[node.primitive_index];
-                    if(hit_triangle(triangle, ray_tmin, closest_so_far, ray)) {
+                    if(hit_triangle(triangle, RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
                         hit_material_id = triangle.material_id;
                         hit_normal = hitRec.normal;
@@ -570,7 +570,7 @@ fn hit_scene(ray : Ray) -> bool {
 	var hit_anything = false;
 
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
-		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray)) {
+		if(hit_quad(quad_objs[i], RAY_PARAMETER_MIN, closest_so_far, ray)) {
 			hit_anything = true;
 			closest_so_far = hitRec.t;
 		}
@@ -583,9 +583,9 @@ fn hit_scene(ray : Ray) -> bool {
         let max_index = i32(uniforms.bvh_length);
         while (node_index < max_index && NULL_POINTER_LINK != node_index) {
             let node = bvh[node_index];
-            if(hit_aabb(node.aabb_min, node.aabb_max, ray_tmin, closest_so_far, ray, inverted_ray_dir)) {
+            if(hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray, inverted_ray_dir)) {
                 if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
-                    if(hit_triangle(triangles[node.primitive_index], ray_tmin, closest_so_far, ray)) {
+                    if(hit_triangle(triangles[node.primitive_index], RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_anything = true;
                         closest_so_far = hitRec.t;
                     }
@@ -598,7 +598,7 @@ fn hit_scene(ray : Ray) -> bool {
     }
 
 	for(var i = u32(0); i < uniforms.sdf_count; i++) {
-        if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)) {
+        if(hit_sdf(sdf[i], RAY_PARAMETER_MIN, closest_so_far, ray)) {
             hit_anything = true;
             closest_so_far = hitRec.t;
         }

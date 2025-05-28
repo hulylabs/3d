@@ -1,6 +1,6 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
-    use std::fmt::Write;
+    use std::fmt::{Display, Write};
     
     pub(crate) fn assert_eq(left: &[f32], right: &[f32], epsilon: f32) {
         assert_eq!(left.len(), right.len(), "ranges have different lengths");
@@ -14,6 +14,14 @@ pub(crate) mod tests {
         
         if !buffer.is_empty() {
             panic!("{}", buffer);
+        }
+    }
+
+    pub(crate) fn assert_all_items_equal<T: PartialEq + Display>(target: &[T], reference: T) {
+        for i in 0..target.len() {
+            if target[i] != reference {
+                panic!("element '{element}' at index {index} differs from reference", element = target[i], index = i);
+            }
         }
     }
 }
