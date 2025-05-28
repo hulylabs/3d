@@ -10,6 +10,10 @@ const MATERIAL_GLASS = 2.0;
 const MATERIAL_ISOTROPIC = 3.0;
 const MATERIAL_ANISOTROPIC = 4.0;
 
+const PRIMITIVE_TYPE_SDF: u32 = 1;
+const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
+const NULL_POINTER_LINK: i32 = -1;
+
 const WORK_GROUP_SIZE_X = 8;
 const WORK_GROUP_SIZE_Y = 8;
 const WORK_GROUP_SIZE_Z = 1;
@@ -31,7 +35,6 @@ const DETERMINISTIC_MAX_RAY_BOUNCES = 10;
 const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
 const MONTE_CARLO_STRATIFY_SAMLING = false;
 const MONTE_CARLO_IMPORTANCE_SAMPLING = true;
-const STACK_SIZE = 20;
 const MAX_SDF_RAY_MARCH_STEPS = 120;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
@@ -45,7 +48,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 1) var<storage, read> sdf: array<Sdf>;
 @group(2) @binding( 2) var<storage, read> triangles: array<Triangle>;
 @group(2) @binding( 3) var<storage, read> materials: array<Material>;
-@group(2) @binding( 4) var<storage, read> bvh: array<AABB>;
+@group(2) @binding( 4) var<storage, read> bvh: array<BvhNode>;
 
 var<private> randState: u32 = 0u;
 var<private> pixelCoords: vec2f;
@@ -55,7 +58,6 @@ var<private> scatterRec: ScatterRecord;
 var<private> lights: Parallelogram;
 var<private> ray_tmin: f32 = 0.000001;
 var<private> ray_tmax: f32 = MAX_FLOAT;
-var<private> stack: array<i32, STACK_SIZE>;
 
 struct Uniforms {
 	frame_buffer_size: vec2u,
@@ -102,7 +104,7 @@ struct Parallelogram {
 	D: f32,
 	normal: vec3f,
 	w: vec3f,
-	material_id: f32,
+	material_id: u32,
 }
 
 struct Triangle {
@@ -113,28 +115,25 @@ struct Triangle {
 	normalB : vec3f,
 	object_uid : u32,
 	normalC : vec3f,
-	material_id : f32,
-}
-
-struct AABB {
-	min : vec3f,
-	right_offset : f32,
-
-	max : vec3f,
-	prim_type : f32,
-
-	prim_id : f32,
-	prim_count : f32,
-	skip_link : f32,
-	axis : f32,
+	material_id : u32,
 }
 
 struct Sdf {
     location : mat4x4f,
     inverse_location : mat4x4f,
     class_index : f32,
-    material_id : f32,
+    material_id : u32,
     object_uid : u32,
+}
+
+struct BvhNode {
+	aabb_min : vec3f,
+	primitive_index: u32,
+
+	aabb_max: vec3f,
+	primitive_type: u32,
+
+	hit_miss_skip_link: i32,
 }
 
 struct HitRecord {
@@ -245,7 +244,7 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
             if(hitRec.front_face == false){
                 hitRec.normal = -hitRec.normal;
             }
-            hitRec.material = materials[i32(sdf.material_id)];
+            hitRec.material = materials[sdf.material_id];
             return true;
         }
         let step_size = max(abs(signed_distance), t_scaled);
@@ -293,7 +292,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[i32(quad.material_id)];
+	hitRec.material = materials[quad.material_id];
 	return true;
 }
 
@@ -335,15 +334,15 @@ fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[i32(triangle.material_id)];
+	hitRec.material = materials[triangle.material_id];
 
 	return true;
 }
 
 // https://medium.com/@bromanz/another-view-on-the-classic-ray-aabb-intersection-algorithm-for-bvh-traversal-41125138b525
-fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray, invDir : vec3f) -> bool {
-	var t0s = (box_min - ray.origin) * invDir;
-	var t1s = (box_max - ray.origin) * invDir;
+fn hit_aabb(box_min: vec3f, box_max: vec3f, tmin: f32, tmax: f32, ray: Ray, inverted_ray_dir: vec3f) -> bool {
+	var t0s = (box_min - ray.origin) * inverted_ray_dir;
+	var t1s = (box_max - ray.origin) * inverted_ray_dir;
 
 	var tsmaller = min(t0s, t1s);
 	var tbigger = max(t0s, t1s);
@@ -356,7 +355,7 @@ fn hit_aabb(box_min : vec3f, box_max : vec3f, tmin : f32, tmax : f32, ray : Ray,
 
 fn get_lights() {
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
-		let emission = materials[i32(quad_objs[i].material_id)].emission;
+		let emission = materials[quad_objs[i].material_id].emission;
 
 		if(emission.x > 0.0) {
 			lights = quad_objs[i];
@@ -494,14 +493,14 @@ fn path_trace_monte_carlo() -> vec3f {
 fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var closest_so_far = MAX_FLOAT;
     var hit_uid: u32 = 0;
-    var hit_albedo: vec3f = vec3f(0.0f);
+    var hit_material_id: u32 = 0;
     var hit_normal: vec3f = vec3f(0.0f);
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, ray_tmin, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
-            hit_albedo = materials[u32(parallelogram.material_id)].albedo;
+            hit_material_id = parallelogram.material_id;
             hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
@@ -511,64 +510,43 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         let sdf = sdf[i];
         if(hit_sdf(sdf, ray_tmin, closest_so_far, ray)){
             hit_uid = sdf.object_uid;
-            hit_albedo = materials[u32(sdf.material_id)].albedo;
+            hit_material_id = sdf.material_id;
             hit_normal = hitRec.normal;
             closest_so_far = hitRec.t;
         }
     }
 
-    const leafNode = 2;		// fix this hardcoding later
-    var invDir = 1 / ray.direction;
-    var toVisitOffset = 0;
-    var curNodeIdx = 0;
-    var node = bvh[curNodeIdx];
-
-    while(true) {
-        node = bvh[curNodeIdx];
-
-        if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir)) {
-            if(i32(node.prim_type) == leafNode) {
-                let startPrim = i32(node.prim_id);
-                let countPrim = i32(node.prim_count);
-                for(var j = 0; j < countPrim; j++) {
-                    let triangle = triangles[startPrim + j];
+    // "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
+    {
+        let inverted_ray_dir = 1.0 / ray.direction;
+        var node_index: i32 = 0;
+        let max_index = i32(uniforms.bvh_length);
+        while (node_index < max_index && NULL_POINTER_LINK != node_index) {
+            let node = bvh[node_index];
+            if(hit_aabb(node.aabb_min, node.aabb_max, ray_tmin, closest_so_far, ray, inverted_ray_dir)) {
+                if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
+                    let triangle = triangles[node.primitive_index];
                     if(hit_triangle(triangle, ray_tmin, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
-                        hit_albedo = materials[u32(triangle.material_id)].albedo;
+                        hit_material_id = triangle.material_id;
                         hit_normal = hitRec.normal;
                         closest_so_far = hitRec.t;
                     }
                 }
-
-                if(toVisitOffset == 0){
-                    break;
-                }
-                toVisitOffset--;
-                curNodeIdx = stack[toVisitOffset];
+                node_index++;
             } else {
-                if(ray.direction[i32(node.axis)] < 0) {
-                    stack[toVisitOffset] = curNodeIdx + 1;
-                    toVisitOffset++;
-                    curNodeIdx = i32(node.right_offset);
-                } else {
-                    stack[toVisitOffset] = i32(node.right_offset);
-                    toVisitOffset++;
-                    curNodeIdx++;
-                }
+                node_index = node.hit_miss_skip_link;
             }
-        } else {
-            if(toVisitOffset == 0) {
-                break;
-            }
-
-            toVisitOffset--;
-            curNodeIdx = stack[toVisitOffset];
-        }
-
-        if(toVisitOffset >= STACK_SIZE) {
-            break;
         }
     }
+
+    var hit_albedo: vec3f;
+    if (0 < hit_uid) {
+        hit_albedo = materials[hit_material_id].albedo;
+    } else {
+        hit_albedo = vec3f(0.0);
+    }
+
     return FirstHitSurface(hit_uid, hit_albedo, hit_normal);
 }
 
@@ -587,8 +565,7 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 
 /// hitRay
 
-fn hit_scene(ray : Ray) -> bool
-{
+fn hit_scene(ray : Ray) -> bool {
 	var closest_so_far = MAX_FLOAT;
 	var hit_anything = false;
 
@@ -599,59 +576,26 @@ fn hit_scene(ray : Ray) -> bool
 		}
 	}
 
-	// traversing BVH using a stack implementation
-	// https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies#CompactBVHForTraversal
-
-	const leafNode = 2;		// fix this hardcoding later
-	var invDir = 1 / ray.direction;
-	var toVisitOffset = 0;
-	var curNodeIdx = 0;
-	var node = bvh[curNodeIdx];
-
-	while(true) {
-		node = bvh[curNodeIdx];
-
-		if(hit_aabb(node.min, node.max, ray_tmin, closest_so_far, ray, invDir)) {
-			if(i32(node.prim_type) == leafNode) {
-				let startPrim = i32(node.prim_id);
-				let countPrim = i32(node.prim_count);
-				for(var j = 0; j < countPrim; j++) {
-					if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray))
-					{
-						hit_anything = true;
-						closest_so_far = hitRec.t;
-					}
-				}
-
-				if(toVisitOffset == 0) {
-					break;
-				}
-				toVisitOffset--;
-				curNodeIdx = stack[toVisitOffset];
-			} else {
-				if(ray.direction[i32(node.axis)] < 0) {
-					stack[toVisitOffset] = curNodeIdx + 1;
-					toVisitOffset++;
-					curNodeIdx = i32(node.right_offset);
-				} else {
-					stack[toVisitOffset] = i32(node.right_offset);
-					toVisitOffset++;
-					curNodeIdx++;
-				}
-			}
-		} else {
-			if(toVisitOffset == 0) {
-				break;
-			}
-
-			toVisitOffset--;
-			curNodeIdx = stack[toVisitOffset];
-		}
-
-		if(toVisitOffset >= STACK_SIZE) {
-			break;
-		}
-	}
+    // "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
+	{
+        let inverted_ray_dir = 1.0 / ray.direction;
+        var node_index: i32 = 0;
+        let max_index = i32(uniforms.bvh_length);
+        while (node_index < max_index && NULL_POINTER_LINK != node_index) {
+            let node = bvh[node_index];
+            if(hit_aabb(node.aabb_min, node.aabb_max, ray_tmin, closest_so_far, ray, inverted_ray_dir)) {
+                if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
+                    if(hit_triangle(triangles[node.primitive_index], ray_tmin, closest_so_far, ray)) {
+                        hit_anything = true;
+                        closest_so_far = hitRec.t;
+                    }
+                }
+                node_index++;
+            } else {
+                node_index = node.hit_miss_skip_link;
+            }
+        }
+    }
 
 	for(var i = u32(0); i < uniforms.sdf_count; i++) {
         if(hit_sdf(sdf[i], ray_tmin, closest_so_far, ray)) {
@@ -662,57 +606,6 @@ fn hit_scene(ray : Ray) -> bool
 
 	return hit_anything;
 }
-
-// ============== Other BVH traversal methods (brute force and using skip pointers) =================
-
-// fn hit_skipPointers(ray : Ray) -> bool
-// {
-// 	var closest_so_far = MAX_FLOAT;
-// 	var hit_anything = false;
-
-// 	var invDir = 1 / ray.direction;
-// 	var i = 0;
-// 	while(i < uniforms.bvh_length && i != -1)
-// 	{
-// 		if(hit_aabb(bvh[i], ray_tmin, closest_so_far, ray, invDir))
-// 		{
-
-// 			let t = i32(bvh[i].prim_type);
-
-// 			if(t == 2) {
-
-// 				let startPrim = i32(bvh[i].prim_id);
-// 				let countPrim = i32(bvh[i].prim_count);
-// 				for(var j = 0; j < countPrim; j++)
-// 				{
-// 					if(hit_triangle(triangles[startPrim + j], ray_tmin, closest_so_far, ray))
-// 					{
-// 						hit_anything = true;
-// 						closest_so_far = hitRec.t;
-// 					}
-// 				}
-// 			}
-
-// 			i++;
-// 		}
-
-// 		else
-// 		{
-// 			i = i32(bvh[i].skip_link);
-// 		}
-// 	}
-
-// 	for(var i = 0; i < uniforms.parallelograms_count; i++)
-// 	{
-// 		if(hit_quad(quad_objs[i], ray_tmin, closest_so_far, ray))
-// 		{
-// 			hit_anything = true;
-// 			closest_so_far = hitRec.t;
-// 		}
-// 	}
-
-// 	return hit_anything;
-// }
 
 /// traceRay
 
@@ -1145,7 +1038,7 @@ fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
     let emissive = hit.material.emission;
 
-    let light_color = materials[u32(lights.material_id)].emission;
+    let light_color = materials[lights.material_id].emission;
     let reflected = mix(diffuse, specular, hit.material.specular_strength);
 
     return reflected * light_color * shadow_lightened + ambient + emissive;

@@ -86,7 +86,7 @@ mod tests {
 
         let function_execution = make_executable(&template,
         create_argument_formatter!(
-            "Triangle({argument}.a, {argument}.b, {argument}.c, vec3f(0), vec3f(0), 13, vec3f(0), 3.0), \
+            "Triangle({argument}.a, {argument}.b, {argument}.c, vec3f(0), vec3f(0), 13, vec3f(0), u32(3)), \
             Ray({argument}.ray_origin, vec3f({argument}.ray_x, {argument}.ray_y, {argument}.ray_z))")
         );
 

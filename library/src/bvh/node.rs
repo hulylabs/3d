@@ -11,26 +11,20 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 struct BvhNodeContent {
-    start_triangle_index: usize,
-    triangles_count: usize,
+    start_primitive_index: usize,
 }
 
 impl BvhNodeContent {
     #[must_use]
-    fn new(start_triangle_index: usize, triangles_count: usize) -> Self {
-        assert!(triangles_count > 0);
-        BvhNodeContent {
-            start_triangle_index,
-            triangles_count,
+    fn new(start_primitive_index: usize) -> Self {
+        Self {
+            start_primitive_index,
         }
     }
+    
     #[must_use]
-    fn start_triangle_index(&self) -> usize {
-        self.start_triangle_index
-    }
-    #[must_use]
-    fn triangles_count(&self) -> usize {
-        self.triangles_count
+    fn primitive_index(&self) -> usize {
+        self.start_primitive_index
     }
 }
 
@@ -59,34 +53,32 @@ impl BvhNode {
             bounding_box: Aabb::new(),
             content: None,
             serial_index: None,
-            hit_node: None, // TODO: not used? check the algorithm
+            hit_node: None,
             miss_node: None,
             right_offset: None,
             axis: Axis::X,
         }
     }
 
-    const GPU_NULL_REFERENCE_MARKER: f64 = -1.0;
+    const GPU_NULL_REFERENCE_MARKER: i32 = -1;
+
+    pub(super) const PRIMITIVE_TYPE_NULL: u32 = 0;
+    pub(super) const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
 
     #[must_use]
-    fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> f64 {
+    fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> i32 {
         if let Some(node) = &node {
             match node.borrow().serial_index {
-                Some(index) => index as f64,
+                Some(index) => index as i32,
                 None => BvhNode::GPU_NULL_REFERENCE_MARKER,
             }
         } else {
             BvhNode::GPU_NULL_REFERENCE_MARKER
         }
     }
-
+    
     #[must_use]
-    fn right_offset_index_or_null(&self) -> f64 {
-        BvhNode::index_of_or_null(&self.right_offset)
-    }
-
-    #[must_use]
-    fn miss_node_index_or_null(&self) -> f64 {
+    fn miss_node_index_or_null(&self) -> i32 {
         BvhNode::index_of_or_null(&self.miss_node)
     }
 
@@ -120,35 +112,35 @@ impl BvhNode {
 
     // TODO: rewrite without recursion!
 
-    fn build_hierarchy(support: &mut [Triangle], start: usize, end: usize) -> Rc<RefCell<BvhNode>> {
-        assert!(start <= end);
-        assert!(support.len() > start);
-        assert!(support.len() > end);
+    fn build_hierarchy(support: &mut [Triangle], start_inclusive: usize, end_inclusive: usize) -> Rc<RefCell<BvhNode>> {
+        assert!(start_inclusive <= end_inclusive);
+        assert!(support.len() > start_inclusive);
+        assert!(support.len() > end_inclusive);
 
         let mut node = BvhNode::new();
 
-        for i in start..=end {
+        for i in start_inclusive..=end_inclusive {
             node.bounding_box = Aabb::merge(node.bounding_box, support[i].bounding_box());
         }
 
         let axis = node.bounding_box.extent().max_axis();
         let comparator = BvhNode::COMPARATORS[axis as usize];
 
-        let span = end - start;
+        let span = end_inclusive - start_inclusive;
 
-        if span == 0 {
-            node.content = Some(BvhNodeContent::new(start, end - start + 1));
+        if 0 == span {
+            node.content = Some(BvhNodeContent::new(start_inclusive));
         } else {
-            let mut subarray = support[start..=end].to_vec();
+            let mut subarray = support[start_inclusive..=end_inclusive].to_vec();
             subarray.sort_by(comparator);
 
             for (index, object) in subarray.iter().enumerate() {
-                support[start + index] = *object;
+                support[start_inclusive + index] = *object;
             }
 
-            let middle = start + (span / 2);
-            node.left = Some(BvhNode::build_hierarchy(support, start, middle));
-            node.right = Some(BvhNode::build_hierarchy(support, middle + 1, end));
+            let middle = start_inclusive + (span / 2);
+            node.left = Some(BvhNode::build_hierarchy(support, start_inclusive, middle));
+            node.right = Some(BvhNode::build_hierarchy(support, middle + 1, end_inclusive));
             node.axis = axis;
 
             node.bounding_box = Aabb::merge
@@ -214,47 +206,40 @@ impl BvhNode {
         debug_assert!(container.fully_written(), "buffer underflow");
 
         let index = self.serial_index().unwrap();
-
-        let primitive_kind: f64;
-        let primitive_id: f64;
-        let primitive_count: f64;
-        match self.content.as_ref()
-        {
-            Some(content) =>
-            {
-                primitive_kind = 2.0; // TODO: refactor this - 2 is a type for triangle
-                primitive_id = content.start_triangle_index() as f64;
-                primitive_count = content.triangles_count() as f64;
+        
+        let primitive_index: u32;
+        let primitive_type: u32;
+        match self.content.as_ref() {
+            Some(content) => {
+                primitive_index = content.primitive_index() as u32;
+                primitive_type = Self::PRIMITIVE_TYPE_TRIANGLE;
             }
-            None =>
-            {
-                primitive_kind = Self::GPU_NULL_REFERENCE_MARKER;
-                primitive_id = Self::GPU_NULL_REFERENCE_MARKER;
-                primitive_count = Self::GPU_NULL_REFERENCE_MARKER;
+            None => {
+                primitive_index = 0;
+                primitive_type = Self::PRIMITIVE_TYPE_NULL;
             },
         }
 
         container.write_object(index, |writer|{
-            writer.write_quartet_f64(
-                self.bounding_box.min().x,
-                self.bounding_box.min().y,
-                self.bounding_box.min().z,
-                self.right_offset_index_or_null(),
-            );
+            
+            writer.write_quartet(|writer| {
+                writer.write_float_64(self.bounding_box.min().x);
+                writer.write_float_64(self.bounding_box.min().y);
+                writer.write_float_64(self.bounding_box.min().z);
+                writer.write_unsigned(primitive_index);
+            });
 
-            writer.write_quartet_f64(
-                self.bounding_box.max().x,
-                self.bounding_box.max().y,
-                self.bounding_box.max().z,
-                primitive_kind,
-            );
+            writer.write_quartet(|writer| {
+                writer.write_float_64(self.bounding_box.max().x);
+                writer.write_float_64(self.bounding_box.max().y);
+                writer.write_float_64(self.bounding_box.max().z);
+                writer.write_unsigned(primitive_type);
+            });
 
-            writer.write_quartet_f64(
-                primitive_id,
-                primitive_count,
-                self.miss_node_index_or_null(),
-                self.axis as usize as f64,
-            );
+            writer.write_quartet(|writer| {
+                writer.write_signed(self.miss_node_index_or_null());
+            });
+            
         });
     }
 }
@@ -307,8 +292,7 @@ pub(crate) mod tests {
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
         assert_abs_diff_eq!(system_under_test.bounding_box, triangle.bounding_box(), epsilon = DEFAULT_EPSILON_F64);
-        assert_eq!(system_under_test.content.as_ref().unwrap().start_triangle_index(), 0);
-        assert_eq!(system_under_test.content.as_ref().unwrap().triangles_count(), 1);
+        assert_eq!(system_under_test.content.as_ref().unwrap().primitive_index(), 0);
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());
         assert!(system_under_test.right_offset.is_none());
@@ -363,7 +347,7 @@ pub(crate) mod tests {
         let mut victim = BvhNode::new();
         let expected_index = 13_usize;
         victim.set_serial_index(expected_index);
-        assert_eq!(BvhNode::index_of_or_null(&Some(Rc::new(RefCell::new(victim)))), expected_index as f64);
+        assert_eq!(BvhNode::index_of_or_null(&Some(Rc::new(RefCell::new(victim)))), expected_index as i32);
     }
 
     #[test]
@@ -387,20 +371,7 @@ pub(crate) mod tests {
         let node = BvhNode::new();
         assert!(node.right().is_none(), "Expected right to be None");
     }
-
-    #[test]
-    fn test_right_offset_index_or_null() {
-        let mut node = BvhNode::new();
-        assert_eq!(node.right_offset_index_or_null(), BvhNode::GPU_NULL_REFERENCE_MARKER);
-
-        let right_offset_node = Rc::new(RefCell::new(BvhNode::new()));
-        let expected_right_offset_index = 5;
-        right_offset_node.borrow_mut().set_serial_index(expected_right_offset_index);
-        node.right_offset = Some(Rc::clone(&right_offset_node));
-
-        assert_eq!(node.right_offset_index_or_null(), expected_right_offset_index as f64);
-    }
-
+    
     #[test]
     fn test_miss_node_index_or_null() {
         let mut node = BvhNode::new();
@@ -411,7 +382,7 @@ pub(crate) mod tests {
         miss_node.borrow_mut().set_serial_index(expected_miss_node_index);
         node.miss_node = Some(Rc::clone(&miss_node));
 
-        assert_eq!(node.miss_node_index_or_null(), expected_miss_node_index as f64);
+        assert_eq!(node.miss_node_index_or_null(), expected_miss_node_index as i32);
     }
 
     #[test]

@@ -45,10 +45,10 @@ impl GpuSerializable for Parallelogram {
         );
 
         container.write_quartet(|writer| {
-            writer.write_float(self.local_x.x as f32);
-            writer.write_float(self.local_x.y as f32);
-            writer.write_float(self.local_x.z as f32);
-            writer.write_integer(self.links.uid().0);
+            writer.write_float_64(self.local_x.x);
+            writer.write_float_64(self.local_x.y);
+            writer.write_float_64(self.local_x.z);
+            writer.write_unsigned(self.links.uid().0);
         });
 
         container.write_quartet_f64(
@@ -65,12 +65,12 @@ impl GpuSerializable for Parallelogram {
             normal.z,
         );
 
-        container.write_quartet_f64(
-            w.x,
-            w.y,
-            w.z,
-            self.links.material_index().as_f64(),
-        );
+        container.write_quartet(|writer| {
+            writer.write_float_64(w.x);
+            writer.write_float_64(w.y);
+            writer.write_float_64(w.z);
+            writer.write_unsigned(self.links.material_index().0 as u32);
+        });
 
         debug_assert!(container.object_fully_written());
     }
@@ -151,6 +151,6 @@ mod tests {
         assert_eq!(serialized[16], 0.0);
         assert_eq!(serialized[17], 0.0);
         assert_eq!(serialized[18], -4.0 / 16.0);
-        assert_eq!(serialized[19], expected_material_index.0 as f32);
+        assert_eq!(serialized[19].to_bits(), expected_material_index.0 as u32);
     }
 }

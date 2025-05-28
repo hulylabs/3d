@@ -35,9 +35,9 @@ impl GpuSerializable for SdfInstance {
         serialize_matrix(container, &self.location.invert().unwrap());
 
         container.write_quartet(|writer| {
-            writer.write_float(self.class.as_f64() as f32);
-            writer.write_float(self.links.material_index().0 as f32);
-            writer.write_integer(self.links.uid().0);
+            writer.write_float_64(self.class.as_f64());
+            writer.write_unsigned(self.links.material_index().0 as u32);
+            writer.write_unsigned(self.links.uid().0);
         });
 
         debug_assert!(container.object_fully_written());
@@ -115,7 +115,7 @@ mod tests {
 
         assert_eq!(serialized[values_checked], expected_class.as_f64() as f32);
         values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_material_index.as_f64() as f32);
+        assert_eq!(serialized[values_checked].to_bits(), expected_material_index.0 as u32);
         values_checked += 1;
         assert_eq!(serialized[values_checked].to_bits(), expected_object_uid.0);
         values_checked += 1;

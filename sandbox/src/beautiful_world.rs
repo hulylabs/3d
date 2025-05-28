@@ -391,7 +391,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn create_zen_garden_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_zen_garden_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         
         // Light source
@@ -532,7 +532,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn create_crystal_palace_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_crystal_palace_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         
         // Light source
@@ -630,7 +630,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn create_underwater_treasure_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_underwater_treasure_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         
         // Light source with blue tint

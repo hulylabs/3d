@@ -410,7 +410,7 @@ impl World {
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
     }
 
-    pub(super) fn switch_to_constructive_solid_geometry_sample_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_constructive_solid_geometry_sample_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -421,7 +421,7 @@ impl World {
             self.materials.blue_material);
     }
 
-    pub(super) fn switch_to_smooth_operators_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -442,7 +442,7 @@ impl World {
             self.materials.green_mirror);
     }
 
-    pub(super) fn switch_to_sdf_exhibition_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -547,7 +547,37 @@ impl World {
             self.materials.blue_material);
     }
     
-    pub(super) fn switch_to_ui_box_scene(&mut self, scene: &mut Container) {
+    #[must_use]
+    fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
+        let exe_path = env::current_exe().unwrap();
+        let exe_directory = exe_path.parent().unwrap();
+        exe_directory.join(file_name)
+    }
+    
+    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Container) {
+        scene.clear_objects();
+        self.make_common_scene_walls(scene);
+
+        let mut meshes = MeshWarehouse::new();
+        let mesh_file = Self::get_resource_path(Path::new("assets").join("monkey.obj"));
+        let mesh_or_error = meshes.load(mesh_file);
+
+        match mesh_or_error {
+            Ok(mesh) => {
+                let location 
+                    = Transformation::new(
+                    Affine::from_translation(Vector::new(0.5, 0.0, 0.0)) *
+                        Affine::from_nonuniform_scale(0.6, 0.6, 0.6)
+                    );
+                scene.add_mesh(&meshes, mesh, &location, self.materials.black_material);
+            },
+            Err(mesh_loading_error) => {
+                error!("failed to load mesh: {}", mesh_loading_error);
+            },
+        }
+    }
+    
+    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         
         scene.add_sdf(
@@ -587,15 +617,8 @@ impl World {
 
         self.make_common_scene_walls(scene);
 
-        #[must_use]
-        fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
-            let exe_path = env::current_exe().unwrap();
-            let exe_directory = exe_path.parent().unwrap();
-            exe_directory.join(file_name)
-        }
-
         let mut meshes = MeshWarehouse::new();
-        let cube_mesh_file = get_resource_path(Path::new("assets").join("cube.obj"));
+        let cube_mesh_file = Self::get_resource_path(Path::new("assets").join("cube.obj"));
         let cube_mesh_or_error = meshes.load(cube_mesh_file);
         
         match cube_mesh_or_error {
