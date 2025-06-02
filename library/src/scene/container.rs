@@ -7,7 +7,7 @@ use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
-use crate::scene::bvh_proxies::SceneObjects;
+use crate::scene::bvh_proxies::{proxy_of_sdf, SceneObjects};
 use crate::scene::materials_warehouse::MaterialsWarehouse;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::scene::monolithic::Monolithic;
@@ -24,8 +24,10 @@ use crate::utils::object_uid::ObjectUid;
 use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
 use std::collections::HashMap;
+use cgmath::SquareMatrix;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
+use crate::objects::sdf_class_index::SdfClassIndex;
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum DataKind {
@@ -40,7 +42,7 @@ pub struct Container {
     triangles: Vec<Triangle>,
     
     materials: MaterialsWarehouse,
-    sdfs: SdfWarehouse,
+    sdf_prototypes: SdfWarehouse,
     
     uid_generator: UidGenerator,
 }
@@ -55,14 +57,14 @@ impl Container {
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials: MaterialsWarehouse::new(),
-            sdfs: SdfWarehouse::new(sdf_classes),
+            sdf_prototypes: SdfWarehouse::new(sdf_classes),
             uid_generator: UidGenerator::new(),
         }
     }
 
     #[must_use]
     pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
-        format!("{}\n{}", base_code, self.sdfs.sdf_classes_code())
+        format!("{}\n{}", base_code, self.sdf_prototypes.sdf_classes_code())
     }
 
     #[must_use]
@@ -97,16 +99,20 @@ impl Container {
             Box::new(Monolithic::new(
                 DataKind::Parallelogram as usize,
                 Box::new(Parallelogram::new(origin, local_x, local_y, Linkage::new(uid, material))),
+                0,
+                Affine::identity(),
             ))
         })
     }
 
     pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid{
-        let index = self.sdfs.index_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
+        let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
                 Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
+                index.0,
+                *location,
             ))
         })
     }
@@ -118,7 +124,7 @@ impl Container {
         instance.put_triangles_into(&mut self.triangles);
 
         let geometry_kind = DataKind::TriangleMesh as usize;
-        self.objects.insert(links.uid(), Box::new(Triangulated::new(links, geometry_kind)));
+        self.objects.insert(links.uid(), Box::new(Triangulated::new(links, geometry_kind, 0, *transformation.forward())));
         self.per_object_kind_statistics[geometry_kind].register_new_object();
 
         links.uid()
@@ -137,7 +143,10 @@ impl Container {
     }
     
     pub fn clear_objects(&mut self) {
-        self.triangles.clear();
+        if self.objects.is_empty() {
+            return;
+        }
+        
         for object in self.objects.keys() {
             self.uid_generator.put_back(*object);
         }
@@ -145,6 +154,7 @@ impl Container {
             statistics.clear_objects();
         }
         self.objects.clear();
+        self.triangles.clear();
     }
     
     #[must_use]
@@ -157,6 +167,18 @@ impl Container {
         let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
 
         self.triangles.make_proxies(&mut objects_to_tree);
+
+        const SDF_KIND: usize = DataKind::Sdf as usize;
+        let sdf_count = self.per_object_kind_statistics[SDF_KIND].object_count();
+        if sdf_count > 0 {
+            let sorted_of_a_kind = self.sorted_of_a_kind(SDF_KIND, sdf_count);
+            for (index, (_, sdf)) in sorted_of_a_kind.iter().enumerate() {
+                let class_index = sdf.payload();
+                let class_aabb = self.sdf_prototypes.aabb_from_index(SdfClassIndex(class_index));
+                let instance_aabb = class_aabb.transform(sdf.transformation());
+                objects_to_tree.push(proxy_of_sdf(index, instance_aabb));
+            }
+        }
 
         build_serialized_bvh(&mut objects_to_tree)
     }
@@ -213,24 +235,7 @@ impl Container {
         let desired_kind = desired_kind as usize;
         let count = self.per_object_kind_statistics[desired_kind].object_count();
         assert!(count > 0, "gpu can't accept empty buffer");
-
-        let sorted_of_a_kind: Vec<(u32, &dyn SceneObject)> =
-        {
-            let mut sorted = Vec::with_capacity(count);
-            for (key, object) in self.objects.iter() {
-                if object.data_kind_uid() == desired_kind {
-                    sorted.push((key.0, object.as_ref()));
-                }
-            }
-            debug_assert_eq!(sorted.len(), count);
-
-            /*
-            We can do without sorting, serializing in the loop above. But the stable
-            order will make testing (especially automated tests) and debugging easier.
-            */
-            sorted.sort_by_key(|x| x.0);
-            sorted
-        };
+        let sorted_of_a_kind = self.sorted_of_a_kind(desired_kind, count);
         
         let quartets_per_object = sorted_of_a_kind[0].1.serialized_quartet_count();
         let mut result = GpuReadySerializationBuffer::new(count, quartets_per_object);
@@ -239,6 +244,19 @@ impl Container {
         }
 
         result
+    }
+
+    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<(u32, &dyn SceneObject)> {
+        let mut sorted = Vec::with_capacity(expected_count);
+        for (key, object) in self.objects.iter() {
+            if object.data_kind_uid() == desired_kind {
+                sorted.push((key.0, object.as_ref()));
+            }
+        }
+        debug_assert_eq!(sorted.len(), expected_count);
+
+        sorted.sort_by_key(|x| x.0);
+        sorted
     }
 }
 

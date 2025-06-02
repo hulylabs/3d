@@ -14,6 +14,7 @@ const MATERIAL_ANISOTROPIC = 4.0;
 
 const PRIMITIVE_TYPE_SDF: u32 = 1;
 const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
+
 const NULL_POINTER_LINK: i32 = -1;
 
 const WORK_GROUP_SIZE_X: u32 = 8;
@@ -76,7 +77,6 @@ struct Uniforms {
 
 	parallelograms_count: u32,
 	sdf_count: u32,
-	triangles_count: u32,
 	bvh_length: u32,
 	pixel_side_subdivision: u32, // anti-aliasing level: bigger value -> slower render -> less jagged edges
 }
@@ -506,16 +506,6 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         }
     }
 
-    for(var i = u32(0); i < uniforms.sdf_count; i++){
-        let sdf = sdf[i];
-        if(hit_sdf(sdf, RAY_PARAMETER_MIN, closest_so_far, ray)){
-            hit_uid = sdf.object_uid;
-            hit_material_id = sdf.material_id;
-            hit_normal = hitRec.normal;
-            closest_so_far = hitRec.t;
-        }
-    }
-
     // "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
     {
         let inverted_ray_dir = 1.0 / ray.direction;
@@ -529,6 +519,14 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     if(hit_triangle(triangle, RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
                         hit_material_id = triangle.material_id;
+                        hit_normal = hitRec.normal;
+                        closest_so_far = hitRec.t;
+                    }
+                } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
+                    let sdf = sdf[node.primitive_index];
+                    if(hit_sdf(sdf, RAY_PARAMETER_MIN, closest_so_far, ray)){
+                        hit_uid = sdf.object_uid;
+                        hit_material_id = sdf.material_id;
                         hit_normal = hitRec.normal;
                         closest_so_far = hitRec.t;
                     }
@@ -576,7 +574,7 @@ fn hit_scene(ray : Ray) -> bool {
 		}
 	}
 
-    // "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
+    // BVH traversal from "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
 	{
         let inverted_ray_dir = 1.0 / ray.direction;
         var node_index: i32 = 0;
@@ -589,18 +587,16 @@ fn hit_scene(ray : Ray) -> bool {
                         hit_anything = true;
                         closest_so_far = hitRec.t;
                     }
+                } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
+                    if(hit_sdf(sdf[node.primitive_index], RAY_PARAMETER_MIN, closest_so_far, ray)) {
+                        hit_anything = true;
+                        closest_so_far = hitRec.t;
+                    }
                 }
                 node_index++;
             } else {
                 node_index = node.hit_miss_skip_link;
             }
-        }
-    }
-
-	for(var i = u32(0); i < uniforms.sdf_count; i++) {
-        if(hit_sdf(sdf[i], RAY_PARAMETER_MIN, closest_so_far, ray)) {
-            hit_anything = true;
-            closest_so_far = hitRec.t;
         }
     }
 

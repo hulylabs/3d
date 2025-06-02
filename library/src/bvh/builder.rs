@@ -63,6 +63,7 @@ fn evaluate_serial_indices(candidate: Option<Rc<RefCell<BvhNode>>>, index: &mut 
 mod tests {
     use super::*;
     use crate::bvh::node::tests::make_triangle;
+    use crate::bvh::proxy::PrimitiveType;
     use crate::scene::bvh_proxies::{proxy_of_triangle, SceneObjects};
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
@@ -85,7 +86,7 @@ mod tests {
         assert_eq!(&actual_serialized[16..20], &(1.0f32.to_ne_bytes()));
         assert_eq!(&actual_serialized[20..24], &(2.0f32.to_ne_bytes()));
         assert_eq!(&actual_serialized[24..28], &(3.0f32.to_ne_bytes()));
-        assert_eq!(&actual_serialized[28..32], &(BvhNode::PRIMITIVE_TYPE_TRIANGLE.to_ne_bytes()));
+        assert_eq!(&actual_serialized[28..32], &((PrimitiveType::Triangle as u32).to_ne_bytes()));
 
         assert_eq!(&actual_serialized[32..36], &((-1i32).to_ne_bytes()));
         assert_eq!(&actual_serialized[36..40], &(DEFAULT_PAD_VALUE.to_ne_bytes()));

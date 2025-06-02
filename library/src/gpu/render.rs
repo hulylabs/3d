@@ -27,6 +27,7 @@ use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::scene::version::Version;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -76,7 +77,6 @@ impl Renderer {
             camera,
             parallelograms_count: 0,
             sdf_count: 0,
-            triangles_count: 0,
             bvh_length: 0,
             pixel_side_subdivision: 1,
         };
@@ -149,15 +149,15 @@ impl Renderer {
     fn update_buffer<T: GpuSerializationSize>(geometry_kind: &'static DataKind, buffer: &mut VersionedBuffer, resources: &Resources, scene: &Container, queue: &wgpu::Queue,) -> BufferUpdateStatus {
         let actual_data_version = scene.data_version(*geometry_kind);
         let serializer = || Self::serialize_scene_data::<T>(scene, geometry_kind);
-        buffer.try_update_and_resize(actual_data_version, resources, queue, serializer)
+        buffer.try_update(actual_data_version, resources, queue, serializer)
     }
     
     #[must_use]
-    fn serialize_triangles(scene: &Container) -> (GpuReadySerializationBuffer, u32) {
+    fn serialize_triangles(scene: &Container) -> GpuReadySerializationBuffer {
         if scene.triangles_count() > 0 {
-            (scene.evaluate_serialized_triangles(), scene.triangles_count() as u32)
+            scene.evaluate_serialized_triangles()
         } else {
-            (Self::make_empty_buffer_marker::<Triangle>(), 0)
+            Self::make_empty_buffer_marker::<Triangle>()
         }
     }
     
@@ -176,22 +176,31 @@ impl Renderer {
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
         let mut composite_status = BuffersUpdateStatus::new();
 
+        composite_status.merger_material(self.buffers.materials.try_update(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
+        
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
-        composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
-
-        composite_status.merger_material(self.buffers.materials.try_update_and_resize(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
+        self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
+        
+        let mut update_bvh = false;
         
         let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
         if self.buffers.triangles.version_diverges(triangles_set_version) {
-            
-            let (serialized_triangles, serialized_triangles_count) = Self::serialize_triangles(self.scene());
-            self.uniforms.triangles_count = serialized_triangles_count;
-            
+            let serialized_triangles = Self::serialize_triangles(self.scene());
+            composite_status.merge_geometry(self.buffers.triangles.try_update(triangles_set_version, &self.resources, self.context.queue(), || serialized_triangles));
+            update_bvh = true;
+        }
+
+        let sdf_set_version = self.scene.data_version(DataKind::Sdf);
+        if self.buffers.sdf.version_diverges(sdf_set_version) {
+            composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
+            self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
+            update_bvh = true;
+        }
+
+        if update_bvh {
             let (bvh, bvh_length) = Self::serialize_bvh(self.scene());
+            composite_status.merge_geometry(self.buffers.bvh.update(&self.resources, self.context.queue(), || bvh));
             self.uniforms.bvh_length = bvh_length;
-            
-            composite_status.merge_geometry(self.buffers.triangles.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || serialized_triangles));
-            composite_status.merge_geometry(self.buffers.bvh.try_update_and_resize(triangles_set_version, &self.resources, self.context.queue(), || bvh));
         }
         
         if composite_status.any_resized() {
@@ -200,11 +209,9 @@ impl Renderer {
             Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
         }
         
-        self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
-        self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
-        
         composite_status
     }
+    
     #[must_use]
     fn make_empty_buffer_marker<T: GpuSerializationSize>() -> GpuReadySerializationBuffer {
         GpuReadySerializationBuffer::make_filled(1, T::SERIALIZED_QUARTET_COUNT, 0.0_f32)
@@ -226,8 +233,7 @@ impl Renderer {
     }
     
     fn init_buffers(scene: &mut Container, context: &Context, uniforms: &mut Uniforms, resources: &Resources) -> Buffers {
-        let (serialized_triangles, serialized_triangles_count) = Self::serialize_triangles(scene);
-        uniforms.triangles_count = serialized_triangles_count;
+        let serialized_triangles = Self::serialize_triangles(scene);
 
         let (bvh, bvh_length) = Self::serialize_bvh(scene);
         uniforms.bvh_length = bvh_length;
@@ -248,7 +254,7 @@ impl Renderer {
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
-            bvh: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources,"bvh", || bvh),
+            bvh: VersionedBuffer::new(Version(0), resources,"bvh", || bvh),
         }
     }
 
@@ -614,7 +620,6 @@ struct Uniforms {
     
     parallelograms_count: u32,
     sdf_count: u32,
-    triangles_count: u32,
     bvh_length: u32,
     pixel_side_subdivision: u32,
 }
@@ -647,7 +652,7 @@ impl Uniforms {
         self.pixel_side_subdivision = level;
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 4 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -669,8 +674,7 @@ impl Uniforms {
         
         self.camera.serialize_into(&mut result);
 
-        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.triangles_count, self.bvh_length);
-        result.write_quartet_u32(self.pixel_side_subdivision, 0, 0, 0);
+        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.bvh_length, self.pixel_side_subdivision);
         
         debug_assert!(result.object_fully_written());
         result
@@ -704,7 +708,6 @@ mod tests {
 
     const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
     const DEFAULT_SDF_COUNT: u32 = 6;
-    const DEFAULT_TRIANGLES_COUNT: u32 = 7;
     const DEFAULT_BVH_LENGTH: u32 = 8;
     const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
 
@@ -721,7 +724,6 @@ mod tests {
             
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
             sdf_count: DEFAULT_SDF_COUNT,
-            triangles_count: DEFAULT_TRIANGLES_COUNT,
             bvh_length: DEFAULT_BVH_LENGTH,
             pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
         }
@@ -739,9 +741,8 @@ mod tests {
 
     const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
     const SLOT_SDF_COUNT: usize = 41;
-    const SLOT_TRIANGLES_COUNT: usize = 42;
-    const SLOT_BVH_LENGTH: usize = 43;
-    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 44;
+    const SLOT_BVH_LENGTH: usize = 42;
+    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 43;
 
     #[test]
     fn test_uniforms_reset_frame_accumulation() {
@@ -831,7 +832,6 @@ mod tests {
         
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
         assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
-        assert_eq!(actual_state_floats[SLOT_TRIANGLES_COUNT].to_bits(), DEFAULT_TRIANGLES_COUNT);
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
         assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
     }

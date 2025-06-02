@@ -5,26 +5,33 @@ use std::cmp::Ordering;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use strum::EnumCount;
-use crate::bvh::proxy::SceneObjectProxy;
+use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::geometry::utils::MaxAxis;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
 struct BvhNodeContent {
     primitive_index: usize,
+    primitive_type: PrimitiveType,
 }
 
 impl BvhNodeContent {
     #[must_use]
-    fn new(primitive_index: usize) -> Self {
+    fn new(primitive_index: usize, primitive_type: PrimitiveType) -> Self {
         Self {
             primitive_index,
+            primitive_type,
         }
     }
     
     #[must_use]
     fn primitive_index(&self) -> usize {
         self.primitive_index
+    }
+
+    #[must_use]
+    fn primitive_type(&self) -> PrimitiveType {
+        self.primitive_type
     }
 }
 
@@ -61,9 +68,6 @@ impl BvhNode {
     }
 
     const GPU_NULL_REFERENCE_MARKER: i32 = -1;
-
-    pub(super) const PRIMITIVE_TYPE_NULL: u32 = 0;
-    pub(super) const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
 
     #[must_use]
     fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> i32 {
@@ -146,8 +150,10 @@ impl BvhNode {
                 node.right.as_ref().unwrap().borrow().bounding_box,
             );
         } else {
-            let object_index = support[start_inclusive].host_container_index();
-            node.content = Some(BvhNodeContent::new(object_index));
+            let proxy = &support[start_inclusive];
+            let object_index = proxy.host_container_index();
+            let primitive_type = proxy.primitive_type();
+            node.content = Some(BvhNodeContent::new(object_index, primitive_type));
         }
 
         Rc::new(RefCell::new(node))
@@ -212,11 +218,11 @@ impl BvhNode {
         match self.content.as_ref() {
             Some(content) => {
                 primitive_index = content.primitive_index() as u32;
-                primitive_type = Self::PRIMITIVE_TYPE_TRIANGLE;
+                primitive_type = content.primitive_type() as u32;
             }
             None => {
                 primitive_index = 0;
-                primitive_type = Self::PRIMITIVE_TYPE_NULL;
+                primitive_type = PrimitiveType::Null as u32;
             },
         }
 

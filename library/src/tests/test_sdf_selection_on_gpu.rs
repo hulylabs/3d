@@ -24,8 +24,8 @@ mod tests {
         
         let warehouse = SdfWarehouse::new(registrator);
 
-        let sphere_index = warehouse.index_for_name(sphere.name()).unwrap();
-        let box_index = warehouse.index_for_name(a_box.name()).unwrap();
+        let sphere_index = warehouse.properties_for_name(sphere.name()).unwrap();
+        let box_index = warehouse.properties_for_name(a_box.name()).unwrap();
 
         let template = ShaderFunction::new("vec4f", "f32", "sdf_select")
             .with_additional_shader_code(warehouse.sdf_classes_code().to_string());

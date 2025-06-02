@@ -34,6 +34,11 @@ impl Transformation {
     pub(crate) fn of_surface_vector(&self, target: Vector) -> Vector {
         self.inverse.transpose().transform_vector(target).normalize()
     }
+
+    #[must_use]
+    pub fn forward(&self) -> &Affine {
+        &self.forward
+    }
 }
 
 pub(crate) trait TransformableCoordinate {

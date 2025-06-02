@@ -58,7 +58,7 @@ impl VersionedBuffer {
     }
 
     #[must_use]
-    pub(super) fn try_update_and_resize<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
+    pub(super) fn try_update<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
@@ -68,6 +68,14 @@ impl VersionedBuffer {
 
         self.content_version = new_version;
 
+        self.update(resources, queue, generate_data)
+    }
+
+    #[must_use]
+    pub(super) fn update<Generator>(&mut self, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
+    where
+        Generator: FnOnce() -> GpuReadySerializationBuffer,
+    {
         let new_content = generate_data();
         self.elements_count = new_content.total_slots_count();
 
@@ -133,7 +141,7 @@ mod tests {
         let (mut system_under_test, resources, context) = make_system_under_test();
         let make_new_data = || make_test_content(1);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION,
             &resources,
             context.queue(),
@@ -148,7 +156,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS - 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),
@@ -165,7 +173,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS + 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),

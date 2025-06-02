@@ -1,4 +1,5 @@
-﻿use crate::objects::material_index::MaterialIndex;
+﻿use crate::geometry::transform::Affine;
+use crate::objects::material_index::MaterialIndex;
 use crate::scene::scene_object::{SceneEnvironment, SceneObject};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::objects::ray_traceable::RayTraceable;
@@ -6,12 +7,14 @@ use crate::objects::ray_traceable::RayTraceable;
 pub(super) struct Monolithic {
     geometry_kind: usize,
     geometry: Box<dyn RayTraceable>,
+    payload: usize,
+    transformation: Affine,
 }
 
 impl Monolithic {
     #[must_use]
-    pub(super) fn new(geometry_kind: usize, backend: Box<dyn RayTraceable>) -> Self {
-        Self { geometry_kind, geometry: backend }
+    pub(super) fn new(geometry_kind: usize, backend: Box<dyn RayTraceable>, payload: usize, transformation: Affine,) -> Self {
+        Self { geometry_kind, geometry: backend, payload, transformation, }
     }
 }
 
@@ -27,6 +30,14 @@ impl SceneObject for Monolithic {
     #[must_use]
     fn data_kind_uid(&self) -> usize {
         self.geometry_kind
+    }
+    #[must_use]
+    fn payload(&self) -> usize {
+        self.payload
+    }
+    #[must_use]
+    fn transformation(&self) -> &Affine {
+        &self.transformation
     }
 
     #[must_use]
