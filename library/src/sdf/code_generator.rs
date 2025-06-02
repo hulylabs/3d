@@ -57,7 +57,7 @@ impl SdfCodeGenerator {
             
             let occurrences = self.sdf_bodies.try_find(&body);
             if let Some(occurrences) = occurrences.filter(|o| o.occurrences() > 1) {
-                for _ in candidate.children() {
+                for _ in candidate.descendants() {
                     context.descendant_bodies_deduplicated.pop();
                 }
                 context.descendant_bodies_deduplicated.push(format_sdf_invocation(occurrences.name()));
@@ -130,11 +130,12 @@ impl Default for SdfRegistrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::alias::{Point, Vector};
+    use crate::geometry::alias::Vector;
     use crate::sdf::named_sdf::UniqueSdfClassName;
     use crate::sdf::sdf_base::Sdf;
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::sdf_translation::SdfTranslation;
     use crate::sdf::sdf_union::SdfUnion;
     use std::rc::Rc;
 
@@ -205,9 +206,9 @@ mod tests {
                     SdfBox::new(Vector::new(1.0, 2.0, 3.0)),
                     SdfBox::new(Vector::new(5.0, 7.0, 11.0)),
                 ),
-                SdfSphere::new_offset(13.0, Point::new(-17.0, -19.0, -23.0)),
+                SdfTranslation::new(Vector::new(-17.0, -19.0, -23.0), SdfSphere::new(13.0)),
             ),
-            SdfSphere::new_offset(29.0, Point::new(31.0, 37.0, 41.0)),
+            SdfTranslation::new(Vector::new(31.0, 37.0, 41.0), SdfSphere::new(29.0)),
         );
 
         let name = UniqueSdfClassName::new("the_name".to_string());
@@ -215,22 +216,16 @@ mod tests {
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_the_name(point: vec3f) -> f32 { \
-        var left_3: f32;\n { \
-        var left_2: f32;\n { \
-        var left_1: f32;\n { \
-        let q = abs(point)-vec3f(1.0,2.0,3.0); \
-        left_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
-        var right_1: f32;\n { \
-        let q = abs(point)-vec3f(5.0,7.0,11.0); \
-        right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); }  \
-        left_2 = min(left_1,right_1); } \
-        var right_2: f32;\n { \
-        right_2 = length((point-vec3f(-17.0,-19.0,-23.0)))-13.0; }  \
-        left_3 = min(left_2,right_2); } \
-        var right_3: f32;\n { \
-        right_3 = length((point-vec3f(31.0,37.0,41.0)))-29.0; }  \
-        return min(left_3,right_3); }\n";
+        let expected_code = "fn sdf_the_name(point: vec3f) -> f32 { var left_3: f32;\n \
+        { var left_2: f32;\n \
+        { var left_1: f32;\n \
+        { let q = abs(point)-vec3f(1.0,2.0,3.0); left_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } var right_1: f32;\n \
+        { let q = abs(point)-vec3f(5.0,7.0,11.0); right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); }  left_2 = min(left_1,right_1); } var right_2: f32;\n \
+        { var operand_1: f32;\n \
+        { let point = point-vec3f(-17.0,-19.0,-23.0);\n \
+        { operand_1 = length(point)-13.0; } } right_2 = operand_1; }  left_3 = min(left_2,right_2); } var right_3: f32;\n \
+        { var operand_1: f32;\n { let point = point-vec3f(31.0,37.0,41.0);\n \
+        { operand_1 = length(point)-29.0; } } right_3 = operand_1; }  return min(left_3,right_3); }\n";
 
         assert_no_shared_code(generator_under_test);
         assert_eq!(actual_name, expected_name);

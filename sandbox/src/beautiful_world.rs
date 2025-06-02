@@ -13,10 +13,11 @@ use library::sdf::sdf_intersection_smooth::SdfIntersectionSmooth;
 use library::sdf::sdf_octahedron::SdfOctahedron;
 use library::sdf::sdf_pyramid::SdfPyramid;
 use library::sdf::sdf_round_box::SdfRoundBox;
-use library::sdf::sdf_round_code::SdfRoundCone;
+use library::sdf::sdf_round_cone::SdfRoundCone;
 use library::sdf::sdf_sphere::SdfSphere;
 use library::sdf::sdf_subtraction_smooth::SdfSubtractionSmooth;
 use library::sdf::sdf_torus_xz::SdfTorusXz;
+use library::sdf::sdf_translation::SdfTranslation;
 use library::sdf::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::sdf_vesica_segment::SdfVesicaSegment;
 use library::utils::object_uid::ObjectUid;
@@ -63,12 +64,12 @@ impl BeautifulSdfClasses {
         // Flower base - smooth union of spheres
         let flower_base = NamedSdf::new(
             SdfUnionSmooth::new(
-                SdfSphere::new_offset(0.8, Point::new(0.0, 0.0, 0.0)),
+                SdfTranslation::new(Vector::new(0.0, 0.0, 0.0), SdfSphere::new(0.8)),
                 SdfUnionSmooth::new(
-                    SdfSphere::new_offset(0.5, Point::new(0.6, 0.0, 0.0)),
+                    SdfTranslation::new(Vector::new(0.6, 0.0, 0.0), SdfSphere::new(0.5)),
                     SdfUnionSmooth::new(
-                        SdfSphere::new_offset(0.5, Point::new(-0.3, 0.52, 0.0)),
-                        SdfSphere::new_offset(0.5, Point::new(-0.3, -0.52, 0.0)),
+                        SdfTranslation::new(Vector::new(-0.3,  0.52, 0.0), SdfSphere::new(0.5)),
+                        SdfTranslation::new(Vector::new(-0.3, -0.52, 0.0), SdfSphere::new(0.5)),
                         0.2,
                     ),
                     0.2,
@@ -121,7 +122,7 @@ impl BeautifulSdfClasses {
         let pebble = NamedSdf::new(
             SdfSubtractionSmooth::new(
                 SdfSphere::new(1.0),
-                SdfSphere::new_offset(0.8, Point::new(0.7, 0.7, 0.0)),
+                SdfTranslation::new(Vector::new(0.7, 0.7, 0.0), SdfSphere::new(0.8)),
                 0.3,
             ),
             UniqueSdfClassName::new("pebble".to_string())

@@ -1,9 +1,10 @@
-﻿use crate::sdf::binary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
+﻿use crate::sdf::n_ary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
 use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::format_scalar;
 use crate::sdf::stack::Stack;
 use std::rc::Rc;
+use crate::geometry::aabb::Aabb;
 
 pub struct SdfUnionSmooth {
     left: Rc<dyn Sdf>,
@@ -31,25 +32,30 @@ impl Sdf for SdfUnionSmooth {
         produce_binary_operation_body(
             children_bodies,
             level,
-            |left_name, right_name| produce_smooth_union_preparation(left_name, right_name, &self.smooth_size),
-            |left_name, right_name| produce_smooth_union_return(left_name, right_name, &self.smooth_size),
+            |left_name, right_name| produce_smooth_union_preparation(&left_name.into(), &right_name.into(), &self.smooth_size),
+            |left_name, right_name| produce_smooth_union_return(&left_name.into(), &right_name.into(), &self.smooth_size),
         )
     }
 
     #[must_use]
-    fn children(&self) -> Vec<Rc<dyn Sdf>> {
+    fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.left.clone(), self.right.clone()]
+    }
+
+    #[must_use]
+    fn aabb(&self) -> Aabb {
+        Aabb::make_union(self.left.aabb(), self.right.aabb())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sdf::binary_operations_utils::tests::{test_binary_operator_body_production, test_binary_operator_children};
+    use crate::sdf::n_ary_operations_utils::tests::{test_binary_operator_body_production, test_binary_operator_descendants};
 
     #[test]
     fn test_children() {
-        test_binary_operator_children(|left, right| SdfUnionSmooth::new(left, right, 0.25));
+        test_binary_operator_descendants(|left, right| SdfUnionSmooth::new(left, right, 0.25));
     }
 
     #[test]

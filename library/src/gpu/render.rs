@@ -30,6 +30,7 @@ use winit::dpi::PhysicalSize;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
+    pub(super) use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
     pub(super) use crate::denoiser::entry::Denoiser;
     pub(super) use exr::prelude::write_rgba_file;
     pub(super) use pxm::PFMBuilder;
@@ -461,7 +462,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "denoiser")]
-    pub(crate) fn denoise_accumulated_image(&mut self)
+    pub(crate) fn denoise_accumulated_image(&mut self, timer: &mut denoiser::MinMaxTimeMeasurer)
     {
         self.copy_noisy_pixels_to_cpu();
 
@@ -472,13 +473,15 @@ impl Renderer {
             let beauty_floats: &mut [f32] = bytemuck::cast_slice_mut(beauty);
             let albedo_floats: &[f32] = bytemuck::cast_slice(albedo);
             let normal_floats: &[f32] = bytemuck::cast_slice(normal);
-            
+
+            timer.start();
             let mut executor = self.denoiser.begin_denoise(frame_buffer_width, frame_buffer_height);
             executor.issue_albedo_write(albedo_floats);
             executor.issue_normal_write(normal_floats);
             executor.issue_noisy_beauty_write(beauty_floats);
             executor.filter(beauty_floats);
-
+            timer.stop();
+            
             self.buffers.denoised_beauty_image.fill_render_target(self.context.queue(), beauty);
             self.context.queue().submit([]);
         }

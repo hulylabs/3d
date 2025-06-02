@@ -121,6 +121,8 @@ impl Camera {
         self.zoom_speed = other.zoom_speed;
         self.linear_speed = other.linear_speed;
         self.rotation_speed = other.rotation_speed;
+        
+        self.updated = true;
     }
 
     #[must_use]

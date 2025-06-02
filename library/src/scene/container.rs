@@ -155,9 +155,9 @@ impl Container {
     #[must_use]
     pub(crate) fn evaluate_serialized_bvh(&self) -> GpuReadySerializationBuffer {
         let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
-        
+
         self.triangles.make_proxies(&mut objects_to_tree);
-        
+
         build_serialized_bvh(&mut objects_to_tree)
     }
 
@@ -191,7 +191,7 @@ impl Container {
     fn bvh_object_count(&self) -> usize {
         self.triangles.len() + self.count_of_a_kind(DataKind::Sdf)
     }
-    
+
     #[must_use]
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,

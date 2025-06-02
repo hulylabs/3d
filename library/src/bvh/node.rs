@@ -50,7 +50,7 @@ impl BvhNode {
         Self {
             left: None,
             right: None,
-            bounding_box: Aabb::new(),
+            bounding_box: Aabb::make_null(),
             content: None,
             serial_index: None,
             hit_node: None,
@@ -120,7 +120,7 @@ impl BvhNode {
         let mut node = BvhNode::new();
 
         for i in start_inclusive..=end_inclusive {
-            node.bounding_box = Aabb::merge(node.bounding_box, support[i].aabb());
+            node.bounding_box = Aabb::make_union(node.bounding_box, support[i].aabb());
         }
 
         let axis = node.bounding_box.extent().max_axis();
@@ -140,7 +140,7 @@ impl BvhNode {
             node.right = Some(BvhNode::build_hierarchy(support, middle + 1, end_inclusive));
             node.axis = axis;
 
-            node.bounding_box = Aabb::merge
+            node.bounding_box = Aabb::make_union
             (
                 node.left.as_ref().unwrap().borrow().bounding_box,
                 node.right.as_ref().unwrap().borrow().bounding_box,
@@ -276,7 +276,7 @@ pub(crate) mod tests {
 
         assert!(system_under_test.left.is_none());
         assert!(system_under_test.right.is_none());
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::new(), epsilon = DEFAULT_EPSILON_F64);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::make_null(), epsilon = DEFAULT_EPSILON_F64);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());
@@ -316,7 +316,7 @@ pub(crate) mod tests {
 
         let system_under_test = ware.borrow();
 
-        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::merge(left.bounding_box(), right.bounding_box()), epsilon = DEFAULT_EPSILON_F64);
+        assert_abs_diff_eq!(system_under_test.bounding_box, Aabb::make_union(left.bounding_box(), right.bounding_box()), epsilon = DEFAULT_EPSILON_F64);
         assert!(system_under_test.content.is_none());
         assert!(system_under_test.hit_node.is_none());
         assert!(system_under_test.miss_node.is_none());

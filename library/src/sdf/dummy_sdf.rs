@@ -1,6 +1,7 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
     use std::rc::Rc;
+    use crate::geometry::aabb::Aabb;
     use crate::sdf::sdf_base::Sdf;
     use crate::sdf::shader_code::{FunctionBody, ShaderCode,};
     use crate::sdf::stack::Stack;
@@ -32,8 +33,13 @@ pub(crate) mod tests {
         }
 
         #[must_use]
-        fn children(&self) -> Vec<Rc<dyn Sdf>> {
+        fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
             vec![]
+        }
+
+        #[must_use]
+        fn aabb(&self) -> Aabb {
+            Aabb::make_null()
         }
     }
     

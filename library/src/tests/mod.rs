@@ -7,3 +7,4 @@ pub(crate) mod common;
 mod test_shaders_compilation;
 mod test_tracer_functions;
 pub(crate) mod shader_entry_generator;
+pub(crate) mod sdf_sample_cases;

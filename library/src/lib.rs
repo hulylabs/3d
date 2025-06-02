@@ -254,9 +254,7 @@ impl Engine {
         #[cfg(feature = "denoiser")]
         {
             if self.renderer.is_monte_carlo() {
-                self.denoising_measurer.start();
-                self.renderer.denoise_accumulated_image();
-                self.denoising_measurer.stop();   
+                self.renderer.denoise_accumulated_image(&mut self.denoising_measurer);
             }
         }
 

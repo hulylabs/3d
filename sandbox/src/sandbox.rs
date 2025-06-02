@@ -19,7 +19,7 @@ use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulW
 #[must_use]
 fn make_default_camera() -> Camera {
     let mut camera = Camera::new_perspective_camera(0.8, Point::new(0.0, 0.0, 0.0));
-    camera.move_horizontally(0.5);
+    //camera.move_horizontally(0.5);
 
     camera.set_zoom_speed(-0.3);
     camera.set_linear_speed(0.1);
@@ -164,6 +164,12 @@ impl Sandbox {
                     self.selected_object = None;
                 } else if "8" == letter_key {
                     self.tech_world.load_to_triangle_mesh_testing_scene(self.engine.scene());
+                    self.selected_object = None;
+                } else if "9" == letter_key {
+                    self.tech_world.load_sdf_debug_scene(self.engine.scene());
+                    self.selected_object = None;
+                } else if "0" == letter_key {
+                    self.tech_world.load_sdf_aabb_debug_scene(self.engine.scene());
                     self.selected_object = None;
                 }
             }

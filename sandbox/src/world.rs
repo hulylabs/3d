@@ -1,4 +1,4 @@
-﻿use cgmath::Deg;
+﻿use cgmath::{Deg, EuclideanSpace, SquareMatrix};
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
@@ -7,7 +7,7 @@ use library::objects::material_index::MaterialIndex;
 use library::scene::container::Container;
 use library::scene::mesh_warehouse::MeshWarehouse;
 use library::sdf::code_generator::SdfRegistrator;
-use library::sdf::cut_hollow_sphere::SdfCutHollowSphere;
+use library::sdf::sdf_cut_hollow_sphere::SdfCutHollowSphere;
 use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
 use library::sdf::sdf_box_frame::SdfBoxFrame;
@@ -23,7 +23,7 @@ use library::sdf::sdf_octahedron::SdfOctahedron;
 use library::sdf::sdf_pyramid::SdfPyramid;
 use library::sdf::sdf_rhombus::SdfRhombus;
 use library::sdf::sdf_round_box::SdfRoundBox;
-use library::sdf::sdf_round_code::SdfRoundCone;
+use library::sdf::sdf_round_cone::SdfRoundCone;
 use library::sdf::sdf_solid_angle::SdfSolidAngle;
 use library::sdf::sdf_sphere::SdfSphere;
 use library::sdf::sdf_subtraction::SdfSubtraction;
@@ -37,6 +37,8 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
+use library::sdf::sdf_base::Sdf;
+use library::sdf::sdf_translation::SdfTranslation;
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -63,6 +65,8 @@ pub(super) struct SdfClasses {
     union_smooth: NamedSdf,
     subtraction_smooth: NamedSdf,
     intersection_smooth: NamedSdf,
+    debug_sdf: NamedSdf,
+    debug_sdf_box: NamedSdf,
 }
 
 impl SdfClasses {
@@ -165,8 +169,8 @@ impl SdfClasses {
         registrator.add(&csg_example);
         
         let union_smooth = NamedSdf::new(SdfUnionSmooth::new(
-            SdfSphere::new_offset(1.0, Point::new(-0.9, 0.0, 0.0)),
-            SdfSphere::new_offset(1.0, Point::new( 0.9, 0.0, 0.0)),
+            SdfTranslation::new(Vector::new(-0.9, 0.0, 0.0), SdfSphere::new(1.0)),
+            SdfTranslation::new(Vector::new( 0.9, 0.0, 0.0), SdfSphere::new(1.0)),
             0.25,
         ), UniqueSdfClassName::new("union_smooth".to_string()));
         registrator.add(&union_smooth);
@@ -174,11 +178,11 @@ impl SdfClasses {
         let subtraction_smooth = NamedSdf::new(
             SdfSubtractionSmooth::new(
                 SdfSubtractionSmooth::new(
-                    SdfBox::new_offset(Vector::new(1.0, 1.0, 1.0), Point::new(0.0, 0.0, 0.0)),
-                    SdfSphere::new_offset(0.5, Point::new( 0.9, 0.0, 0.0)),
+                    SdfBox::new(Vector::new(1.0, 1.0, 1.0)),
+                    SdfTranslation::new(Vector::new( 0.9, 0.0, 0.0), SdfSphere::new(0.5)),
                     0.25,
                 ),
-                SdfSphere::new_offset(0.5, Point::new( -0.9, 0.0, 0.0)),
+                SdfTranslation::new(Vector::new( -0.9, 0.0, 0.0), SdfSphere::new(0.5)),
             0.25,
             ),
             UniqueSdfClassName::new("subtraction_smooth".to_string())
@@ -186,12 +190,41 @@ impl SdfClasses {
         registrator.add(&subtraction_smooth);
 
         let intersection_smooth = NamedSdf::new(SdfIntersectionSmooth::new(
-            SdfSphere::new_offset(1.0, Point::new(-0.2, 0.0, 0.0)),
-            SdfSphere::new_offset(1.0, Point::new( 0.2, 0.0, 0.0)),
+            SdfTranslation::new(Vector::new(-0.2, 0.0, 0.0), SdfSphere::new(1.0)),
+            SdfTranslation::new(Vector::new( 0.2, 0.0, 0.0), SdfSphere::new(1.0)),
             0.25,
         ), UniqueSdfClassName::new("intersection_smooth".to_string()));
         registrator.add(&intersection_smooth);
-            
+
+
+        // let rc = SdfTranslation::new(Vector::new(0.0, 0.0, 0.0),
+        //                              SdfUnionSmooth::new(
+        //                                  SdfTranslation::new(Vector::new(0.3, 0.3, 0.3),
+        //                                     SdfBox::new(Vector::new(0.35, 0.35, 0.35))),
+        //                                  
+        //                                  SdfTranslation::new(Vector::new(-0.3, -0.3, -0.3),
+        //                                          SdfBox::new(Vector::new(0.35, 0.35, 0.35))),
+        //                                  
+        //                                  0.05,
+        //                              )
+        //                         );
+        
+        let rc = SdfCutHollowSphere::new(0.65, 0.3, 0.05);
+        
+        let debug_sdf = NamedSdf::new(
+            rc.clone(),
+            UniqueSdfClassName::new("debug_sdf".to_string()),
+        );
+        registrator.add(&debug_sdf);
+        
+        let aabb = rc.aabb();
+        let center = (aabb.max().to_vec() + aabb.min().to_vec()) * 0.5;
+        let debug_sdf_box = NamedSdf::new(
+            SdfTranslation::new(center, SdfBox::new(rc.aabb().extent() * 0.5)),
+            UniqueSdfClassName::new("debug_sdf_box".to_string()),
+        );
+        registrator.add(&debug_sdf_box);
+
         Self { 
             rectangular_box, 
             sphere, 
@@ -217,6 +250,8 @@ impl SdfClasses {
             union_smooth,
             subtraction_smooth,
             intersection_smooth,
+            debug_sdf,
+            debug_sdf_box,
         }
     }
 }
@@ -554,6 +589,26 @@ impl World {
         exe_directory.join(file_name)
     }
     
+    pub(super) fn load_sdf_debug_scene(&mut self, scene: &mut Container) {
+        scene.clear_objects();
+        self.make_common_scene_walls(scene);
+
+        scene.add_sdf(
+            &Affine::identity(),
+            self.sdf_classes.debug_sdf.name(),
+            self.materials.blue_material);
+    }
+    
+    pub(super) fn load_sdf_aabb_debug_scene(&mut self, scene: &mut Container) {
+        scene.clear_objects();
+        self.make_common_scene_walls(scene);
+
+        scene.add_sdf(
+            &Affine::identity(),
+            self.sdf_classes.debug_sdf_box.name(),
+            self.materials.blue_material);
+    }
+
     pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Container) {
         scene.clear_objects();
         self.make_common_scene_walls(scene);

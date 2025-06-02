@@ -4,6 +4,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use crate::sdf::shader_variable_name::ShaderVariableName;
 
 #[derive(Clone)]
 pub struct FunctionBody;
@@ -66,10 +67,23 @@ impl ShaderCode<FunctionBody> {
     }
 
     #[must_use]
-    pub(super) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
-        let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
-        let assignment = format!("var {name}: f32;\n {{ {assignment} }}", name=variable_name, assignment=evaluation.trim());
+    pub(super) fn to_scalar_declaration_assignment(&self, variable_name: &ShaderVariableName) -> ShaderCode<VariableAssignment> {
+        let assignment = self.make_scalar_assignment(variable_name);
+        let assignment = format!("var {name}: f32;\n {assignment}", name=variable_name, assignment=assignment);
         ShaderCode::<VariableAssignment>::new(assignment.to_string())
+    }
+
+    #[must_use]
+    pub(super) fn to_scalar_assignment(&self, variable_name: &ShaderVariableName) -> ShaderCode<VariableAssignment> {
+        let assignment = self.make_scalar_assignment(variable_name);
+        ShaderCode::<VariableAssignment>::new(assignment.to_string())
+    }
+
+    #[must_use]
+    fn make_scalar_assignment(&self, variable_name: &ShaderVariableName) -> String {
+        let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
+        let assignment = format!("{{ {assignment} }}", assignment = evaluation.trim());
+        assignment
     }
 }
 
@@ -152,12 +166,12 @@ mod tests {
     #[test]
     fn test_function_body_conversion_to_block_expression() {
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_scalar_assignment(&"foo".to_string())),
+            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_scalar_declaration_assignment(&ShaderVariableName::new("foo", None))),
             String::from("var foo: f32;\n { foo = 13; }"),
         );
 
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new(" return 17; ".to_string()).to_scalar_assignment(&"zig".to_string())),
+            String::from(ShaderCode::<FunctionBody>::new(" return 17; ".to_string()).to_scalar_declaration_assignment(&ShaderVariableName::new("zig", None))),
             String::from("var zig: f32;\n { zig = 17; }"),
         );
     }
