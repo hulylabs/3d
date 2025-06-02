@@ -375,7 +375,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_right() {
+        fn test_right() {
         let node = BvhNode::new();
         assert!(node.right().is_none(), "Expected right to be None");
     }

@@ -1,6 +1,6 @@
 ﻿use crate::geometry::aabb::Aabb;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum PrimitiveType {
     Null = 0,
     Sdf = 1,
@@ -24,8 +24,6 @@ impl SceneObjectProxy {
     pub(crate) fn host_container_index(&self) -> usize {
         self.host_container_index
     }
-    
-    
 
     #[must_use]
     pub(crate) fn aabb(&self) -> Aabb {

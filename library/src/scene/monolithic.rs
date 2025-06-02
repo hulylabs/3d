@@ -48,3 +48,42 @@ impl SceneObject for Monolithic {
         self.geometry.serialize_into(buffer);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cgmath::Deg;
+    use crate::serialization::serializable_for_gpu::GpuSerializable;
+    use super::*;
+
+    struct DummyRayTraceable;
+    
+    impl GpuSerializable for DummyRayTraceable {
+        fn serialize_into(&self, buffer: &mut GpuReadySerializationBuffer) {
+        }
+    }
+    
+    impl RayTraceable for DummyRayTraceable {
+        #[must_use]
+        fn material(&self) -> MaterialIndex {
+            MaterialIndex(0)
+        }
+
+        fn set_material(&mut self, material_index: MaterialIndex) {
+        }
+
+        #[must_use]
+        fn serialized_quartet_count(&self) -> usize {
+            0
+        }
+    }
+    
+    #[test]
+    fn test_payload_pass_through() {
+        let expected_geometry_kind = 17;
+        let expected_payload = 3;
+        let system_under_test = Monolithic::new(expected_geometry_kind, Box::new(DummyRayTraceable{}), expected_payload, Affine::from_angle_y(Deg(45.0)));
+        
+        assert_eq!(system_under_test.payload(), expected_payload);
+        assert_eq!(system_under_test.data_kind_uid(), expected_geometry_kind);
+    }
+}

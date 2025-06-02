@@ -17,6 +17,21 @@ pub(crate) mod tests {
         }
     }
 
+    pub(crate) fn assert_all_not_equal<T: PartialEq>(left: &[T], right: &[T]) {
+        assert_eq!(left.len(), right.len(), "ranges have different lengths");
+
+        let mut buffer = String::new();
+        for (i, (x, y)) in left.iter().zip(right.iter()).enumerate() {
+            if x == y {
+                write!(&mut buffer, "values at index {} are equal\n", i,).unwrap();
+            }
+        }
+
+        if !buffer.is_empty() {
+            panic!("{}", buffer);
+        }
+    }
+
     pub(crate) fn assert_all_items_equal<T: PartialEq + Display>(target: &[T], reference: T) {
         for i in 0..target.len() {
             if target[i] != reference {
