@@ -7,11 +7,11 @@ mod tests {
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
-    use crate::tests::assert_utils::tests::assert_eq;
-    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use std::fmt::Write;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
 
     #[test]
     fn test_sdf_selection_evaluation() {
@@ -54,7 +54,7 @@ mod tests {
 
         let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz"));
 
-        let actual_distances = execute_code(&input_points, function_execution.as_str(), ExecutionConfig::default());
+        let actual_distances = execute_code(&input_points, function_execution, ExecutionConfig::default());
         
         assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }

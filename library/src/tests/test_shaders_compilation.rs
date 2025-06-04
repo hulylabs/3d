@@ -8,7 +8,7 @@ mod tests {
     #[test]
     fn test_compilation() {
         let context = create_headless_wgpu_context();
-        let resources = Resources::new(context, wgpu::TextureFormat::Rgba8Unorm);
+        let resources = Resources::new(context);
 
         let dummy_sdf_selection = format!("{}return 0.0; }}", format_sdf_selection_function_opening());
         let whole_shader_code = format!("{}\n{}", WHOLE_TRACER_GPU_CODE, dummy_sdf_selection); 

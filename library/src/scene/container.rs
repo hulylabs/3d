@@ -286,7 +286,7 @@ mod tests {
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::tests::assert_utils::tests::assert_all_not_equal;
+    use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
     use crate::utils::object_uid::ObjectUid;
     use cgmath::{EuclideanSpace, SquareMatrix, Zero};
     use std::cell::RefCell;

@@ -364,18 +364,6 @@ fn get_lights() {
 	}
 }
 
-// ACES approximation for tone mapping
-// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/):
-fn aces_approx(v : vec3f) -> vec3f {
-    let v1 = v * 0.6f;
-    const a = 2.51f;
-    const b = 0.03f;
-    const c = 2.43f;
-    const d = 0.59f;
-    const e = 0.14f;
-    return clamp((v1*(a*v1+b))/(v1*(c*v1+d)+e), vec3(0.0f), vec3(1.0f));
-}
-
 /// main
 
 fn evaluate_pixel_index(
@@ -914,6 +902,18 @@ const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     vec2<f32>( 1.0,  1.0),
 );
 
+// ACES approximation for tone mapping
+// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/:
+fn aces_approx(v : vec3f) -> vec3f {
+    let v1 = v * 0.6f;
+    const a = 2.51f;
+    const b = 0.03f;
+    const c = 2.43f;
+    const d = 0.59f;
+    const e = 0.14f;
+    return clamp((v1*(a*v1+b))/(v1*(c*v1+d)+e), vec3(0.0f), vec3(1.0f));
+}
+
 @vertex fn vs(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
     return vec4<f32>(full_screen_quad_positions[in_vertex_index], 0.0, 1.0);
 }
@@ -1081,14 +1081,14 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
     var offset: f32 = min_ray_offset;
     var next_point = position + to_light * offset;
     for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
-        let step = sample_signed_distance(next_point, to_light);
+        let signed_distance = sample_signed_distance(next_point, to_light);
 
-        result = min(result, step.signed_distance * light_size / offset);
+        result = min(result, signed_distance * light_size / offset);
         if(result < DETERMINISTIC_SHADOW_MARCHING_MIN) {
             break;
         }
 
-        offset += clamp(step.signed_distance, DETERMINISTIC_SHADOW_MIN_STEP, DETERMINISTIC_SHADOW_MAX_STEP);
+        offset += clamp(signed_distance, DETERMINISTIC_SHADOW_MIN_STEP, DETERMINISTIC_SHADOW_MAX_STEP);
         if(offset > max_ray_offset) {
             break;
         }
@@ -1099,14 +1099,9 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
     return smoothstep(DETERMINISTIC_SHADOW_MARCHING_MIN, DETERMINISTIC_SHADOW_MARCHING_MAX, result);
 }
 
-struct RayMarchStep {
-    new_position: vec3f,
-    signed_distance: f32,
-}
-
 @must_use // expected normalized 'direction'
-fn sample_signed_distance(position: vec3f, direction: vec3f) -> RayMarchStep {
-    var record: RayMarchStep = RayMarchStep(position, MAX_FLOAT);
+fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
+    var record = MAX_FLOAT;
     for (var i = u32(0); i < uniforms.sdf_count; i++) {
         let sdf = sdf[i];
 
@@ -1119,8 +1114,8 @@ fn sample_signed_distance(position: vec3f, direction: vec3f) -> RayMarchStep {
         let global_offset = global_next - position;
         let global_distance = length(global_offset) * sign(dot(global_offset, direction));
 
-        if (global_distance < record.signed_distance) {
-            record = RayMarchStep(global_next, global_distance);
+        if (global_distance < record) {
+            record = global_distance;
         }
     }
     return record;
@@ -1132,8 +1127,8 @@ fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
     var fall_off: f32 = 1.0;
     for(var i = 0; i < DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES; i++) {
         let height = 0.01 + 0.12 * f32(i) / 4.0;
-        let step = sample_signed_distance(posision + height * normal, normal);
-        occlusion += (height - step.signed_distance) * fall_off;
+        let signed_distance = sample_signed_distance(posision + height * normal, normal);
+        occlusion += (height - signed_distance) * fall_off;
         fall_off *= 0.95;
         if(occlusion > 0.35) {
             break;

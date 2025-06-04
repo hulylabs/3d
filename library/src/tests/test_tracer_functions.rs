@@ -4,7 +4,6 @@ mod tests {
     use crate::geometry::alias::Vector;
     use crate::geometry::transform::Affine;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
-    use crate::gpu::resources::ComputeRoutineEntryPoint;
     use crate::objects::common_properties::Linkage;
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::sdf::SdfInstance;
@@ -16,15 +15,16 @@ mod tests {
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::tests::assert_utils::tests::assert_eq;
-    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, BindGroupSlot, ExecutionConfig};
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::{Pod, Zeroable};
     use std::fmt::Write;
     use cgmath::Matrix4;
+    use crate::gpu::pipelines_factory::ComputeRoutineEntryPoint;
     use crate::objects::material::Material;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
@@ -124,7 +124,7 @@ mod tests {
             PodVector {x: -2.0, y: 0.5, z: 0.5, w: 1.0,},
         ];
 
-        let actual_output = execute_code::<TriangleAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
+        let actual_output = execute_code::<TriangleAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
@@ -184,7 +184,7 @@ mod tests {
             1.0,
         ];
 
-        let actual_output = execute_code::<ShadowInput, f32>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
+        let actual_output = execute_code::<ShadowInput, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
@@ -224,7 +224,7 @@ mod tests {
             PodVector {x:  SQRT_2, y:  -SQRT_2, z:  0.0, w:  0.0,},
         ];
         
-        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
+        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
@@ -235,7 +235,7 @@ mod tests {
 
         let shader_code = generate_code_for(&identity_box_class);
         
-        let template = ShaderFunction::new("PositionAndDirection", "RayMarchStep", "sample_signed_distance")
+        let template = ShaderFunction::new("PositionAndDirection", "f32", "sample_signed_distance")
             .with_position_and_direction_type()
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
@@ -268,14 +268,14 @@ mod tests {
         ];
 
         // xyz: shifted position, w: signed distance
-        let expected_output: Vec<PodVector> = vec![
-            PodVector {x:  1.5, y:  0.0, z:  1.5, w:  1.5,},
-            PodVector {x:  0.0, y:  0.0, z:  3.0, w:  1.0,},
-            PodVector {x:  0.0, y: -1.0, z:  0.0, w: -1.5,},
-            PodVector {x: -1.0, y: -2.0, z: -3.0, w:  0.0,},
+        let expected_output: Vec<f32> = vec![
+             1.5,
+             1.0,
+            -1.5,
+             0.0,
         ];
         
-        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution.as_str(), execution_config);
+        let actual_output = execute_code::<PositionAndDirection, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
         
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }

@@ -27,8 +27,7 @@ mod tests {
     use crate::sdf::sdf_vesica_segment::SdfVesicaSegment;
     use crate::sdf::shader_function_name::FunctionName;
     use crate::serialization::pod_vector::PodVector;
-    use crate::tests::assert_utils::tests::assert_eq;
-    use crate::tests::common::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::sdf_sample_cases::tests::SdfSampleCases;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
@@ -38,6 +37,7 @@ mod tests {
     use std::rc::Rc;
     use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
     use crate::sdf::sdf_translation::SdfTranslation;
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
 
     #[test]
     fn test_sdf_union_spheres() {
@@ -413,6 +413,6 @@ mod tests {
         
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz"));
 
-        execute_code(input, function_execution.as_str(), ExecutionConfig::default())
+        execute_code(input, function_execution, ExecutionConfig::default())
     }
 }

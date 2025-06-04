@@ -8,3 +8,4 @@ Cargo.lock
 *.pdb
 /library/tests/out
 .idea/workspace.xml
+/.caches

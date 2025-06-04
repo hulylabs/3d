@@ -1,5 +1,4 @@
-﻿use super::resources::{ComputeRoutineEntryPoint, Resources};
-use crate::bvh::node::BvhNode;
+﻿use crate::bvh::node::BvhNode;
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
 use crate::gpu::color_buffer_evaluation::{ColorBufferEvaluationStrategy, RenderStrategyId};
@@ -8,7 +7,10 @@ use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::frame_buffer::FrameBuffer;
 use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
+use crate::gpu::pipeline_code::PipelineCode;
+use crate::gpu::pipelines_factory::{ComputeRoutineEntryPoint, PipelinesFactory};
 use crate::gpu::rasterization_pipeline::RasterizationPipeline;
+use crate::gpu::resources::Resources;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
@@ -16,6 +18,7 @@ use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::container::{Container, DataKind};
+use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
@@ -23,26 +26,31 @@ use crate::utils::object_uid::ObjectUid;
 use cgmath::Vector2;
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::scene::version::Version;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
-    pub(super) use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
     pub(super) use crate::denoiser::entry::Denoiser;
+    pub(super) use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
     pub(super) use exr::prelude::write_rgba_file;
     pub(super) use pxm::PFMBuilder;
     pub(super) use std::fs::File;
     pub(super) use std::path::Path;
 }
 
-pub(crate) struct Renderer {
+struct Gpu {
     context: Rc<Context>,
     resources: Resources,
     buffers: Buffers,
+    pipelines_factory: PipelinesFactory,
+}
+
+pub(crate) struct Renderer {
+    gpu: Gpu,
     uniforms: Uniforms,
     pipeline_ray_tracing_monte_carlo: Rc<RefCell<ComputePipeline>>,
     pipeline_ray_tracing_deterministic: Rc<RefCell<ComputePipeline>>,
@@ -67,7 +75,9 @@ impl Renderer {
         presentation_format: wgpu::TextureFormat,
         frame_buffer_size: FrameBufferSize,
         strategy: RenderStrategyId, 
-        antialiasing_level: u32, )
+        antialiasing_level: u32,
+        caches_path: Option<PathBuf>,
+    )
     -> anyhow::Result<Self> 
     {
         let mut uniforms = Uniforms {
@@ -83,23 +93,31 @@ impl Renderer {
 
         let mut scene = scene_container;
 
-        let resources = Resources::new(context.clone(), presentation_format);
+        let resources = Resources::new(context.clone());
         let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
-        
-        let shader_code = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
-        let shader_module = resources.create_shader_module("ray tracer shader", shader_code.as_str());
-        
-        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::RayTracingMonteCarlo)));
-        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&context, &resources, &buffers, &shader_module, ComputeRoutineEntryPoint::RayTracingDeterministic)));
-        let object_id = Self::create_object_id_pipeline(&context, &resources, &buffers, &shader_module);
+        let pipelines_factory = PipelinesFactory::new(context.clone(), presentation_format, caches_path);
+        let mut gpu = Gpu { context, resources, buffers, pipelines_factory };
+
+        let shader_source_text = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
+        let shader_source_hash = blake3::hash(shader_source_text.as_bytes());
+
+        let shader_module = gpu.resources.create_shader_module("ray tracer shader", shader_source_text.as_str());
+
+        let monte_carlo_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "monte_carlo_code".to_string());
+        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&mut gpu, &monte_carlo_code, ComputeRoutineEntryPoint::RayTracingMonteCarlo)));
+
+        let deterministic_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "deterministic_code".to_string());
+        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&mut gpu, &deterministic_code, ComputeRoutineEntryPoint::RayTracingDeterministic)));
+
+        let object_id_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "object_id_pipeline_code".to_string());
+        let object_id = Self::create_object_id_pipeline(&mut gpu, &object_id_code);
 
         let default_strategy = ColorBufferEvaluationStrategy::new_monte_carlo(ray_tracing_monte_carlo.clone());
-        let final_image_rasterization = Self::create_rasterization_pipeline(&context, &resources, &buffers, &shader_module, default_strategy.id());
+        let final_image_rasterization_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "final_image_rasterization_code".to_string());
+        let final_image_rasterization = Self::create_rasterization_pipeline(&mut gpu, &final_image_rasterization_code, default_strategy.id());
 
         let mut renderer = Self {
-            context,
-            resources,
-            buffers,
+            gpu,
             uniforms,
             pipeline_ray_tracing_monte_carlo: ray_tracing_monte_carlo.clone(),
             pipeline_ray_tracing_deterministic: ray_tracing_deterministic.clone(),
@@ -137,7 +155,7 @@ impl Renderer {
         
         self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
         self.uniforms.set_pixel_side_subdivision(antialiasing_level);
-        Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization, flavour);
+        Self::setup_frame_buffers_bindings_for_rasterization(&self.gpu, &mut self.pipeline_final_image_rasterization, flavour);
     }
     
     #[must_use]
@@ -176,37 +194,37 @@ impl Renderer {
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
         let mut composite_status = BuffersUpdateStatus::new();
 
-        composite_status.merger_material(self.buffers.materials.try_update(self.scene.materials().data_version(), &self.resources, self.context.queue(), || self.scene.materials().serialize()));
+        composite_status.merger_material(self.gpu.buffers.materials.try_update(self.scene.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || self.scene.materials().serialize()));
         
-        composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.buffers.parallelograms, &self.resources, &self.scene, self.context.queue()));
+        composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
         self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
         
         let mut update_bvh = false;
         
         let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
-        if self.buffers.triangles.version_diverges(triangles_set_version) {
+        if self.gpu.buffers.triangles.version_diverges(triangles_set_version) {
             let serialized_triangles = Self::serialize_triangles(self.scene());
-            composite_status.merge_geometry(self.buffers.triangles.try_update(triangles_set_version, &self.resources, self.context.queue(), || serialized_triangles));
+            composite_status.merge_geometry(self.gpu.buffers.triangles.try_update(triangles_set_version, &self.gpu.resources, self.gpu.context.queue(), || serialized_triangles));
             update_bvh = true;
         }
 
         let sdf_set_version = self.scene.data_version(DataKind::Sdf);
-        if self.buffers.sdf.version_diverges(sdf_set_version) {
-            composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.buffers.sdf, &self.resources, &self.scene, self.context.queue()));
+        if self.gpu.buffers.sdf.version_diverges(sdf_set_version) {
+            composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.gpu.buffers.sdf, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
             self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
             update_bvh = true;
         }
 
         if update_bvh {
             let (bvh, bvh_length) = Self::serialize_bvh(self.scene());
-            composite_status.merge_geometry(self.buffers.bvh.update(&self.resources, self.context.queue(), || bvh));
+            composite_status.merge_geometry(self.gpu.buffers.bvh.update(&self.gpu.resources, self.gpu.context.queue(), || bvh));
             self.uniforms.bvh_length = bvh_length;
         }
         
         if composite_status.any_resized() {
-            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
-            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
-            Self::create_geometry_buffers_bindings(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
+            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
+            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
+            Self::create_geometry_buffers_bindings(&self.gpu, &mut self.pipeline_surface_attributes);
         }
         
         composite_status
@@ -263,48 +281,49 @@ impl Renderer {
     const SCENE_GROUP_INDEX: u32 = 2;
 
     #[must_use]
-    fn create_object_id_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule) -> ComputePipeline {
-        let pipeline = resources.create_compute_pipeline(ComputeRoutineEntryPoint::ObjectId, module);
-        Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
+    fn create_object_id_pipeline(gpu: &mut Gpu, code: &PipelineCode) -> ComputePipeline {
+        let pipeline = gpu.pipelines_factory.create_compute_pipeline(ComputeRoutineEntryPoint::ObjectId, code);
+        Self::create_compute_pipeline(gpu, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(device, buffers, pipeline);
         })
     }
     
     #[must_use]
-    fn create_ray_tracing_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule, routine: ComputeRoutineEntryPoint) -> ComputePipeline {
-        let pipeline = resources.create_compute_pipeline(routine, module);
-        Self::create_compute_pipeline(context.device(), buffers, pipeline, |device, buffers, pipeline| {
+    fn create_ray_tracing_pipeline(gpu: &mut Gpu, code: &PipelineCode, routine: ComputeRoutineEntryPoint) -> ComputePipeline {
+        let pipeline = gpu.pipelines_factory.create_compute_pipeline(routine, code);
+        Self::create_compute_pipeline(gpu, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, buffers, pipeline);
         })
     }
 
     #[must_use]
-    fn create_compute_pipeline<Code>(device: &wgpu::Device, buffers: &Buffers, pipeline: wgpu::ComputePipeline, customization: Code) -> ComputePipeline
+    fn create_compute_pipeline<Code>(gpu: &Gpu, pipeline: wgpu::ComputePipeline, customization: Code) -> ComputePipeline
         where Code: FnOnce(&wgpu::Device, &Buffers, &mut ComputePipeline), 
     {
+        let device = gpu.context.device();
         let mut pipeline = ComputePipeline::new(pipeline);
 
         pipeline.setup_bind_group(Self::UNIFORMS_GROUP_INDEX, Some("compute pipeline uniform group"), device, |bind_group| {
             bind_group
-                .add_entry(0, buffers.uniforms.clone())
+                .add_entry(0, gpu.buffers.uniforms.clone())
             ;
         });
 
-        customization(device, buffers, &mut pipeline);
+        customization(device, &gpu.buffers, &mut pipeline);
 
-        Self::create_geometry_buffers_bindings(device, buffers, &mut pipeline);
+        Self::create_geometry_buffers_bindings(gpu, &mut pipeline);
         
         pipeline
     }
     
-    fn create_geometry_buffers_bindings(device: &wgpu::Device, buffers: &Buffers, pipeline: &mut ComputePipeline) {
-        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), device, |bind_group| {
+    fn create_geometry_buffers_bindings(gpu: &Gpu, pipeline: &mut ComputePipeline) {
+        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), gpu.context.device(), |bind_group| {
             bind_group
-                .add_entry(0, buffers.parallelograms.backend().clone())
-                .add_entry(1, buffers.sdf.backend().clone())
-                .add_entry(2, buffers.triangles.backend().clone())
-                .add_entry(3, buffers.materials.backend().clone())
-                .add_entry(4, buffers.bvh.backend().clone())
+                .add_entry(0, gpu.buffers.parallelograms.backend().clone())
+                .add_entry(1, gpu.buffers.sdf.backend().clone())
+                .add_entry(2, gpu.buffers.triangles.backend().clone())
+                .add_entry(3, gpu.buffers.materials.backend().clone())
+                .add_entry(4, gpu.buffers.bvh.backend().clone())
             ;
         });
     }
@@ -331,23 +350,24 @@ impl Renderer {
         });
     }
 
-    fn create_rasterization_pipeline(context: &Context, resources: &Resources, buffers: &Buffers, module: &wgpu::ShaderModule, render_strategy: RenderStrategyId) -> RasterizationPipeline {
-        let mut rasterization_pipeline = RasterizationPipeline::new(resources.create_rasterization_pipeline(module));
+    fn create_rasterization_pipeline(gpu: &mut Gpu, code: &PipelineCode, render_strategy: RenderStrategyId) -> RasterizationPipeline {
+        let pipeline = gpu.pipelines_factory.create_rasterization_pipeline(code);
+        let mut rasterization_pipeline = RasterizationPipeline::new(pipeline);
 
         let uniforms_binding_index=  0;
         let bind_group_layout = rasterization_pipeline.bind_group_layout(uniforms_binding_index);
         let mut bind_group_builder = BindGroupBuilder::new(uniforms_binding_index, Some("rasterization pipeline uniform group"), bind_group_layout);
         bind_group_builder
-            .add_entry(0, buffers.uniforms.clone())
+            .add_entry(0, gpu.buffers.uniforms.clone())
         ;
-        rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
+        rasterization_pipeline.commit_bind_group(gpu.context.device(), bind_group_builder);
 
-        Self::setup_frame_buffers_bindings_for_rasterization(context, buffers, &mut rasterization_pipeline, render_strategy);
+        Self::setup_frame_buffers_bindings_for_rasterization(gpu, &mut rasterization_pipeline, render_strategy);
 
         rasterization_pipeline
     }
     
-    fn setup_frame_buffers_bindings_for_rasterization(context: &Context, buffers: &Buffers, rasterization_pipeline: &mut RasterizationPipeline, flavour: RenderStrategyId) {
+    fn setup_frame_buffers_bindings_for_rasterization(gpu: &Gpu, rasterization_pipeline: &mut RasterizationPipeline, flavour: RenderStrategyId) {
         let label = Some("rasterization pipeline frame buffers group");
 
         let bind_group_layout = rasterization_pipeline.bind_group_layout(Self::FRAME_BUFFERS_GROUP_INDEX);
@@ -357,20 +377,20 @@ impl Renderer {
         if cfg!(feature = "denoiser") {
             if flavour == RenderStrategyId::Deterministic {
                 bind_group_builder
-                    .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                    .add_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
                 ;   
             } else {
                 bind_group_builder
-                    .add_entry(0, buffers.denoised_beauty_image.gpu_render_target())
+                    .add_entry(0, gpu.buffers.denoised_beauty_image.gpu_render_target())
                 ;
             }
         } else {
             bind_group_builder
-                .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                .add_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
             ;
         }
         
-        rasterization_pipeline.commit_bind_group(context.device(), bind_group_builder);
+        rasterization_pipeline.commit_bind_group(gpu.context.device(), bind_group_builder);
     }
 
     pub(crate) fn set_output_size(&mut self, new_size: PhysicalSize<u32>) {
@@ -380,21 +400,23 @@ impl Renderer {
         
         let new_frame_size = self.uniforms.frame_buffer_area();
         if previous_frame_size < new_frame_size {
-            self.buffers.ray_tracing_frame_buffer = FrameBuffer::new(self.context.device(), self.uniforms.frame_buffer_size);
-            self.buffers.denoised_beauty_image = FrameBufferLayer::new(self.context.device(), self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
+            let device = self.gpu.context.device();
 
-            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
-            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(self.context.device(), &self.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
-            Self::setup_frame_buffers_bindings_for_surface_attributes_compute(self.context.device(), &self.buffers, &mut self.pipeline_surface_attributes);
-            Self::setup_frame_buffers_bindings_for_rasterization(&self.context, &self.buffers, &mut self.pipeline_final_image_rasterization, self.color_buffer_evaluation.id());
+            self.gpu.buffers.ray_tracing_frame_buffer = FrameBuffer::new(device, self.uniforms.frame_buffer_size);
+            self.gpu.buffers.denoised_beauty_image = FrameBufferLayer::new(device, self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
+
+            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, &self.gpu.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
+            Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, &self.gpu.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
+            Self::setup_frame_buffers_bindings_for_surface_attributes_compute(device, &self.gpu.buffers, &mut self.pipeline_surface_attributes);
+            Self::setup_frame_buffers_bindings_for_rasterization(&self.gpu, &mut self.pipeline_final_image_rasterization, self.color_buffer_evaluation.id());
         } else {
-            self.buffers.ray_tracing_frame_buffer.invalidate_cpu_copies();
+            self.gpu.buffers.ray_tracing_frame_buffer.invalidate_cpu_copies();
         }
     }
 
     #[must_use]
     pub(crate) fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
-        let map = self.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
+        let map = self.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
         let index = (self.uniforms.frame_buffer_size.width() * y + x) as usize;
         assert!(index < map.len());
         let uid = map[index];
@@ -407,7 +429,7 @@ impl Renderer {
     }
 
     pub(crate) fn accumulate_more_rays(&mut self)  {
-        let mut rebuild_geometry_buffers = self.buffers.ray_tracing_frame_buffer.object_id_at_cpu().is_empty();
+        let mut rebuild_geometry_buffers = self.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu().is_empty();
         let scene_status = self.update_buffers_if_scene_changed();
 
         {
@@ -427,34 +449,34 @@ impl Renderer {
             
             // TODO: rewrite with 'write_buffer_with'? May be we need kind of ping-pong or circular buffer here?
             let uniform_values = self.uniforms.serialize();
-            self.context.queue().write_buffer(&self.buffers.uniforms, 0, uniform_values.backend());
+            self.gpu.context.queue().write_buffer(&self.gpu.buffers.uniforms, 0, uniform_values.backend());
             self.uniforms.drop_reset_flag();
         }
 
         let rebuild_albedo_buffer = rebuild_geometry_buffers
-            || self.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
+            || self.gpu.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
             || scene_status.any_updated();
         
         self.compute_pass("ray tracing compute pass", self.color_buffer_evaluation.pipeline().deref(), |ray_tracing_pass|{
-            self.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(ray_tracing_pass);
+            self.gpu.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(ray_tracing_pass);
         });
 
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
             self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
                 if rebuild_geometry_buffers {
-                    self.buffers.ray_tracing_frame_buffer.prepare_aux_buffers_copy_from_gpu(after_pass);
+                    self.gpu.buffers.ray_tracing_frame_buffer.prepare_aux_buffers_copy_from_gpu(after_pass);
                 } else if rebuild_albedo_buffer {
-                    self.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
+                    self.gpu.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
                 }
             });
             
             if rebuild_geometry_buffers {
-                let copy_operation = self.buffers.ray_tracing_frame_buffer.copy_aux_buffers_from_gpu();
-                self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+                let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_aux_buffers_from_gpu();
+                self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
                 pollster::block_on(copy_operation);
             } else if rebuild_albedo_buffer {
-                let copy_operation = self.buffers.ray_tracing_frame_buffer.copy_albedo_from_gpu();
-                self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+                let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_albedo_from_gpu();
+                self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
                 pollster::block_on(copy_operation);
             }
         }
@@ -462,8 +484,8 @@ impl Renderer {
 
     #[cfg(any(test, feature = "denoiser"))]
     fn copy_noisy_pixels_to_cpu(&mut self) {
-        let pixel_colors_buffer_gpu_to_cpu_transfer = self.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
-        self.context.device().poll(PollType::Wait).expect("failed to poll the device");
+        let pixel_colors_buffer_gpu_to_cpu_transfer = self.gpu.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
+        self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
         pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
     }
 
@@ -475,7 +497,7 @@ impl Renderer {
         {
             let frame_buffer_width = self.uniforms.frame_buffer_size.width() as usize;
             let frame_buffer_height = self.uniforms.frame_buffer_size.height() as usize;
-            let (beauty, albedo, normal) = self.buffers.ray_tracing_frame_buffer.denoiser_input();
+            let (beauty, albedo, normal) = self.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
             let beauty_floats: &mut [f32] = bytemuck::cast_slice_mut(beauty);
             let albedo_floats: &[f32] = bytemuck::cast_slice(albedo);
             let normal_floats: &[f32] = bytemuck::cast_slice(normal);
@@ -488,8 +510,8 @@ impl Renderer {
             executor.filter(beauty_floats);
             timer.stop();
             
-            self.buffers.denoised_beauty_image.fill_render_target(self.context.queue(), beauty);
-            self.context.queue().submit([]);
+            self.gpu.buffers.denoised_beauty_image.fill_render_target(self.gpu.context.queue(), beauty);
+            self.gpu.context.queue().submit([]);
         }
     }
 
@@ -529,7 +551,7 @@ impl Renderer {
             pfm.write_into(&mut file).unwrap();
         }
 
-        let (beauty, albedo, normal) = self.buffers.ray_tracing_frame_buffer.denoiser_input();
+        let (beauty, albedo, normal) = self.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
 
         save("_beauty", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, beauty, divider);
         save("_albedo", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, albedo, 1.0);
@@ -573,7 +595,7 @@ impl Renderer {
             customize(&mut encoder);
         }
         let command_buffer = encoder.finish();
-        self.context.queue().submit(Some(command_buffer));
+        self.gpu.context.queue().submit(Some(command_buffer));
     }
 
     fn final_image_rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline) {
@@ -583,12 +605,12 @@ impl Renderer {
             rasterization_pass.draw(0..6, 0..1); // TODO: magic const
         }
         let render_command_buffer = encoder.finish();
-        self.context.queue().submit(Some(render_command_buffer));
+        self.gpu.context.queue().submit(Some(render_command_buffer));
     }
 
     #[must_use]
     fn create_command_encoder(&self, label: &str) -> wgpu::CommandEncoder {
-        self.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+        self.gpu.context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
     }
 
     #[must_use]
@@ -690,7 +712,6 @@ mod tests {
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
-    use wgpu::TextureFormat;
 
     use crate::geometry::transform::Affine;
     use crate::sdf::code_generator::SdfRegistrator;
@@ -698,10 +719,11 @@ mod tests {
     use crate::sdf::sdf_box::SdfBox;
     #[cfg(feature = "denoiser")]
     use crate::serialization::pod_vector::PodVector;
+    use crate::utils::tests::assert_utils::tests::assert_all_items_equal;
+    use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
     use rstest::rstest;
-    use crate::tests::assert_utils::tests::assert_all_items_equal;
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
@@ -846,8 +868,7 @@ mod tests {
 
     #[must_use]
     fn make_render(scene: Container, camera: Camera, strategy: RenderStrategyId, antialiasing_level: u32, context: Rc<Context>) -> Renderer {
-        let presentation_format = TextureFormat::Rgba8Unorm;
-        Renderer::new(context.clone(), scene, camera, presentation_format, TEST_FRAME_BUFFER_SIZE, strategy, antialiasing_level)
+        Renderer::new(context.clone(), scene, camera, COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, strategy, antialiasing_level, None)
             .expect("render instantiation has failed")
     }
     
@@ -950,7 +971,7 @@ mod tests {
 
     #[cfg(feature = "denoiser")]
     fn assert_parallelogram_albedo_in_center(system_under_test: &mut Renderer) {
-        let (_, albedo, _) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
+        let (_, albedo, _) = system_under_test.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
         let parallelogram_color = PodVector { x: TEST_COLOR_R, y: TEST_COLOR_G, z: TEST_COLOR_B, w: 1.0 };
         let background_color = PodVector { x: 0.0, y: 0.0, z: 0.0, w: 1.0 };
         assert_parallelogram_vector_data_in_center(albedo, parallelogram_color, background_color, "single_parallelogram_colors");
@@ -958,31 +979,31 @@ mod tests {
 
     #[cfg(feature = "denoiser")]
     fn assert_parallelogram_normals_in_center(system_under_test: &mut Renderer) {
-        let (_, _, normal_map) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
+        let (_, _, normal_map) = system_under_test.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
         let parallelogram_normal = PodVector { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
         let background_normal = PodVector { x: 0.0, y: 0.0, z: 0.0, w: 0.0 };
         assert_parallelogram_vector_data_in_center(normal_map, parallelogram_normal, background_normal, "single_parallelogram_normals");
     }
 
     fn assert_empty_color_buffer(system_under_test: &mut Renderer) {
-        let colors = system_under_test.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
+        let colors = system_under_test.gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
         assert_all_items_equal(colors, PodVector { x: 0.1, y: 0.1, z: 0.1, w: 1.0 });
     }
     
     fn assert_empty_ids_buffer(system_under_test: &mut Renderer) {
-        let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
+        let object_id_map = system_under_test.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
         assert_all_items_equal(object_id_map, 0);
     }
 
     #[cfg(feature = "denoiser")]
     fn assert_normals_and_albedo_are_empty(system_under_test: &mut Renderer) {
-        let (_, albedo, normal_map) = system_under_test.buffers.ray_tracing_frame_buffer.denoiser_input();
+        let (_, albedo, normal_map) = system_under_test.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
         assert_all_items_equal(albedo, PodVector { x: 0.0, y: 0.0, z: 0.0, w: 1.0 });
         assert_all_items_equal(normal_map, PodVector { x: 0.0, y: 0.0, z: 0.0, w: 0.0 });
     }
     
     fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer, file_identity: &str) {
-        let object_id_map = system_under_test.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
+        let object_id_map = system_under_test.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
 
         let png_path = Path::new("tests").join(format!("out/{file_identity}_identification.png"));
         save_u32_buffer_as_png(object_id_map, TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
@@ -997,7 +1018,7 @@ mod tests {
     }
 
     fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer, file_identity: &str) {
-        let colors = system_under_test.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
+        let colors = system_under_test.gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
 
         let png_path = Path::new("tests").join(format!("out/{file_identity}_colors.png"));
         save_u32_buffer_as_png(&hdr_to_sdr(colors), TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());

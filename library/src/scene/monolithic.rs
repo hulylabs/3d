@@ -58,7 +58,7 @@ mod tests {
     struct DummyRayTraceable;
     
     impl GpuSerializable for DummyRayTraceable {
-        fn serialize_into(&self, buffer: &mut GpuReadySerializationBuffer) {
+        fn serialize_into(&self, _buffer: &mut GpuReadySerializationBuffer) {
         }
     }
     
@@ -68,7 +68,7 @@ mod tests {
             MaterialIndex(0)
         }
 
-        fn set_material(&mut self, material_index: MaterialIndex) {
+        fn set_material(&mut self, _material_index: MaterialIndex) {
         }
 
         #[must_use]

@@ -96,7 +96,6 @@ impl VersionedBuffer {
 
 #[cfg(test)]
 mod tests {
-    use wgpu::TextureFormat;
     use crate::gpu::context::Context;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use super::*;
@@ -120,7 +119,7 @@ mod tests {
     #[must_use]
     fn make_system_under_test() -> (VersionedBuffer, Resources, Rc<Context>) {
         let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone(), TextureFormat::Rgba8Snorm);
+        let resources = Resources::new(context.clone());
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
         let system_under_test = VersionedBuffer::new(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, SYSTEM_UNDER_TEST_LABEL, generate_data);

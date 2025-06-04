@@ -1,8 +1,9 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
+    use crate::gpu::adapter_features::AdapterFeatures;
+    use crate::gpu::context::Context;
     use std::rc::Rc;
     use wgpu::Trace;
-    use crate::gpu::context::Context;
 
     const HEADLESS_DEVICE_LABEL: &str = "Rust Tracer Library Headless Device";
 
@@ -27,11 +28,24 @@ pub(crate) mod tests {
             .await
             .expect("failed to find an adapter");
 
+        let adapter_info = adapter.get_info();
+        println!(
+            "Adapter Info:\n\
+            Name: {}\n\
+            Backend: {:?}\n\
+            Device Type: {:?}",
+            adapter_info.name,
+            adapter_info.backend,
+            adapter_info.device_type,
+        );
+        
+        let features = AdapterFeatures::new(&adapter);
+        
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some(HEADLESS_DEVICE_LABEL),
-                    required_features: wgpu::Features::default(),
+                    required_features: features.desired_features(),
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::default(),
                     trace: Trace::Off,
@@ -40,6 +54,6 @@ pub(crate) mod tests {
             .await
             .expect("failed to create device");
 
-        Context::new(device, queue)
+        Context::new(device, queue, features.pipeline_caching_supported())
     }
 }
