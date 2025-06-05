@@ -159,7 +159,7 @@ impl Container {
     
     #[must_use]
     pub(crate) fn evaluate_serialized_triangles(&self) -> GpuReadySerializationBuffer {
-        assert!(self.triangles.len() > 0, "gpu can't accept empty buffer");
+        assert!(!self.triangles.is_empty(), "gpu can't accept empty buffer");
         serialize_batch(&self.triangles)
     }
 

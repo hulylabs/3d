@@ -1,7 +1,7 @@
 ﻿use derive_more::Display;
 use crate::sdf::named_sdf::UniqueSdfClassName;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Display)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Display, Ord, PartialOrd)]
 #[display("{}", _0)]
 pub(crate) struct FunctionName(pub String);
 

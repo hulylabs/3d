@@ -54,6 +54,6 @@ pub(crate) mod tests {
             .await
             .expect("failed to create device");
 
-        Context::new(device, queue, features.pipeline_caching_supported())
+        Context::new(device, queue, features.pipeline_caching_supported(), adapter_info,)
     }
 }

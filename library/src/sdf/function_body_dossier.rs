@@ -49,7 +49,7 @@ impl FunctionBodyDossier {
                 result.push(dossier);
             }
         }
-        result.sort_by_key(|x| x.children_levels_below());
+        result.sort_by_key(|x| (x.children_levels_below(), x.name()));
         result
     }
     

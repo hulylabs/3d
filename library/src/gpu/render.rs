@@ -49,6 +49,19 @@ struct Gpu {
     pipelines_factory: PipelinesFactory,
 }
 
+pub(crate) struct FrameBufferSettings {
+    presentation_format: wgpu::TextureFormat,
+    frame_buffer_size: FrameBufferSize,
+    antialiasing_level: u32,
+}
+
+impl FrameBufferSettings {
+    #[must_use]
+    pub(crate) fn new(presentation_format: wgpu::TextureFormat, frame_buffer_size: FrameBufferSize, antialiasing_level: u32) -> Self {
+        Self { presentation_format, frame_buffer_size, antialiasing_level }
+    }
+}
+
 pub(crate) struct Renderer {
     gpu: Gpu,
     uniforms: Uniforms,
@@ -72,16 +85,14 @@ impl Renderer {
         context: Rc<Context>,
         scene_container: Container,
         camera: Camera,
-        presentation_format: wgpu::TextureFormat,
-        frame_buffer_size: FrameBufferSize,
-        strategy: RenderStrategyId, 
-        antialiasing_level: u32,
+        frame_buffer_settings: FrameBufferSettings,
+        strategy: RenderStrategyId,
         caches_path: Option<PathBuf>,
     )
-    -> anyhow::Result<Self> 
+        -> anyhow::Result<Self>
     {
         let mut uniforms = Uniforms {
-            frame_buffer_size,
+            frame_buffer_size: frame_buffer_settings.frame_buffer_size,
             frame_number: 0,
             if_reset_framebuffer: false,
             camera,
@@ -95,11 +106,11 @@ impl Renderer {
 
         let resources = Resources::new(context.clone());
         let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
-        let pipelines_factory = PipelinesFactory::new(context.clone(), presentation_format, caches_path);
+        let pipelines_factory = PipelinesFactory::new(context.clone(), frame_buffer_settings.presentation_format, caches_path);
         let mut gpu = Gpu { context, resources, buffers, pipelines_factory };
 
         let shader_source_text = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
-        let shader_source_hash = blake3::hash(shader_source_text.as_bytes());
+        let shader_source_hash = seahash::hash(shader_source_text.as_bytes());
 
         let shader_module = gpu.resources.create_shader_module("ray tracer shader", shader_source_text.as_str());
 
@@ -129,7 +140,7 @@ impl Renderer {
             #[cfg(feature = "denoiser")]
             denoiser: denoiser::Denoiser::new(),
         };
-        renderer.set_render_strategy(strategy, antialiasing_level);
+        renderer.set_render_strategy(strategy, frame_buffer_settings.antialiasing_level);
         
         Ok(renderer)
     }
@@ -767,6 +778,14 @@ mod tests {
     const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 43;
 
     #[test]
+    fn test_hash() {
+        println!("{}", seahash::hash("test_string".as_bytes()));
+        println!("{}", seahash::hash("test_string".as_bytes()));
+        println!("{}", seahash::hash("test_string".as_bytes()));
+        println!("{}", seahash::hash("test_string".as_bytes()));
+    }
+
+    #[test]
     fn test_uniforms_reset_frame_accumulation() {
         let mut system_under_test = make_test_uniforms_instance();
 
@@ -868,7 +887,8 @@ mod tests {
 
     #[must_use]
     fn make_render(scene: Container, camera: Camera, strategy: RenderStrategyId, antialiasing_level: u32, context: Rc<Context>) -> Renderer {
-        Renderer::new(context.clone(), scene, camera, COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, strategy, antialiasing_level, None)
+        let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, antialiasing_level);
+        Renderer::new(context.clone(), scene, camera, frame_buffer_settings, strategy, None)
             .expect("render instantiation has failed")
     }
     

@@ -20,7 +20,7 @@ use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::render::Renderer;
+use crate::gpu::render::{FrameBufferSettings, Renderer};
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
@@ -121,7 +121,8 @@ impl Engine {
             .await
             .map_err(|error| EngineInstantiationError::AdapterRequisitionError{what: error.to_string()})?;
 
-        log_adapter_info(&graphics_adapter);
+        let adapter_info = graphics_adapter.get_info();
+        log_adapter_info(&adapter_info);
 
         let features = AdapterFeatures::new(&graphics_adapter);
         
@@ -152,19 +153,18 @@ impl Engine {
         };
         graphics_device.set_device_lost_callback(lost_device_handler);
         
-        let context = Rc::new(Context::new(graphics_device, commands_queue, features.pipeline_caching_supported()));
+        let context = Rc::new(Context::new(graphics_device, commands_queue, features.pipeline_caching_supported(), adapter_info));
         let output_surface_format = surface_capabilities.formats[0];
 
         let frame_buffer_size = FrameBufferSize::new(max(1, window_pixels_size.width), max(1, window_pixels_size.height));
+        let frame_buffer_settings = FrameBufferSettings::new(output_surface_format, frame_buffer_size, PIXEL_SUBDIVISION_DETERMINISTIC,);
         let renderer 
             = Renderer::new(
-                context.clone(), 
-                scene, 
-                camera, 
-                output_surface_format, 
-                frame_buffer_size, 
-                RenderStrategyId::Deterministic, 
-                PIXEL_SUBDIVISION_DETERMINISTIC,
+                context.clone(),
+                scene,
+                camera,
+                frame_buffer_settings,
+                RenderStrategyId::Deterministic,
                 caches_path,
             )
             .map_err(|e| EngineInstantiationError::InternalError {what: e.to_string()})?;

@@ -1,6 +1,6 @@
 ﻿use std::rc::Rc;
 
-pub type ShaderHash = blake3::Hash;
+pub type ShaderHash = u64;
 
 pub(crate) struct PipelineCode {
     module: Rc<wgpu::ShaderModule>,
@@ -17,7 +17,7 @@ impl PipelineCode {
     
     #[must_use]
     pub(crate) fn content_hash(&self) -> ShaderHash {
-        self.source_hash.clone()
+        self.source_hash
     }
 
     #[must_use]

@@ -1,13 +1,16 @@
-﻿pub(crate) struct Context {
+﻿use wgpu::AdapterInfo;
+
+pub(crate) struct Context {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline_caching_supported: bool,
+    adapter_info: AdapterInfo,
 }
 
 impl Context {
     #[must_use]
-    pub(crate) fn new(device: wgpu::Device, queue: wgpu::Queue, pipeline_caching_supported: bool,) -> Self {
-        Self { device, queue, pipeline_caching_supported, }
+    pub(crate) fn new(device: wgpu::Device, queue: wgpu::Queue, pipeline_caching_supported: bool, adapter_info: AdapterInfo,) -> Self {
+        Self { device, queue, pipeline_caching_supported, adapter_info, }
     }
 
     #[must_use]
@@ -23,5 +26,10 @@ impl Context {
     #[must_use]
     pub(crate) fn pipeline_caching_supported(&self) -> bool {
         self.pipeline_caching_supported
+    }
+
+    #[must_use]
+    pub(super) fn adapter_info(&self) -> &AdapterInfo {
+        &self.adapter_info
     }
 }

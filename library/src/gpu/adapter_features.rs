@@ -1,5 +1,5 @@
 ﻿use log::info;
-use wgpu::Adapter;
+use wgpu::{Adapter, AdapterInfo};
 
 pub(crate) struct AdapterFeatures {
     desired_features: wgpu::Features,
@@ -29,8 +29,7 @@ impl AdapterFeatures {
     }
 }
 
-pub(crate) fn log_adapter_info(adapter: &Adapter) {
-    let adapter_info = adapter.get_info();
+pub(crate) fn log_adapter_info(adapter_info: &AdapterInfo) {
     info!(
         "Adapter Info:\n\
          Name: {}\n\

@@ -92,7 +92,7 @@ pub(crate) mod tests {
         let resources = Resources::new(context.clone());
 
         let module = resources.create_shader_module("test GPU function execution", &gpu_code);
-        let code = PipelineCode::new(module, blake3::hash(gpu_code.as_bytes()), "some_gpu_code".to_string());
+        let code = PipelineCode::new(module, seahash::hash(gpu_code.as_bytes()), "some_gpu_code".to_string());
         
         let input_buffer = resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
         let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
