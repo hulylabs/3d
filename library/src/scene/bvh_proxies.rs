@@ -3,8 +3,11 @@ use crate::geometry::aabb::Aabb;
 use crate::objects::triangle::Triangle;
 
 #[must_use]
-pub(crate) fn proxy_of_triangle(index: usize, triangle: &Triangle) -> SceneObjectProxy {
-    SceneObjectProxy::new(index, PrimitiveType::Triangle, triangle.bounding_box())
+pub(crate) fn proxy_of_triangle(index: usize, triangle: &Triangle, aabb_inflation_rate: f64) -> SceneObjectProxy {
+    assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
+    let aabb = triangle.bounding_box();
+    let aabb = aabb.max_extent_relative_inflate(aabb_inflation_rate);
+    SceneObjectProxy::new(index, PrimitiveType::Triangle, aabb)
 }
 
 #[must_use]
@@ -13,16 +16,17 @@ pub(super) fn proxy_of_sdf(index: usize, aabb: Aabb) -> SceneObjectProxy {
 }
 
 pub(crate) trait SceneObjects {
-    fn make_proxies(&self, destination: &mut Vec<SceneObjectProxy>);
+    fn make_proxies(&self, destination: &mut Vec<SceneObjectProxy>, aabb_inflation: f64);
 }
 
 impl SceneObjects for Vec<Triangle> {
-    fn make_proxies(&self, destination: &mut Vec<SceneObjectProxy>) {
+    fn make_proxies(&self, destination: &mut Vec<SceneObjectProxy>, aabb_inflation_rate: f64) {
+        assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
         if self.is_empty() {
             return;
         }
         for (index, triangle) in self.iter().enumerate() {
-            destination.push(proxy_of_triangle(index, triangle));
+            destination.push(proxy_of_triangle(index, triangle, aabb_inflation_rate));
         }
     }
 }
@@ -36,13 +40,18 @@ mod tests {
     use crate::objects::material_index::MaterialIndex;
     use crate::utils::object_uid::ObjectUid;
     use cgmath::EuclideanSpace;
+    use rstest::rstest;
 
-    #[test]
-    fn test_proxy_of_triangle() {
+    #[rstest]
+    #[case(0.0)]
+    #[case(1.0)]
+    fn test_proxy_of_triangle_without_inflation(#[case] inflation: f64) {
         let expected_container_index = 17;
-        let actual_object = proxy_of_triangle(expected_container_index, &make_dummy_triangle());
+        let triangle = make_dummy_triangle();
+        let actual_object = proxy_of_triangle(expected_container_index, &triangle, inflation);
         assert_eq!(actual_object.primitive_type(), PrimitiveType::Triangle); 
         assert_eq!(actual_object.host_container_index(), expected_container_index); 
+        assert_eq!(actual_object.aabb(), triangle.bounding_box().max_extent_relative_inflate(inflation)); 
     }
     
     #[test]

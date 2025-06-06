@@ -164,12 +164,13 @@ impl Container {
     }
 
     #[must_use]
-    pub(crate) fn evaluate_serialized_bvh(&self) -> GpuReadySerializationBuffer {
+    pub(crate) fn evaluate_serialized_bvh(&self, aabb_inflation_rate: f64) -> GpuReadySerializationBuffer {
         assert!(self.bvh_object_count() > 0, "gpu can't accept empty buffer");
+        assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
         
         let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
 
-        self.triangles.make_proxies(&mut objects_to_tree);
+        self.triangles.make_proxies(&mut objects_to_tree, aabb_inflation_rate);
 
         const SDF_KIND: usize = DataKind::Sdf as usize;
         let sdf_count = self.per_object_kind_statistics[SDF_KIND].object_count();
@@ -178,6 +179,7 @@ impl Container {
             for (index, sdf) in sorted_of_a_kind.iter().enumerate() {
                 let class_index = sdf.entity.payload();
                 let class_aabb = self.sdf_prototypes.aabb_from_index(SdfClassIndex(class_index));
+                let class_aabb = class_aabb.max_extent_relative_inflate(aabb_inflation_rate);
                 let instance_aabb = class_aabb.transform(sdf.entity.transformation());
                 objects_to_tree.push(proxy_of_sdf(index, instance_aabb));
             }

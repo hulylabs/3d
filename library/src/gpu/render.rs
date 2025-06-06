@@ -18,7 +18,6 @@ use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::container::{Container, DataKind};
-use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
@@ -31,6 +30,7 @@ use std::rc::Rc;
 use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::gpu::resizable_buffer::ResizableBuffer;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -80,6 +80,8 @@ impl Renderer {
     const WORK_GROUP_SIZE_X: u32 = 8;
     const WORK_GROUP_SIZE_Y: u32 = 8;
     const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
+    
+    const BVH_INFLATION_RATE: f64 = 0.1;
     
     pub(crate) fn new(
         context: Rc<Context>,
@@ -191,9 +193,10 @@ impl Renderer {
     }
     
     #[must_use]
-    fn serialize_bvh(scene: &Container) -> (GpuReadySerializationBuffer, u32) {
+    fn serialize_bvh(scene: &Container, aabb_inflation_rate: f64) -> (GpuReadySerializationBuffer, u32) {
+        assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
         if scene.bvh_inhabited() {
-            let bvh = scene.evaluate_serialized_bvh();
+            let bvh = scene.evaluate_serialized_bvh(aabb_inflation_rate);
             let count = bvh.total_slots_count() as u32;
             (bvh, count)
         } else {
@@ -227,9 +230,14 @@ impl Renderer {
         }
 
         if update_bvh {
-            let (bvh, bvh_length) = Self::serialize_bvh(self.scene());
-            composite_status.merge_geometry(self.gpu.buffers.bvh.update(&self.gpu.resources, self.gpu.context.queue(), || bvh));
+            let (bvh, bvh_length) = Self::serialize_bvh(self.scene(), 0.0);
+            composite_status.merge_bvh(self.gpu.buffers.bvh.update(&self.gpu.resources, self.gpu.context.queue(), || bvh));
+
+            let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(self.scene(), Self::BVH_INFLATION_RATE);
+            composite_status.merge_bvh(self.gpu.buffers.bvh_inflated.update(&self.gpu.resources, self.gpu.context.queue(), || bvh_inflated));
+
             self.uniforms.bvh_length = bvh_length;
+            assert_eq!(bvh_length, bvh_inflated_length);
         }
         
         if composite_status.any_resized() {
@@ -264,7 +272,9 @@ impl Renderer {
     fn init_buffers(scene: &mut Container, context: &Context, uniforms: &mut Uniforms, resources: &Resources) -> Buffers {
         let serialized_triangles = Self::serialize_triangles(scene);
 
-        let (bvh, bvh_length) = Self::serialize_bvh(scene);
+        let (bvh, bvh_length) = Self::serialize_bvh(scene, 0.0);
+        let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(scene, Self::BVH_INFLATION_RATE);
+        assert_eq!(bvh_length, bvh_inflated_length);
         uniforms.bvh_length = bvh_length;
 
         let materials = if scene.materials().count() > 0
@@ -283,7 +293,8 @@ impl Renderer {
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
             materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
-            bvh: VersionedBuffer::new(Version(0), resources,"bvh", || bvh),
+            bvh: ResizableBuffer::new(resources,"bvh", || bvh),
+            bvh_inflated: ResizableBuffer::new(resources,"bvh inflated", || bvh_inflated),
         }
     }
 
@@ -335,6 +346,7 @@ impl Renderer {
                 .add_entry(2, gpu.buffers.triangles.backend().clone())
                 .add_entry(3, gpu.buffers.materials.backend().clone())
                 .add_entry(4, gpu.buffers.bvh.backend().clone())
+                //.add_entry(5, gpu.buffers.bvh_inflated.backend().clone())
             ;
         });
     }
@@ -642,7 +654,9 @@ struct Buffers {
     sdf: VersionedBuffer,
     triangles: VersionedBuffer,
     materials: VersionedBuffer,
-    bvh: VersionedBuffer,
+
+    bvh: ResizableBuffer,
+    bvh_inflated: ResizableBuffer,
 }
 
 struct Uniforms {

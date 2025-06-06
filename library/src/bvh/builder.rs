@@ -74,7 +74,7 @@ mod tests {
             0.0, 2.0, 0.0,
             0.0, 0.0, 3.0,
         ]);
-        let mut proxies = vec![proxy_of_triangle(0, &triangle)];
+        let mut proxies = vec![proxy_of_triangle(0, &triangle, 0.0)];
         let actual_serialized_bvh = build_serialized_bvh(&mut proxies);
         let actual_serialized = actual_serialized_bvh.backend();
 
@@ -118,7 +118,7 @@ mod tests {
         ];
         
         let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(cube_triangles.len());
-        cube_triangles.make_proxies(&mut objects_to_tree);
+        cube_triangles.make_proxies(&mut objects_to_tree, 0.0);
 
         let actual_serialized_bvh = build_serialized_bvh(&mut objects_to_tree);
 

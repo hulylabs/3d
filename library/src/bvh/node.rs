@@ -6,7 +6,7 @@ use std::ops::DerefMut;
 use std::rc::Rc;
 use strum::EnumCount;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
-use crate::geometry::utils::MaxAxis;
+use crate::geometry::utils::Max;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 
@@ -293,7 +293,7 @@ pub(crate) mod tests {
     #[test]
     fn test_single_triangle_support() {
         let triangle = make_triangle([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
-        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &triangle)]);
+        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &triangle, 0.0)]);
 
         let system_under_test = ware.borrow();
 
@@ -318,7 +318,7 @@ pub(crate) mod tests {
             0.0 - axis_offset.x, 1.0 - axis_offset.y, 0.0 - axis_offset.z,
             0.0 - axis_offset.x, 0.0 - axis_offset.y, 1.0 - axis_offset.z,
         ]);
-        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &left), proxy_of_triangle(0, &right)]);
+        let ware = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &left, 0.0), proxy_of_triangle(0, &right, 0.0)]);
 
         let system_under_test = ware.borrow();
 

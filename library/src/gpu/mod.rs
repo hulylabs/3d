@@ -16,3 +16,4 @@ mod buffers_update_status;
 pub(crate) mod pipelines_factory;
 pub(crate) mod pipeline_code;
 pub(crate) mod adapter_features;
+mod resizable_buffer;

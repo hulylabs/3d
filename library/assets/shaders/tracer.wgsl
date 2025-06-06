@@ -52,6 +52,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 2) var<storage, read> triangles: array<Triangle>;
 @group(2) @binding( 3) var<storage, read> materials: array<Material>;
 @group(2) @binding( 4) var<storage, read> bvh: array<BvhNode>;
+@group(2) @binding( 5) var<storage, read> bvh_inflated: array<BvhNode>;
 
 var<private> randState: u32 = 0u;
 var<private> pixelCoords: vec2f;
@@ -1016,7 +1017,8 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let light_center = lights.Q + (lights.u + lights.v) * 0.5;
     let to_light = light_center - hit.p;
-    let to_light_direction = normalize(to_light);
+    let to_light_distance = length(to_light);
+    let to_light_direction = select(to_light / to_light_distance, vec3f(0.0), MIN_FLOAT > to_light_distance);
     let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
 
     let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
@@ -1024,7 +1026,7 @@ fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let reflected_light = reflect(-to_light_direction, hit.normal);
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, 1.0);
+    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
     let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
     let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
@@ -1104,21 +1106,26 @@ fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
     var record = MAX_FLOAT;
     for (var i = u32(0); i < uniforms.sdf_count; i++) {
         let sdf = sdf[i];
-
-        let local_position = transform_point(sdf.inverse_location, position);
-        let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
-        let local_distance = sdf_select(sdf.class_index, local_position);
-        let local_next = local_position + local_direction * local_distance;
-
-        let global_next = transform_point(sdf.location, local_next);
-        let global_offset = global_next - position;
-        let global_distance = length(global_offset) * sign(dot(global_offset, direction));
-
-        if (global_distance < record) {
-            record = global_distance;
+        let candidate_distance = sample_signed_distance_function(sdf, position, direction);
+        if (candidate_distance < record) {
+            record = candidate_distance;
         }
     }
     return record;
+}
+
+@must_use // expected normalized 'direction'
+fn sample_signed_distance_function(sdf: Sdf, position: vec3f, direction: vec3f) -> f32 {
+    let local_position = transform_point(sdf.inverse_location, position);
+    let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
+    let local_distance = sdf_select(sdf.class_index, local_position);
+    let local_next = local_position + local_direction * local_distance;
+
+    let global_next = transform_point(sdf.location, local_next);
+    let global_offset = global_next - position;
+    let global_distance = length(global_offset) * sign(dot(global_offset, direction));
+
+    return global_distance;
 }
 
 @must_use // 'normal' is expected to be normalized
