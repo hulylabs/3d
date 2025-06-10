@@ -25,15 +25,15 @@ const WORK_GROUP_SIZE = vec3<u32>(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, WORK_GRO
 const BACKGROUND_COLOR = vec3f(0.1);
 
 const DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES = 5;
-const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 256;
+const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 32;
 const DETERMINISTIC_SHADOW_MIN_STEP = 0.01;
 const DETERMINISTIC_SHADOW_MAX_STEP = 0.1;
-const DETERMINISTIC_SHADOW_START_BIAS = 0.015;
+const DETERMINISTIC_SHADOW_START_BIAS = 0.005;
 const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0; // bigger - crispier shadows
 const DETERMINISTIC_SHADOW_MARCHING_MIN = -1.0;
 const DETERMINISTIC_SHADOW_MARCHING_MAX = 1.0;
 const DETERMINISTIC_SHADOW_FLOOR = 0.6;
-const DETERMINISTIC_MAX_RAY_BOUNCES = 10;
+const DETERMINISTIC_MAX_RAY_BOUNCES = 8;
 
 const MONTE_CARLO_MAX_RAY_BOUNCES = 50;
 const MONTE_CARLO_STRATIFY_SAMLING = false;
@@ -1037,7 +1037,8 @@ fn evaluate_dielectric_surface_color(hit: HitRecord, hit_material: Material) -> 
     let reflected_light = reflect(-to_light_direction, hit.normal);
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-    let shadow = evaluate_soft_shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    //let shadow = evaluate_soft_shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    let shadow = evaluate_hard_shadow(hit.p, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
     let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
     let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
@@ -1085,7 +1086,7 @@ fn rand_from_seed(seed: f32) -> f32  {
 }
 
 @must_use // 'to_light' expected to be normalized
-fn evaluate_hard_shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
+fn evaluate_hard_shadow(position: vec3f, to_light: vec3f, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
     if (hit_scene(Ray(position + to_light * min_ray_offset, to_light), max_ray_offset)) {
         if (any(hitMaterial.emission > vec3f(0.0))) {
             return 1.0;
@@ -1097,14 +1098,14 @@ fn evaluate_hard_shadow(position: vec3f, to_light: vec3f, light_size: f32, min_r
 
 @must_use // 'to_light' expected to be normalized
 fn evaluate_soft_shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
-    var result: f32 = DETERMINISTIC_SHADOW_MARCHING_MAX;
+    var result: f32 = evaluate_hard_shadow(position, to_light, min_ray_offset, max_ray_offset); // or DETERMINISTIC_SHADOW_MARCHING_MAX
     var offset: f32 = min_ray_offset;
     var next_point = position + to_light * offset;
-    var step = 0.05;
     for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
         let signed_distance = sample_signed_distance(next_point, to_light);
 
-        result = min(result, signed_distance * light_size / offset);
+        let candidate = signed_distance * light_size / offset;
+        result = min(result, candidate);
         if(result < DETERMINISTIC_SHADOW_MARCHING_MIN) {
             break;
         }
