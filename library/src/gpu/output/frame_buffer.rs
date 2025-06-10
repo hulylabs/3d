@@ -31,7 +31,7 @@ impl FrameBuffer {
         self.noisy_pixel_color.prepare_cpu_read(encoder);
     }
     
-    pub(crate) fn prepare_aux_buffers_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub(crate) fn prepare_all_aux_buffers_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
         self.object_id.prepare_cpu_read(encoder);
         self.normal.prepare_cpu_read(encoder);
         self.albedo.prepare_cpu_read(encoder);
@@ -40,8 +40,12 @@ impl FrameBuffer {
     pub(crate) fn prepare_albedo_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
         self.albedo.prepare_cpu_read(encoder);
     }
+
+    pub(crate) fn prepare_object_id_copy_from_gpu(&self, encoder: &mut wgpu::CommandEncoder) {
+        self.object_id.prepare_cpu_read(encoder);
+    }
     
-    pub(crate) fn copy_aux_buffers_from_gpu(&mut self) -> impl Future<Output = ()> {
+    pub(crate) fn copy_all_aux_buffers_from_gpu(&mut self) -> impl Future<Output = ()> {
         let object_id_read = self.object_id.read_cpu_copy();
         let normals_read = self.normal.read_cpu_copy();
         let albedo_read = self.albedo.read_cpu_copy();
@@ -58,6 +62,10 @@ impl FrameBuffer {
     
     pub(crate) fn copy_albedo_from_gpu(&mut self) -> impl Future<Output = ()> {
         self.albedo.read_cpu_copy()
+    }
+
+    pub(crate) fn copy_object_id_from_gpu(&mut self) -> impl Future<Output = ()> {
+        self.object_id.read_cpu_copy()
     }
 
     #[must_use]
@@ -152,11 +160,11 @@ mod tests {
         let mut system_under_test = FrameBuffer::new(context.device(), test_buffer_size());
 
         let mut encoder = context.device().create_command_encoder(&CommandEncoderDescriptor { label: None });
-        system_under_test.prepare_aux_buffers_copy_from_gpu(&mut encoder);
+        system_under_test.prepare_all_aux_buffers_copy_from_gpu(&mut encoder);
         context.queue().submit(Some(encoder.finish()));
 
-        let gpu_to_cpu_copy = system_under_test.copy_aux_buffers_from_gpu();
-        context.device().poll(PollType::Wait).expect("failed to poll the device");
+        let gpu_to_cpu_copy = system_under_test.copy_all_aux_buffers_from_gpu();
+        context.wait();
         pollster::block_on(gpu_to_cpu_copy);
 
         system_under_test

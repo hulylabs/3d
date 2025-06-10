@@ -27,7 +27,6 @@ use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
-use wgpu::wgt::PollType;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
 use crate::gpu::resizable_buffer::ResizableBuffer;
@@ -494,19 +493,29 @@ impl Renderer {
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
             self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
                 if rebuild_geometry_buffers {
-                    self.gpu.buffers.ray_tracing_frame_buffer.prepare_aux_buffers_copy_from_gpu(after_pass);
-                } else if rebuild_albedo_buffer {
+                    if cfg!(feature = "denoiser") {
+                        self.gpu.buffers.ray_tracing_frame_buffer.prepare_all_aux_buffers_copy_from_gpu(after_pass);
+                    } else {
+                        self.gpu.buffers.ray_tracing_frame_buffer.prepare_object_id_copy_from_gpu(after_pass);
+                    }
+                } else if cfg!(feature = "denoiser") && rebuild_albedo_buffer {
                     self.gpu.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
                 }
             });
             
             if rebuild_geometry_buffers {
-                let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_aux_buffers_from_gpu();
-                self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
-                pollster::block_on(copy_operation);
-            } else if rebuild_albedo_buffer {
+                if cfg!(feature = "denoiser") {
+                    let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_all_aux_buffers_from_gpu();
+                    self.gpu.context.wait();
+                    pollster::block_on(copy_operation);
+                } else {
+                    let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_object_id_from_gpu();
+                    self.gpu.context.wait();
+                    pollster::block_on(copy_operation);
+                }
+            } else if cfg!(feature = "denoiser") && rebuild_albedo_buffer {
                 let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_albedo_from_gpu();
-                self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
+                self.gpu.context.wait();
                 pollster::block_on(copy_operation);
             }
         }
@@ -515,7 +524,7 @@ impl Renderer {
     #[cfg(any(test, feature = "denoiser"))]
     fn copy_noisy_pixels_to_cpu(&mut self) {
         let pixel_colors_buffer_gpu_to_cpu_transfer = self.gpu.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
-        self.gpu.context.device().poll(PollType::Wait).expect("failed to poll the device");
+        self.gpu.context.wait();
         pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
     }
 

@@ -5,14 +5,13 @@ pub(crate) mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::output::duplex_layer::DuplexLayer;
     use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
+    use crate::gpu::pipeline_code::PipelineCode;
+    use crate::gpu::pipelines_factory::{ComputeRoutineEntryPoint, PipelinesFactory};
     use crate::gpu::resources::Resources;
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use bytemuck::{Pod, Zeroable};
     use std::collections::{HashMap, HashSet};
-    use wgpu::wgt::PollType;
     use wgpu::BufferUsages;
-    use crate::gpu::pipeline_code::PipelineCode;
-    use crate::gpu::pipelines_factory::{ComputeRoutineEntryPoint, PipelinesFactory};
 
     struct BindGroup {
         index: u32,
@@ -131,7 +130,7 @@ pub(crate) mod tests {
         context.queue().submit(Some(encoder.finish()));
 
         let copy_wait = output_buffer.read_cpu_copy();
-        context.device().poll(PollType::Wait).expect("failed to poll the device");
+        context.wait();
         pollster::block_on(copy_wait);
 
         output_buffer.cpu_copy().clone()
