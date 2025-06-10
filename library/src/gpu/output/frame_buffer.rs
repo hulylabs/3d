@@ -120,7 +120,6 @@ impl FrameBuffer {
 mod tests {
     use super::*;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use wgpu::wgt::PollType;
     use wgpu::CommandEncoderDescriptor;
 
     #[must_use]

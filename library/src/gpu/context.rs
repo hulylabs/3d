@@ -1,4 +1,4 @@
-﻿use wgpu::AdapterInfo;
+﻿use wgpu::{AdapterInfo, PollStatus};
 use wgpu::wgt::PollType;
 
 pub(crate) struct Context {
@@ -34,7 +34,7 @@ impl Context {
         &self.adapter_info
     }
 
-    pub(crate) fn wait(&self) {
-        self.device.poll(PollType::Wait).expect("failed to poll the device");
+    pub(crate) fn wait(&self) -> PollStatus {
+        self.device.poll(PollType::Wait).expect("failed to poll the device")
     }
 }
