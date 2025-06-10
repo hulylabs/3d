@@ -128,6 +128,10 @@ impl Sandbox {
                     self.engine.camera().set_kind(Box::new(PerspectiveCamera {}));
                 } else if "o" == letter_key {
                     self.engine.camera().set_kind(Box::new(OrthographicCamera {}));
+                } else if "d" == letter_key {
+                    self.engine.scene().dump_scene_bvh("scene_bvh.dot").unwrap_or_else(|e| {
+                        println!("Failed to dump scene_bvh.dot: {}", e);
+                    });
                 } else if "r" == letter_key {
                     self.engine.camera().set_from(&make_default_camera());
                 } else if "m" == letter_key {
@@ -149,28 +153,19 @@ impl Sandbox {
                     self.tech_world.load_to_sdf_exhibition_scene(self.engine.scene());
                     self.selected_object = None;
                 } else if "3" == letter_key {
-                    self.tech_world.load_to_constructive_solid_geometry_sample_scene(self.engine.scene());
-                    self.selected_object = None;
-                } else if "4" == letter_key {
                     self.tech_world.load_to_smooth_operators_scene(self.engine.scene());
                     self.selected_object = None;
-                } else if "5" == letter_key {
+                } else if "4" == letter_key {
                     self.beautiful_world.load_crystal_palace_scene(self.engine.scene());
                     self.selected_object = None;
-                } else if "6" == letter_key {
+                } else if "5" == letter_key {
                     self.beautiful_world.load_underwater_treasure_scene(self.engine.scene());
                     self.selected_object = None;
-                } else if "7" == letter_key {
+                } else if "6" == letter_key {
                     self.beautiful_world.load_zen_garden_scene(self.engine.scene());
                     self.selected_object = None;
-                } else if "8" == letter_key {
+                } else if "7" == letter_key {
                     self.tech_world.load_to_triangle_mesh_testing_scene(self.engine.scene());
-                    self.selected_object = None;
-                } else if "9" == letter_key {
-                    self.tech_world.load_sdf_debug_scene(self.engine.scene());
-                    self.selected_object = None;
-                } else if "0" == letter_key {
-                    self.tech_world.load_sdf_aabb_debug_scene(self.engine.scene());
                     self.selected_object = None;
                 }
             }

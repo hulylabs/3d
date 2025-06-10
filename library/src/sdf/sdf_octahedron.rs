@@ -24,9 +24,9 @@ impl Sdf for SdfOctahedron {
         ShaderCode::<FunctionBody>::new(format!(
             "let p = abs({parameter});\n\
             let m = p.x + p.y + p.z - {size};\n\
-            var q: vec3f;\
+            var q: vec3f;\n\
             var early_exit = false;\n\
-            var result: f32;
+            var result: f32;\n\
             if (3.0*p.x < m) {{\n\
                 q = p.xyz;\n\
             }} else if (3.0*p.y < m) {{\n\
@@ -76,7 +76,7 @@ mod tests {
 
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
-        let expected_body = "let p = abs(point);\nlet m = p.x + p.y + p.z - 2.0;\nvar q: vec3f;var early_exit = false;\nvar result: f32;\n            if (3.0*p.x < m) {\nq = p.xyz;\n} else if (3.0*p.y < m) {\nq = p.yzx;\n} else if (3.0*p.z < m) {\nq = p.zxy;\n} else {\nearly_exit = true;result = m*0.57735027;\n}\nif (!early_exit) {\nlet k = clamp(0.5*(q.z-q.y+2.0), 0.0, 2.0);\nresult = length(vec3(q.x, q.y-2.0+k, q.z-k));\n}\nreturn result;";
+        let expected_body = "let p = abs(point);\nlet m = p.x + p.y + p.z - 2.0;\nvar q: vec3f;\nvar early_exit = false;\nvar result: f32;\nif (3.0*p.x < m) {\nq = p.xyz;\n} else if (3.0*p.y < m) {\nq = p.yzx;\n} else if (3.0*p.z < m) {\nq = p.zxy;\n} else {\nearly_exit = true;result = m*0.57735027;\n}\nif (!early_exit) {\nlet k = clamp(0.5*(q.z-q.y+2.0), 0.0, 2.0);\nresult = length(vec3(q.x, q.y-2.0+k, q.z-k));\n}\nreturn result;";
         assert_eq!(actual_body.as_str(), expected_body);
     }
 }

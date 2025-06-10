@@ -74,7 +74,7 @@ impl VersionedBuffer {
 
     #[must_use]
     pub(super) fn backend(&self) -> &Rc<wgpu::Buffer> {
-        &self.backend.backend()
+        self.backend.backend()
     }
 }
 

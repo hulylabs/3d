@@ -26,9 +26,9 @@ const BACKGROUND_COLOR = vec3f(0.1);
 
 const DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES = 5;
 const DETERMINISTIC_SHADOW_RAY_MAX_STEPS = 256;
-const DETERMINISTIC_SHADOW_MIN_STEP = 0.005;
-const DETERMINISTIC_SHADOW_MAX_STEP = 0.50;
-const DETERMINISTIC_SHADOW_START_BIAS = 0.02;
+const DETERMINISTIC_SHADOW_MIN_STEP = 0.01;
+const DETERMINISTIC_SHADOW_MAX_STEP = 0.1;
+const DETERMINISTIC_SHADOW_START_BIAS = 0.015;
 const DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE = 8.0; // bigger - crispier shadows
 const DETERMINISTIC_SHADOW_MARCHING_MIN = -1.0;
 const DETERMINISTIC_SHADOW_MARCHING_MAX = 1.0;
@@ -58,6 +58,7 @@ var<private> randState: u32 = 0u;
 var<private> pixelCoords: vec2f;
 
 var<private> hitRec: HitRecord;
+var<private> hitMaterial: Material;
 var<private> scatterRec: ScatterRecord;
 var<private> lights: Parallelogram;
 
@@ -138,11 +139,11 @@ struct BvhNode {
 }
 
 struct HitRecord {
-	p : vec3f,
-	t : f32,
-	normal : vec3f,
-	front_face : bool,
-	material : Material,
+	p: vec3f,
+	t: f32,
+	normal: vec3f,
+	front_face: bool,
+	material_id: u32,
 }
 
 struct FirstHitSurface {
@@ -245,7 +246,7 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
             if(hitRec.front_face == false){
                 hitRec.normal = -hitRec.normal;
             }
-            hitRec.material = materials[sdf.material_id];
+            hitRec.material_id = sdf.material_id;
             return true;
         }
         let step_size = max(abs(signed_distance), t_scaled);
@@ -293,7 +294,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[quad.material_id];
+	hitRec.material_id = quad.material_id;
 	return true;
 }
 
@@ -335,15 +336,20 @@ fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
 		hitRec.normal = -hitRec.normal;
 	}
 
-	hitRec.material = materials[triangle.material_id];
+	hitRec.material_id = triangle.material_id;
 
 	return true;
 }
 
+struct AabbHit {
+    hit: bool,
+    ray_parameter: f32,
+}
+
 // https://medium.com/@bromanz/another-view-on-the-classic-ray-aabb-intersection-algorithm-for-bvh-traversal-41125138b525
-fn hit_aabb(box_min: vec3f, box_max: vec3f, tmin: f32, tmax: f32, ray: Ray, inverted_ray_dir: vec3f) -> bool {
-	var t0s = (box_min - ray.origin) * inverted_ray_dir;
-	var t1s = (box_max - ray.origin) * inverted_ray_dir;
+fn hit_aabb(box_min: vec3f, box_max: vec3f, tmin: f32, tmax: f32, ray_origin: vec3f, inverted_ray_dir: vec3f) -> AabbHit {
+	var t0s = (box_min - ray_origin) * inverted_ray_dir;
+	var t1s = (box_max - ray_origin) * inverted_ray_dir;
 
 	var tsmaller = min(t0s, t1s);
 	var tbigger = max(t0s, t1s);
@@ -351,7 +357,7 @@ fn hit_aabb(box_min: vec3f, box_max: vec3f, tmin: f32, tmax: f32, ray: Ray, inve
 	var t_min = max(tmin, max(tsmaller.x, max(tsmaller.y, tsmaller.z)));
 	var t_max = min(tmax, min(tbigger.x, min(tbigger.y, tbigger.z)));
 
-	return t_max > t_min;
+	return AabbHit(t_max > t_min, t_min);
 }
 
 fn get_lights() {
@@ -392,7 +398,7 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
     return pixel_index >= uniforms.frame_buffer_area;
 }
 
-@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_object_id_buffer(
+@compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_surface_attributes_buffer(
     @builtin(global_invocation_id) global_invocation_id: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>,) {
 
@@ -502,7 +508,8 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         let max_index = i32(uniforms.bvh_length);
         while (node_index < max_index && NULL_POINTER_LINK != node_index) {
             let node = bvh[node_index];
-            if(hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray, inverted_ray_dir)) {
+            let aabb_hit = hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray.origin, inverted_ray_dir);
+            if(aabb_hit.hit) {
                 if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
                     let triangle = triangles[node.primitive_index];
                     if(hit_triangle(triangle, RAY_PARAMETER_MIN, closest_so_far, ray)) {
@@ -513,7 +520,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     }
                 } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
                     let sdf = sdf[node.primitive_index];
-                    if(hit_sdf(sdf, RAY_PARAMETER_MIN, closest_so_far, ray)){
+                    if(hit_sdf(sdf, aabb_hit.ray_parameter, closest_so_far, ray)){
                         hit_uid = sdf.object_uid;
                         hit_material_id = sdf.material_id;
                         hit_normal = hitRec.normal;
@@ -552,8 +559,8 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 
 /// hitRay
 
-fn hit_scene(ray : Ray) -> bool {
-	var closest_so_far = MAX_FLOAT;
+fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
+	var closest_so_far = max_ray_patameter;
 	var hit_anything = false;
 
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
@@ -570,14 +577,15 @@ fn hit_scene(ray : Ray) -> bool {
         let max_index = i32(uniforms.bvh_length);
         while (node_index < max_index && NULL_POINTER_LINK != node_index) {
             let node = bvh[node_index];
-            if(hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray, inverted_ray_dir)) {
+            let aabb_hit = hit_aabb(node.aabb_min, node.aabb_max, RAY_PARAMETER_MIN, closest_so_far, ray.origin, inverted_ray_dir);
+            if(aabb_hit.hit) {
                 if(PRIMITIVE_TYPE_TRIANGLE == node.primitive_type) {
                     if(hit_triangle(triangles[node.primitive_index], RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_anything = true;
                         closest_so_far = hitRec.t;
                     }
                 } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
-                    if(hit_sdf(sdf[node.primitive_index], RAY_PARAMETER_MIN, closest_so_far, ray)) {
+                    if(hit_sdf(sdf[node.primitive_index], aabb_hit.ray_parameter, closest_so_far, ray)) {
                         hit_anything = true;
                         closest_so_far = hitRec.t;
                     }
@@ -589,6 +597,7 @@ fn hit_scene(ray : Ray) -> bool {
         }
     }
 
+    hitMaterial = materials[hitRec.material_id];
 	return hit_anything;
 }
 
@@ -599,16 +608,16 @@ fn hit_scene(ray : Ray) -> bool {
 fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 
 	var current_ray = incident_ray;
-	var accumulated_radiance = vec3f(0.0);	// initial radiance (pixel color) is black
-	var throughput = vec3f(1.0);		// initial throughput is 1 (no attenuation)
+	var accumulated_radiance = vec3f(0.0);
+	var throughput = vec3f(1.0);
 
 	for(var i = 0; i < MONTE_CARLO_MAX_RAY_BOUNCES; i++) {
-		if(hit_scene(current_ray) == false) {
-			accumulated_radiance += (BACKGROUND_COLOR * throughput);
+		if(hit_scene(current_ray, MAX_FLOAT) == false) {
+			accumulated_radiance += BACKGROUND_COLOR * throughput;
 			break;
 		}
 
-		var emission_color = hitRec.material.emission;
+		var emission_color = hitMaterial.emission;
 		if(!hitRec.front_face) {
 			emission_color = vec3f(0.0);
 		}
@@ -618,7 +627,7 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 
 			if(scatterRec.skip_pdf) {
 				accumulated_radiance += emission_color * throughput;
-				throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
+				throughput *= mix(hitMaterial.albedo, hitMaterial.specular, doSpecular);
 
 				current_ray = scatterRec.skip_pdf_ray;
 				current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
@@ -642,14 +651,14 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 			}
 
 			accumulated_radiance += emission_color * throughput;
-			throughput *= ((lambertian_pdf * mix(hitRec.material.albedo, hitRec.material.specular, doSpecular)) / pdf);
+			throughput *= ((lambertian_pdf * mix(hitMaterial.albedo, hitMaterial.specular, doSpecular)) / pdf);
 			current_ray = scattered;
 			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
 		} else {
 			let scattered = material_scatter(current_ray);
 
 			accumulated_radiance += emission_color * throughput;
-			throughput *= mix(hitRec.material.albedo, hitRec.material.specular, doSpecular);
+			throughput *= mix(hitMaterial.albedo, hitMaterial.specular, doSpecular);
 
 			current_ray = scattered;
 			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
@@ -675,7 +684,7 @@ var<private> doSpecular : f32;
 fn material_scatter(ray_in : Ray) -> Ray {
 	var scattered = Ray(vec3f(0.0), vec3f(0.0));
 	doSpecular = 0;
-	if(hitRec.material.material_type == MATERIAL_LAMBERTIAN) {
+	if(hitMaterial.material_type == MATERIAL_LAMBERTIAN) {
 
 		let uvw = onb_build_from_w(hitRec.normal);
 		var diffuse_dir = cosine_sampling_wrt_Z();
@@ -683,10 +692,10 @@ fn material_scatter(ray_in : Ray) -> Ray {
 
 		scattered = Ray(hitRec.p, diffuse_dir);
 
-		doSpecular = select(0.0, 1.0, rand_0_1() < hitRec.material.specular_strength);
+		doSpecular = select(0.0, 1.0, rand_0_1() < hitMaterial.specular_strength);
 
 		var specular_dir = reflect(ray_in.direction, hitRec.normal);
-		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitRec.material.roughness));
+		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitMaterial.roughness));
 
 		scattered = Ray(hitRec.p, normalize(mix(diffuse_dir, specular_dir, doSpecular)));
 
@@ -697,22 +706,22 @@ fn material_scatter(ray_in : Ray) -> Ray {
 			scatterRec.skip_pdf_ray = scattered;
 		}
 	}
-	else if(hitRec.material.material_type == MATERIAL_MIRROR) {
+	else if(hitMaterial.material_type == MATERIAL_MIRROR) {
 		var reflected = reflect(ray_in.direction, hitRec.normal);
-		scattered = Ray(hitRec.p, normalize(reflected + hitRec.material.roughness * uniform_random_in_unit_sphere()));
+		scattered = Ray(hitRec.p, normalize(reflected + hitMaterial.roughness * uniform_random_in_unit_sphere()));
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-	else if(hitRec.material.material_type == MATERIAL_GLASS) {
+	else if(hitMaterial.material_type == MATERIAL_GLASS) {
 		let stochastic = true;
-		scattered = glass_scatter(hitRec, ray_in.direction, stochastic);
+		scattered = glass_scatter(hitRec, hitMaterial.refractive_index_eta, ray_in.direction, stochastic);
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-	else if(hitRec.material.material_type == MATERIAL_ISOTROPIC) {
-		let g = hitRec.material.specular_strength;
+	else if(hitMaterial.material_type == MATERIAL_ISOTROPIC) {
+		let g = hitMaterial.specular_strength;
 		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand_0_1())), 2.0)) / (2 * g);
 		let sin_hg = sqrt(1 - cos_hg * cos_hg);
 		let phi = 2 * PI * rand_0_1();
@@ -730,8 +739,8 @@ fn material_scatter(ray_in : Ray) -> Ray {
 }
 
 @must_use
-fn glass_scatter(hit: HitRecord, in_ray_direction: vec3f, stochastic: bool) -> Ray {
-    var ir = hit.material.refractive_index_eta;
+fn glass_scatter(hit: HitRecord, refractive_index_eta: f32, in_ray_direction: vec3f, stochastic: bool) -> Ray {
+    var ir = refractive_index_eta;
     if(hit.front_face) {
         ir = (1.0 / ir);
     }
@@ -985,27 +994,29 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
     var current_ray = incident_ray;
     var throughput = vec3f(1.0);
     for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
-        if (false == hit_scene(current_ray)) {
+        if (false == hit_scene(current_ray, MAX_FLOAT)) {
             accumulated_radiance += BACKGROUND_COLOR * throughput;
             break;
         }
 
-        if (MATERIAL_LAMBERTIAN == hitRec.material.material_type) {
-            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec);
+        let hit_material = hitMaterial;
+
+        if (MATERIAL_LAMBERTIAN == hit_material.material_type) {
+            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec, hit_material);
             break;
         }
 
-        if (MATERIAL_MIRROR == hitRec.material.material_type) {
-            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hitRec.material.roughness);
+        if (MATERIAL_MIRROR == hit_material.material_type) {
+            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hit_material.roughness);
             current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
-            throughput *= hitRec.material.albedo;
-        } else if (MATERIAL_GLASS == hitRec.material.material_type) {
+            throughput *= hit_material.albedo;
+        } else if (MATERIAL_GLASS == hit_material.material_type) {
             let stochastic = false;
-            current_ray = glass_scatter(hitRec, current_ray.direction, stochastic);
+            current_ray = glass_scatter(hitRec, hit_material.refractive_index_eta, current_ray.direction, stochastic);
             current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
-            throughput *= hitRec.material.albedo;
+            throughput *= hit_material.albedo;
         } else {
-            accumulated_radiance += hitRec.material.albedo;
+            accumulated_radiance += hit_material.albedo;
             break;
         }
     }
@@ -1014,7 +1025,7 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 }
 
 @must_use
-fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
+fn evaluate_dielectric_surface_color(hit: HitRecord, hit_material: Material) -> vec3f {
     let light_center = lights.Q + (lights.u + lights.v) * 0.5;
     let to_light = light_center - hit.p;
     let to_light_distance = length(to_light);
@@ -1026,18 +1037,18 @@ fn evaluate_dielectric_surface_color(hit: HitRecord) -> vec3f {
     let reflected_light = reflect(-to_light_direction, hit.normal);
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-    let shadow = shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    let shadow = evaluate_soft_shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
     let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
     let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
 
-    let diffuse = diffuse_fall_off * hit.material.albedo * occlusion;
-    let specular = specular_fall_off * hit.material.specular;
-    let ambient = BACKGROUND_COLOR * hit.material.albedo * occlusion;
-    let emissive = hit.material.emission;
+    let diffuse = diffuse_fall_off * hit_material.albedo * occlusion;
+    let specular = specular_fall_off * hit_material.specular;
+    let ambient = BACKGROUND_COLOR * hit_material.albedo * occlusion;
+    let emissive = hit_material.emission;
 
     let light_color = materials[lights.material_id].emission;
-    let reflected = mix(diffuse, specular, hit.material.specular_strength);
+    let reflected = mix(diffuse, specular, hit_material.specular_strength);
 
     return reflected * light_color * shadow_lightened + ambient + emissive;
 }
@@ -1074,14 +1085,22 @@ fn rand_from_seed(seed: f32) -> f32  {
 }
 
 @must_use // 'to_light' expected to be normalized
-fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
-    /* https://iquilezles.org/articles/rmshadows/ - the algorithm.
-    Main idea: account not only outer penumbra (ray close to object),
-    but also "inner penumbra" (ray barely inside the object). */
+fn evaluate_hard_shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
+    if (hit_scene(Ray(position + to_light * min_ray_offset, to_light), max_ray_offset)) {
+        if (any(hitMaterial.emission > vec3f(0.0))) {
+            return 1.0;
+        }
+        return 0.0;
+    }
+    return 1.0;
+}
 
+@must_use // 'to_light' expected to be normalized
+fn evaluate_soft_shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
     var result: f32 = DETERMINISTIC_SHADOW_MARCHING_MAX;
     var offset: f32 = min_ray_offset;
     var next_point = position + to_light * offset;
+    var step = 0.05;
     for (var i = 0; i < DETERMINISTIC_SHADOW_RAY_MAX_STEPS; i++) {
         let signed_distance = sample_signed_distance(next_point, to_light);
 
@@ -1101,16 +1120,33 @@ fn shadow(position: vec3f, to_light: vec3f, light_size: f32, min_ray_offset: f32
     return smoothstep(DETERMINISTIC_SHADOW_MARCHING_MIN, DETERMINISTIC_SHADOW_MARCHING_MAX, result);
 }
 
+@must_use
+fn inside_aabb(box_min: vec3f, box_max: vec3f, probe: vec3f) -> bool {
+    return all(probe >= box_min) && all(probe <= box_max);
+}
+
 @must_use // expected normalized 'direction'
 fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
     var record = MAX_FLOAT;
-    for (var i = u32(0); i < uniforms.sdf_count; i++) {
-        let sdf = sdf[i];
-        let candidate_distance = sample_signed_distance_function(sdf, position, direction);
-        if (candidate_distance < record) {
-            record = candidate_distance;
+
+    var node_index: i32 = 0;
+    let max_index = i32(uniforms.bvh_length);
+    while (node_index < max_index && NULL_POINTER_LINK != node_index) {
+        let node = bvh_inflated[node_index];
+        if(inside_aabb(node.aabb_min, node.aabb_max, position)) {
+            if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
+                let sdf = sdf[node.primitive_index];
+                let candidate_distance = sample_signed_distance_function(sdf, position, direction);
+                if (candidate_distance < record) {
+                    record = candidate_distance;
+                }
+            }
+            node_index++;
+        } else {
+            node_index = node.hit_miss_skip_link;
         }
     }
+
     return record;
 }
 
@@ -1135,11 +1171,17 @@ fn approximate_ambient_occlusion(posision: vec3f, normal: vec3f) -> f32 {
     for(var i = 0; i < DETERMINISTIC_AMBIENT_OCCLUSION_SAMPLES; i++) {
         let height = 0.01 + 0.12 * f32(i) / 4.0;
         let signed_distance = sample_signed_distance(posision + height * normal, normal);
-        occlusion += (height - signed_distance) * fall_off;
-        fall_off *= 0.95;
+        occlusion += max(0.0, (height - signed_distance) * fall_off);
+        fall_off *= 0.95; // smaller values - lighter the shadow
         if(occlusion > 0.35) {
             break;
         }
     }
-    return clamp(1.0 - 3.0 * occlusion, 0.0, 1.0) * (0.5 + 0.5 * normal.y);
+
+    // smaller values makes shadow outstand further from the caster; must be synced with aabb inflate ratio
+    const OVERALL_INVERTED_SHADOW_LENGTH: f32 = 2.5;
+    // bigger values makes shadow darker
+    const SHADOW_DARKNESS: f32 = 7.0;
+
+    return clamp(OVERALL_INVERTED_SHADOW_LENGTH - SHADOW_DARKNESS * occlusion, 0.0, 1.0);
 }

@@ -23,8 +23,8 @@ impl Sdf for SdfBox {
     #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
-            "let q = abs({parameter})-{extent}; return \
-            length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);",
+            "let q = abs({parameter})-{extent};\n\
+            return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);",
             parameter = conventions::PARAMETER_NAME_THE_POINT,
             extent = format_vector(self.half_size),
         ))
@@ -57,7 +57,7 @@ mod tests {
         
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
         
-        let expected_body = "let q = abs(point)-vec3f(1.0,3.0,5.0); \
+        let expected_body = "let q = abs(point)-vec3f(1.0,3.0,5.0);\n\
         return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);";
         assert_eq!(actual_body.as_str(), expected_body);
     }

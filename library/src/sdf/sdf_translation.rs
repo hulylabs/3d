@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_produce_body() {
-        let expected_body = "var operand_0: f32;\n { let point = point-vec3f(1.0,2.0,3.0);\n { operand_0 = ?_left; } } return operand_0;";
+        let expected_body = "var operand_0: f32;\n{\nlet point = point-vec3f(1.0,2.0,3.0);\n{\noperand_0 = ?_left;\n}\n}\nreturn operand_0;";
         test_unary_operator_body_production(
             |descendant| SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), descendant),
             expected_body,

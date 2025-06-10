@@ -37,7 +37,7 @@ impl Sdf for SdfVesicaSegment {
             let q = vec2f(length({parameter}-c-y*v), abs(y));\n\
             let r = 0.5*l;\n\
             let d = 0.5*(r*r-w*w)/w;\n\
-            var h: vec3f;\
+            var h: vec3f; \
             if (r*q.x<d*(q.y-r)) {{ h = vec3f(0.0,r,0.0); }} else {{ h = vec3f(-d,0.0,d+w); }}\n\
             return length(q-h.xy) - h.z;",
             parameter = conventions::PARAMETER_NAME_THE_POINT,
@@ -121,7 +121,7 @@ mod tests {
 
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
-        let expected_body = "let a = vec3f(-1.0,-2.0,-3.0);\nlet b = vec3f(4.0,5.0,6.0);\nlet w = 0.5;\nlet c = (a+b)*0.5;\nlet l = length(b-a);\nlet v = (b-a)/l;\nlet y = dot(point-c, v);\nlet q = vec2f(length(point-c-y*v), abs(y));\nlet r = 0.5*l;\nlet d = 0.5*(r*r-w*w)/w;\nvar h: vec3f;if (r*q.x<d*(q.y-r)) { h = vec3f(0.0,r,0.0); } else { h = vec3f(-d,0.0,d+w); }\nreturn length(q-h.xy) - h.z;";
+        let expected_body = "let a = vec3f(-1.0,-2.0,-3.0);\nlet b = vec3f(4.0,5.0,6.0);\nlet w = 0.5;\nlet c = (a+b)*0.5;\nlet l = length(b-a);\nlet v = (b-a)/l;\nlet y = dot(point-c, v);\nlet q = vec2f(length(point-c-y*v), abs(y));\nlet r = 0.5*l;\nlet d = 0.5*(r*r-w*w)/w;\nvar h: vec3f; if (r*q.x<d*(q.y-r)) { h = vec3f(0.0,r,0.0); } else { h = vec3f(-d,0.0,d+w); }\nreturn length(q-h.xy) - h.z;";
         assert_eq!(actual_body.as_str(), expected_body);
     }
 }

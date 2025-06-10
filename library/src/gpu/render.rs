@@ -81,7 +81,7 @@ impl Renderer {
     const WORK_GROUP_SIZE_Y: u32 = 8;
     const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
     
-    const BVH_INFLATION_RATE: f64 = 0.1;
+    const BVH_INFLATION_RATE: f64 = 0.2;
     
     pub(crate) fn new(
         context: Rc<Context>,
@@ -117,13 +117,15 @@ impl Renderer {
         let shader_module = gpu.resources.create_shader_module("ray tracer shader", shader_source_text.as_str());
 
         let monte_carlo_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "monte_carlo_code".to_string());
-        let ray_tracing_monte_carlo = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&mut gpu, &monte_carlo_code, ComputeRoutineEntryPoint::RayTracingMonteCarlo)));
+        let ray_tracing_monte_carlo = Rc::new(RefCell::new(
+            Self::create_ray_tracing_pipeline(&mut gpu, &monte_carlo_code, ComputeRoutineEntryPoint::RayTracingMonteCarlo, false)));
 
         let deterministic_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "deterministic_code".to_string());
-        let ray_tracing_deterministic = Rc::new(RefCell::new(Self::create_ray_tracing_pipeline(&mut gpu, &deterministic_code, ComputeRoutineEntryPoint::RayTracingDeterministic)));
+        let ray_tracing_deterministic = Rc::new(RefCell::new(
+            Self::create_ray_tracing_pipeline(&mut gpu, &deterministic_code, ComputeRoutineEntryPoint::RayTracingDeterministic, true)));
 
-        let object_id_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "object_id_pipeline_code".to_string());
-        let object_id = Self::create_object_id_pipeline(&mut gpu, &object_id_code);
+        let surface_attributes_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "surface_attributes_pipeline_code".to_string());
+        let surface_attributes = Self::create_surface_attributes_pipeline(&mut gpu, &surface_attributes_code);
 
         let default_strategy = ColorBufferEvaluationStrategy::new_monte_carlo(ray_tracing_monte_carlo.clone());
         let final_image_rasterization_code = PipelineCode::new(shader_module.clone(), shader_source_hash, "final_image_rasterization_code".to_string());
@@ -135,7 +137,7 @@ impl Renderer {
             pipeline_ray_tracing_monte_carlo: ray_tracing_monte_carlo.clone(),
             pipeline_ray_tracing_deterministic: ray_tracing_deterministic.clone(),
             color_buffer_evaluation: default_strategy,
-            pipeline_surface_attributes: object_id,
+            pipeline_surface_attributes: surface_attributes,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
 
@@ -241,9 +243,9 @@ impl Renderer {
         }
         
         if composite_status.any_resized() {
-            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
-            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
-            Self::create_geometry_buffers_bindings(&self.gpu, &mut self.pipeline_surface_attributes);
+            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut(), false);
+            Self::create_geometry_buffers_bindings(&self.gpu, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut(), true);
+            Self::create_geometry_buffers_bindings(&self.gpu, &mut self.pipeline_surface_attributes, false);
         }
         
         composite_status
@@ -303,23 +305,24 @@ impl Renderer {
     const SCENE_GROUP_INDEX: u32 = 2;
 
     #[must_use]
-    fn create_object_id_pipeline(gpu: &mut Gpu, code: &PipelineCode) -> ComputePipeline {
-        let pipeline = gpu.pipelines_factory.create_compute_pipeline(ComputeRoutineEntryPoint::ObjectId, code);
+    fn create_surface_attributes_pipeline(gpu: &mut Gpu, code: &PipelineCode) -> ComputePipeline {
+        let pipeline = gpu.pipelines_factory.create_compute_pipeline(ComputeRoutineEntryPoint::SurfaceAttributes, code);
+        let uses_inflated_bvh = false;
         Self::create_compute_pipeline(gpu, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_surface_attributes_compute(device, buffers, pipeline);
-        })
+        }, uses_inflated_bvh)
     }
     
     #[must_use]
-    fn create_ray_tracing_pipeline(gpu: &mut Gpu, code: &PipelineCode, routine: ComputeRoutineEntryPoint) -> ComputePipeline {
+    fn create_ray_tracing_pipeline(gpu: &mut Gpu, code: &PipelineCode, routine: ComputeRoutineEntryPoint, uses_inflated_bvh: bool) -> ComputePipeline {
         let pipeline = gpu.pipelines_factory.create_compute_pipeline(routine, code);
         Self::create_compute_pipeline(gpu, pipeline, |device, buffers, pipeline| {
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, buffers, pipeline);
-        })
+        }, uses_inflated_bvh)
     }
 
     #[must_use]
-    fn create_compute_pipeline<Code>(gpu: &Gpu, pipeline: wgpu::ComputePipeline, customization: Code) -> ComputePipeline
+    fn create_compute_pipeline<Code>(gpu: &Gpu, pipeline: wgpu::ComputePipeline, customization: Code, uses_inflated_bvh: bool) -> ComputePipeline
         where Code: FnOnce(&wgpu::Device, &Buffers, &mut ComputePipeline), 
     {
         let device = gpu.context.device();
@@ -333,26 +336,30 @@ impl Renderer {
 
         customization(device, &gpu.buffers, &mut pipeline);
 
-        Self::create_geometry_buffers_bindings(gpu, &mut pipeline);
+        Self::create_geometry_buffers_bindings(gpu, &mut pipeline, uses_inflated_bvh);
         
         pipeline
     }
     
-    fn create_geometry_buffers_bindings(gpu: &Gpu, pipeline: &mut ComputePipeline) {
-        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, Some("compute pipeline scene group"), gpu.context.device(), |bind_group| {
+    fn create_geometry_buffers_bindings(gpu: &Gpu, pipeline: &mut ComputePipeline, uses_inflated_bvh: bool) {
+        let label = Some("compute pipeline scene group");
+        pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, label, gpu.context.device(), |bind_group| {
             bind_group
                 .add_entry(0, gpu.buffers.parallelograms.backend().clone())
                 .add_entry(1, gpu.buffers.sdf.backend().clone())
                 .add_entry(2, gpu.buffers.triangles.backend().clone())
                 .add_entry(3, gpu.buffers.materials.backend().clone())
-                .add_entry(4, gpu.buffers.bvh.backend().clone())
-                //.add_entry(5, gpu.buffers.bvh_inflated.backend().clone())
+                .add_entry(4, gpu.buffers.bvh.backend().clone());
+                
+            if uses_inflated_bvh {
+                bind_group.add_entry(5, gpu.buffers.bvh_inflated.backend().clone());
+            }
             ;
         });
     }
 
     fn setup_frame_buffers_bindings_for_surface_attributes_compute(device: &wgpu::Device, buffers: &Buffers, surface_attributes_pipeline: &mut ComputePipeline) {
-        let label = Some("object id compute pipeline frame buffers group");
+        let label = Some("'surface attributes' compute pipeline frame buffers group");
 
         surface_attributes_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder

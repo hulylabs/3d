@@ -24,7 +24,7 @@ impl SdfRoundBox {
 impl Sdf for SdfRoundBox {
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
-            "let q = abs({parameter})-{extent} + {radius}; \
+            "let q = abs({parameter})-{extent} + {radius};\n\
             return length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0) - {radius};",
             parameter = conventions::PARAMETER_NAME_THE_POINT,
             extent = format_vector(self.half_size),

@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_produce_body() {
-        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; }  return max(left_0,right_0);";
+        let expected_body = "var left_0: f32;\n{\nleft_0 = ?_left;\n}\nvar right_0: f32;\n{\nright_0 = !_right;\n}\n\nreturn max(left_0,right_0);";
         test_binary_operator_body_production(
             |left, right| SdfIntersection::new(left, right),
             expected_body,

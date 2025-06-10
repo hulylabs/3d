@@ -52,6 +52,17 @@ impl SdfWarehouse {
     pub(crate) fn properties_for_name(&self, name: &UniqueSdfClassName) -> Option<&SdfClassIndex> {
         self.properties_from_name.get(name)
     }
+    
+    #[must_use]
+    pub(crate) fn name_from_index(&self, needle: SdfClassIndex) -> Option<&UniqueSdfClassName> {
+        for (name, index) in self.properties_from_name.iter() {
+            if *index == needle {
+                return Some(name);
+            }
+        }
+        None
+    }
+    
 
     #[must_use]
     pub(crate) fn aabb_from_index(&self, index: SdfClassIndex) -> &Aabb {

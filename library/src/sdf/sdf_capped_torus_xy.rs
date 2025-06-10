@@ -35,7 +35,7 @@ impl Sdf for SdfCappedTorusXy {
         ShaderCode::<FunctionBody>::new(format!(
             "var p = {parameter};\n\
             p.x = abs(p.x);\n\
-            var k: f32; if ({sc}.y*p.x>{sc}.x*p.y)  {{ k = dot(p.xy,{sc}.xy); }} else {{ k = length(p.xy); }};\n\
+            var k: f32; if ({sc}.y*p.x>{sc}.x*p.y) {{ k = dot(p.xy,{sc}.xy); }} else {{ k = length(p.xy); }};\n\
             return sqrt(dot(p,p) + {major_radius}*{major_radius} - 2.0*{major_radius}*k) - {minor_radius};",
             parameter = conventions::PARAMETER_NAME_THE_POINT,
             sc = format_point(Point::new(self.sin, self.cos, 0.0)),
@@ -83,7 +83,7 @@ mod tests {
         
         let actual_body = system_under_test.produce_body(&mut Stack::new(), Some(0));
 
-        let expected_body = "var p = point;\np.x = abs(p.x);\nvar k: f32; if (vec3f(0.5,0.8660253882,0.0).y*p.x>vec3f(0.5,0.8660253882,0.0).x*p.y)  { k = dot(p.xy,vec3f(0.5,0.8660253882,0.0).xy); } else { k = length(p.xy); };\nreturn sqrt(dot(p,p) + 2.0*2.0 - 2.0*2.0*k) - 0.5;";
+        let expected_body = "var p = point;\np.x = abs(p.x);\nvar k: f32; if (vec3f(0.5,0.8660253882,0.0).y*p.x>vec3f(0.5,0.8660253882,0.0).x*p.y) { k = dot(p.xy,vec3f(0.5,0.8660253882,0.0).xy); } else { k = length(p.xy); };\nreturn sqrt(dot(p,p) + 2.0*2.0 - 2.0*2.0*k) - 0.5;";
         assert_eq!(actual_body.as_str(), expected_body);
     }
 }

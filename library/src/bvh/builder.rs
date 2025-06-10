@@ -5,19 +5,38 @@ use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+pub(crate) struct Bvh {
+    root: Rc<RefCell<BvhNode>>,
+    nodes_count: usize,
+}
+
+impl Bvh {
+    #[must_use]
+    pub(crate) fn root(&self) -> &Rc<RefCell<BvhNode>> {
+        &self.root
+    }
+}
+
 #[must_use]
-pub(crate) fn build_serialized_bvh(support: &mut[SceneObjectProxy]) -> GpuReadySerializationBuffer {
+pub(crate) fn build_bvh(support: &mut[SceneObjectProxy]) -> Bvh {
     let root = BvhNode::make_for(support);
 
     BvhNode::populate_links(&mut root.borrow_mut(), None);
 
-    let mut index = 0_usize;
-    evaluate_serial_indices(Some(root.clone()), &mut index);
+    let mut nodes_count = 0_usize;
+    evaluate_serial_indices(Some(root.clone()), &mut nodes_count);
+    
+    Bvh { root, nodes_count }
+}
+
+#[must_use]
+pub(crate) fn build_serialized_bvh(support: &mut[SceneObjectProxy]) -> GpuReadySerializationBuffer {
+    let bvh = build_bvh(support);
 
     let quartet_count = <BvhNode as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT;
     let filler = 0.0;
-    let mut serialized = GpuReadySerializationBuffer::make_filled(index, quartet_count, filler);
-    serialize(Some(root.clone()), &mut serialized);
+    let mut serialized = GpuReadySerializationBuffer::make_filled(bvh.nodes_count, quartet_count, filler);
+    serialize(Some(bvh.root.clone()), &mut serialized);
 
     serialized
 }

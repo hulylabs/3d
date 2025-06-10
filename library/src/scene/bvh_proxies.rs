@@ -6,12 +6,12 @@ use crate::objects::triangle::Triangle;
 pub(crate) fn proxy_of_triangle(index: usize, triangle: &Triangle, aabb_inflation_rate: f64) -> SceneObjectProxy {
     assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
     let aabb = triangle.bounding_box();
-    let aabb = aabb.max_extent_relative_inflate(aabb_inflation_rate);
+    let aabb = aabb.extent_relative_inflate(aabb_inflation_rate);
     SceneObjectProxy::new(index, PrimitiveType::Triangle, aabb)
 }
 
 #[must_use]
-pub(super) fn proxy_of_sdf(index: usize, aabb: Aabb) -> SceneObjectProxy {
+pub(crate) fn proxy_of_sdf(index: usize, aabb: Aabb) -> SceneObjectProxy {
     SceneObjectProxy::new(index, PrimitiveType::Sdf, aabb)
 }
 
@@ -51,7 +51,7 @@ mod tests {
         let actual_object = proxy_of_triangle(expected_container_index, &triangle, inflation);
         assert_eq!(actual_object.primitive_type(), PrimitiveType::Triangle); 
         assert_eq!(actual_object.host_container_index(), expected_container_index); 
-        assert_eq!(actual_object.aabb(), triangle.bounding_box().max_extent_relative_inflate(inflation)); 
+        assert_eq!(actual_object.aabb(), triangle.bounding_box().extent_relative_inflate(inflation)); 
     }
     
     #[test]

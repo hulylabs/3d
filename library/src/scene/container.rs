@@ -1,5 +1,6 @@
-﻿use crate::bvh::builder::build_serialized_bvh;
-use crate::bvh::proxy::SceneObjectProxy;
+﻿use crate::bvh::builder::{build_bvh, build_serialized_bvh, };
+use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
+use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
@@ -26,6 +27,8 @@ use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
 use cgmath::SquareMatrix;
 use std::collections::HashMap;
+use std::io::Error;
+use std::path::Path;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 
@@ -60,6 +63,34 @@ impl Container {
             sdf_prototypes: SdfWarehouse::new(sdf_classes),
             uid_generator: UidGenerator::new(),
         }
+    }
+    
+    pub fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
+        let mut objects_to_tree = self.make_bvh_support(0.0);
+        let sdf_list = self.sorted_of_a_kind(DataKind::Sdf as usize, self.count_of_a_kind(DataKind::Sdf));
+        
+        let bvh = build_bvh(&mut objects_to_tree);
+        save_bvh_as_dot_detailed(bvh.root(), |index| {
+            if let Some(index) = index {
+                let proxy = objects_to_tree[index];
+                match proxy.primitive_type() {
+                    PrimitiveType::Sdf => {
+                        let class_index = SdfClassIndex(sdf_list[proxy.host_container_index()].entity.payload());
+                        let name = self.sdf_prototypes.name_from_index(class_index);
+                        if let Some(name) = name {
+                            name.to_string()
+                        } else {
+                            String::new()
+                        }
+                    }
+                    _ => {
+                        String::new()
+                    }
+                }
+            } else {
+                String::new()
+            }
+        }, destination)
     }
 
     #[must_use]
@@ -168,24 +199,29 @@ impl Container {
         assert!(self.bvh_object_count() > 0, "gpu can't accept empty buffer");
         assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
         
+        let mut objects_to_tree = self.make_bvh_support(aabb_inflation_rate);
+        build_serialized_bvh(&mut objects_to_tree)
+    }
+    
+    #[must_use]
+    fn make_bvh_support(&self, aabb_inflation_rate: f64) -> Vec<SceneObjectProxy> {
         let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
 
         self.triangles.make_proxies(&mut objects_to_tree, aabb_inflation_rate);
-
-        const SDF_KIND: usize = DataKind::Sdf as usize;
-        let sdf_count = self.per_object_kind_statistics[SDF_KIND].object_count();
+        
+        let sdf_count = self.count_of_a_kind(DataKind::Sdf);
         if sdf_count > 0 {
-            let sorted_of_a_kind = self.sorted_of_a_kind(SDF_KIND, sdf_count);
+            let sorted_of_a_kind = self.sorted_of_a_kind(DataKind::Sdf as usize, sdf_count);
             for (index, sdf) in sorted_of_a_kind.iter().enumerate() {
                 let class_index = sdf.entity.payload();
                 let class_aabb = self.sdf_prototypes.aabb_from_index(SdfClassIndex(class_index));
-                let class_aabb = class_aabb.max_extent_relative_inflate(aabb_inflation_rate);
+                let class_aabb = class_aabb.extent_relative_inflate(aabb_inflation_rate);
                 let instance_aabb = class_aabb.transform(sdf.entity.transformation());
                 objects_to_tree.push(proxy_of_sdf(index, instance_aabb));
             }
         }
 
-        build_serialized_bvh(&mut objects_to_tree)
+        objects_to_tree
     }
 
     #[must_use]
@@ -288,8 +324,8 @@ mod tests {
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
     use crate::utils::object_uid::ObjectUid;
+    use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
     use cgmath::{EuclideanSpace, SquareMatrix, Zero};
     use std::cell::RefCell;
     use std::io::Write;

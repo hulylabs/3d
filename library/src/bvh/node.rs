@@ -82,12 +82,12 @@ impl BvhNode {
     }
     
     #[must_use]
-    fn miss_node_index_or_null(&self) -> i32 {
+    pub(super) fn miss_node_index_or_null(&self) -> i32 {
         BvhNode::index_of_or_null(&self.miss_node)
     }
 
     #[must_use]
-    pub(super) fn make_for(support: &mut [SceneObjectProxy]) -> Rc<RefCell<BvhNode>> {
+    pub(crate) fn make_for(support: &mut [SceneObjectProxy]) -> Rc<RefCell<BvhNode>> {
         if support.is_empty() {
             return Rc::new(RefCell::new(BvhNode::new()));
         }
@@ -112,6 +112,21 @@ impl BvhNode {
     #[must_use]
     pub(super) fn serial_index(&self) -> Option<usize> {
         self.serial_index
+    }
+    
+    #[must_use]
+    pub(super) fn content_type(&self) -> Option<PrimitiveType> {
+        self.content.as_ref().map(|content| content.primitive_type)
+    }
+
+    #[must_use]
+    pub(super) fn content_index(&self) -> Option<usize> {
+        self.content.as_ref().map(|content| content.primitive_index)
+    }
+
+    #[must_use]
+    pub(super) fn aabb(&self) -> &Aabb {
+        &self.bounding_box
     }
 
     // TODO: rewrite without recursion!
@@ -160,7 +175,7 @@ impl BvhNode {
     }
 
     // https://stackoverflow.com/questions/55479683/traversal-of-bounding-volume-hierachy-in-shaders/55483964#55483964
-    pub(super) fn populate_links(bvh: &mut BvhNode, next_right_node: Option<Rc<RefCell<BvhNode>>>) {
+    pub(crate) fn populate_links(bvh: &mut BvhNode, next_right_node: Option<Rc<RefCell<BvhNode>>>) {
         if bvh.content.is_none() {
             bvh.hit_node = bvh.left.clone();
             bvh.miss_node = next_right_node.clone();

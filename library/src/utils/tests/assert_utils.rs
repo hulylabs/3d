@@ -8,7 +8,7 @@ pub(crate) mod tests {
         let mut buffer = String::new();
         for (i, (x, y)) in left.iter().zip(right.iter()).enumerate() {
             if (x - y).abs() > epsilon {
-                write!(&mut buffer, "values at index {} differ: {} vs {}\n", i, x, y, ).unwrap();   
+                write!(&mut buffer, "values at index {} differ: left = {} vs right = {}\n", i, x, y, ).unwrap();   
             }
         }
         

@@ -355,7 +355,7 @@ impl CacheFileHeader {
 
 #[derive(Display)]
 pub(crate) enum ComputeRoutineEntryPoint {
-    ObjectId,
+    SurfaceAttributes,
 
     RayTracingMonteCarlo,
     RayTracingDeterministic,
@@ -368,7 +368,7 @@ impl ComputeRoutineEntryPoint {
     #[must_use]
     pub(crate) fn name(&self) -> Option<&'static str> {
         match self {
-            ComputeRoutineEntryPoint::ObjectId => Some("compute_object_id_buffer"),
+            ComputeRoutineEntryPoint::SurfaceAttributes => Some("compute_surface_attributes_buffer"),
             ComputeRoutineEntryPoint::RayTracingMonteCarlo => Some("compute_color_buffer_monte_carlo"),
             ComputeRoutineEntryPoint::RayTracingDeterministic => Some("compute_color_buffer_deterministic"),
             

@@ -3,6 +3,8 @@ use crate::geometry::axis::Axis;
 
 pub(crate) trait Max {
     fn max_axis(self) -> Axis;
+
+    #[cfg(test)]
     fn max(self) -> f64;
 }
 
@@ -18,13 +20,14 @@ impl Max for Vector {
         }
         axis
     }
-    
+
+    #[cfg(test)]
     #[must_use]
     fn max(self) -> f64 {
         if self.x > self.y {
             if self.x > self.z {
                 self.x
-            } else { 
+            } else {
                 self.z
             }
         } else {

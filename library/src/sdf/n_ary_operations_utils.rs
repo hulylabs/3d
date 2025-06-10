@@ -22,7 +22,11 @@ where
     let left_sdf = children_bodies.pop().to_scalar_declaration_assignment(&left_name);
 
     ShaderCode::<FunctionBody>::new(format!(
-        "{left} {right} {preparation} return {operation};",
+        "{left}\n\
+        {right}\n\
+        {preparation}\n\
+        return {operation};"
+        ,
         left = left_sdf,
         right = right_sdf,
         preparation = preparation(&left_name, &right_name),
@@ -45,7 +49,13 @@ where
     let child_assignment = children_bodies.pop().to_scalar_assignment(&child_name);
 
     ShaderCode::<FunctionBody>::new(format!(
-        "var {child_name}: f32;\n {{ {transform}\n {child_assignment} }} return {child_name};",
+        "var {child_name}: f32;\n\
+        {{\n\
+        {transform}\n\
+        {child_assignment}\n\
+        }}\n\
+        return {child_name};"
+        ,
         transform = transform(),
         child_assignment = child_assignment,
         child_name = child_name,

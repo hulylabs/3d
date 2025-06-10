@@ -60,7 +60,7 @@ mod tests {
 
     #[test]
     fn test_produce_body() {
-        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; } let h = max(0.25-abs(left_0-right_0),0.0); return min(left_0, right_0) - h*h*0.25/0.25;";
+        let expected_body = "var left_0: f32;\n{\nleft_0 = ?_left;\n}\nvar right_0: f32;\n{\nright_0 = !_right;\n}\nlet h = max(0.25-abs(left_0-right_0),0.0);\nreturn min(left_0, right_0) - h*h*0.25/0.25;";
         test_binary_operator_body_production(
             |left, right| SdfUnionSmooth::new(left, right, 0.25), 
             expected_body,

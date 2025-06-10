@@ -6,7 +6,6 @@ use alias::Vector;
 use cgmath::{AbsDiffEq, Transform};
 use strum::EnumCount;
 use crate::geometry::transform::Affine;
-use crate::geometry::utils::Max;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Aabb {
@@ -100,13 +99,17 @@ impl Aabb {
     
     #[must_use]
     pub fn offset(&self, value: f64) -> Aabb {
-        let offset = Vector::new(value, value, value);
+        self.offset_per_component(Vector::new(value, value, value))
+    }
+
+    #[must_use]
+    fn offset_per_component(&self, offset: Vector) -> Aabb {
         Self { min: self.min - offset, max: self.max + offset }
     }
 
     #[must_use]
-    pub(crate) fn max_extent_relative_inflate(&self, rate: f64) -> Self {
-        self.offset(self.extent().max() * rate)
+    pub(crate) fn extent_relative_inflate(&self, rate: f64) -> Self {
+        self.offset_per_component(self.extent() * rate)
     }
 
     const PAD_DELTA: f64 = 0.0001 / 2.0;
@@ -324,8 +327,8 @@ mod tests {
     #[test]
     fn test_max_extent_relative_inflate() {
         let system_under_test = from_segment(Point::new(-2.0, -4.0, -8.0), Point::new(2.0, 4.0, 8.0));
-        let actual_inflated = system_under_test.max_extent_relative_inflate(0.5);
-        let expected_inflated = from_segment(Point::new(-10.0, -12.0, -16.0), Point::new(10.0, 12.0, 16.0));
+        let actual_inflated = system_under_test.extent_relative_inflate(0.5);
+        let expected_inflated = from_segment(Point::new(-4.0, -8.0, -16.0), Point::new(4.0, 8.0, 16.0));
 
         assert_eq!(actual_inflated, expected_inflated);
     }
