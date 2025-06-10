@@ -1,9 +1,10 @@
-﻿use crate::bvh::node::BvhNode;
+﻿use crate::bvh::node::{get_bvh_node_children, BvhNode};
 use crate::bvh::proxy::SceneObjectProxy;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::bvh::dfs::depth_first_search;
 
 pub(crate) struct Bvh {
     root: Rc<RefCell<BvhNode>>,
@@ -21,7 +22,7 @@ impl Bvh {
 pub(crate) fn build_bvh(support: &mut[SceneObjectProxy]) -> Bvh {
     let root = BvhNode::make_for(support);
 
-    BvhNode::populate_links(&mut root.borrow_mut(), None);
+    BvhNode::make_tree_threaded(root.clone());
 
     let mut nodes_count = 0_usize;
     evaluate_serial_indices(Some(root.clone()), &mut nodes_count);
@@ -45,37 +46,27 @@ fn serialize(candidate: Option<Rc<RefCell<BvhNode>>>, buffer: &mut GpuReadySeria
     if candidate.is_none() {
         return;
     }
-
-    // TODO: rewrite without recursion
-
-    let anchor = candidate.unwrap();
-    let node = anchor.borrow_mut();
-
-    node.serialize_by_index_into(buffer);
-
-    if node.left().is_some() {
-        serialize(node.left().clone(), buffer);
-    }
-    if node.right().is_some() {
-        serialize(node.right().clone(), buffer);
-    }
+    depth_first_search(
+        candidate.unwrap(),
+        get_bvh_node_children,
+        |node: &mut BvhNode, _next_right: Option<Rc<RefCell<BvhNode>>>| {
+            node.serialize_by_index_into(buffer);
+        }
+    );
 }
 
 fn evaluate_serial_indices(candidate: Option<Rc<RefCell<BvhNode>>>, index: &mut usize) {
     if candidate.is_none() {
         return;
     }
-
-    // TODO: rewrite without recursion
-
-    let anchor = candidate.unwrap();
-    let mut node = anchor.borrow_mut();
-
-    node.set_serial_index(*index);
-    *index += 1;
-
-    evaluate_serial_indices(node.left().clone(), index);
-    evaluate_serial_indices(node.right().clone(), index);
+    depth_first_search(
+        candidate.unwrap(),
+        get_bvh_node_children,
+        |node: &mut BvhNode, _next_right: Option<Rc<RefCell<BvhNode>>>| {
+            node.set_serial_index(*index);
+            *index += 1;
+        }
+    );
 }
 
 #[cfg(test)]
@@ -86,6 +77,50 @@ mod tests {
     use crate::scene::bvh_proxies::{proxy_of_triangle, SceneObjects};
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
+    #[test]
+    fn test_evaluate_serial_indices_none() {
+        let mut nodes_count = 0;
+        evaluate_serial_indices(None, &mut nodes_count);
+        assert_eq!(nodes_count, 0);
+    }
+
+    #[test]
+    fn test_evaluate_serial_indices_single_node() {
+        let dummy_triangle = make_triangle([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        let root = BvhNode::make_for(&mut vec![proxy_of_triangle(0, &dummy_triangle, 0.0)]);
+
+        let mut nodes_count = 0;
+        evaluate_serial_indices(Some(root.clone()), &mut nodes_count);
+
+        assert_eq!(nodes_count, 1);
+        assert_eq!(root.borrow().serial_index(), Some(0));
+    }
+
+    #[test]
+    fn test_evaluate_serial_indices_root_with_two_leaves() {
+        let triangle_one = make_triangle([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        let triangle_two = make_triangle([2.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 2.0]);
+        let root = BvhNode::make_for(&mut vec![
+            proxy_of_triangle(0, &triangle_one, 0.0),
+            proxy_of_triangle(1, &triangle_two, 0.0)
+        ]);
+
+        let mut nodes_count = 0;
+        evaluate_serial_indices(Some(root.clone()), &mut nodes_count);
+        
+        assert_eq!(nodes_count, 3);
+
+        assert_eq!(root.borrow().serial_index(), Some(0));
+
+        let left_child = root.borrow().left().clone();
+        assert!(left_child.is_some());
+        assert_eq!(left_child.unwrap().borrow().serial_index(), Some(1));
+
+        let right_child = root.borrow().right().clone();
+        assert!(right_child.is_some());
+        assert_eq!(right_child.unwrap().borrow().serial_index(), Some(2));
+    }
+    
     #[test]
     fn test_single_triangle() {
         let triangle = make_triangle([

@@ -2,9 +2,9 @@
 use crate::geometry::axis::Axis;
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::ops::DerefMut;
 use std::rc::Rc;
 use strum::EnumCount;
+use crate::bvh::dfs::depth_first_search;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::geometry::utils::Max;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -35,16 +35,23 @@ impl BvhNodeContent {
     }
 }
 
+type BvhNodeReference = Option<Rc<RefCell<BvhNode>>>;
+
 pub(crate) struct BvhNode {
-    left: Option<Rc<RefCell<BvhNode>>>,
-    right: Option<Rc<RefCell<BvhNode>>>,
+    left: BvhNodeReference,
+    right: BvhNodeReference,
     bounding_box: Aabb,
     content: Option<BvhNodeContent>,
     serial_index: Option<usize>,
-    hit_node: Option<Rc<RefCell<BvhNode>>>,
-    miss_node: Option<Rc<RefCell<BvhNode>>>,
-    right_offset: Option<Rc<RefCell<BvhNode>>>,
+    hit_node: BvhNodeReference,
+    miss_node: BvhNodeReference,
+    right_offset: BvhNodeReference,
     axis: Axis,
+}
+
+#[must_use]
+pub(super) fn get_bvh_node_children(node: &BvhNode) -> (BvhNodeReference, BvhNodeReference) {
+    (node.left().clone(), node.right().clone())
 }
 
 impl GpuSerializationSize for BvhNode {
@@ -70,7 +77,7 @@ impl BvhNode {
     const GPU_NULL_REFERENCE_MARKER: i32 = -1;
 
     #[must_use]
-    fn index_of_or_null(node: &Option<Rc<RefCell<BvhNode>>>) -> i32 {
+    fn index_of_or_null(node: &BvhNodeReference) -> i32 {
         if let Some(node) = &node {
             match node.borrow().serial_index {
                 Some(index) => index as i32,
@@ -91,8 +98,7 @@ impl BvhNode {
         if support.is_empty() {
             return Rc::new(RefCell::new(BvhNode::new()));
         }
-        let object_count = support.len();
-        BvhNode::build_hierarchy(support, 0, object_count - 1)
+        BvhNode::build_hierarchy(support)
     }
 
     pub(super) fn set_serial_index(&mut self, serial_index: usize) {
@@ -100,12 +106,12 @@ impl BvhNode {
     }
 
     #[must_use]
-    pub(super) fn left(&self) -> &Option<Rc<RefCell<BvhNode>>> {
+    pub(super) fn left(&self) -> &BvhNodeReference {
         &self.left
     }
 
     #[must_use]
-    pub(super) fn right(&self) -> &Option<Rc<RefCell<BvhNode>>> {
+    pub(super) fn right(&self) -> &BvhNodeReference {
         &self.right
     }
 
@@ -129,68 +135,100 @@ impl BvhNode {
         &self.bounding_box
     }
 
-    // TODO: rewrite without recursion!
-
-    fn build_hierarchy(support: &mut [SceneObjectProxy], start_inclusive: usize, end_inclusive: usize) -> Rc<RefCell<BvhNode>> {
-        assert!(start_inclusive <= end_inclusive);
-        assert!(support.len() > start_inclusive);
-        assert!(support.len() > end_inclusive);
-
-        let mut node = BvhNode::new();
-
-        for i in start_inclusive..=end_inclusive {
-            node.bounding_box = Aabb::make_union(node.bounding_box, support[i].aabb());
+    #[must_use]
+    fn build_hierarchy(support: &mut [SceneObjectProxy]) -> Rc<RefCell<BvhNode>> {
+        assert!(!support.is_empty());
+        
+        struct StackItem {
+            start: usize,
+            end: usize,
+            parent: BvhNodeReference,
+            is_left: bool,
         }
 
-        let axis = node.bounding_box.extent().max_axis();
-        let comparator = BvhNode::COMPARATORS[axis as usize];
+        let mut stack = Vec::<StackItem>::new();
+        let mut root: BvhNodeReference = None;
+        stack.push(StackItem {
+            start: 0,
+            end: support.len() - 1,
+            parent: None,
+            is_left: false,
+        });
 
-        let span = end_inclusive - start_inclusive;
-        if 0 < span {
-            let mut subarray = support[start_inclusive..=end_inclusive].to_vec();
-            subarray.sort_by(comparator);
-
-            for (index, object) in subarray.iter().enumerate() {
-                support[start_inclusive + index] = *object;
+        while let Some(StackItem { start, end, parent, is_left }) = stack.pop() {
+            let mut node = BvhNode::new();
+            for i in start..=end {
+                node.bounding_box = Aabb::make_union(node.bounding_box, support[i].aabb());
             }
 
-            let middle = start_inclusive + (span / 2);
-            node.left = Some(BvhNode::build_hierarchy(support, start_inclusive, middle));
-            node.right = Some(BvhNode::build_hierarchy(support, middle + 1, end_inclusive));
-            node.axis = axis;
+            let span = end - start;
+            let current_node = Rc::new(RefCell::new(node));
 
-            node.bounding_box = Aabb::make_union
-            (
-                node.left.as_ref().unwrap().borrow().bounding_box,
-                node.right.as_ref().unwrap().borrow().bounding_box,
-            );
-        } else {
-            let proxy = &support[start_inclusive];
-            let object_index = proxy.host_container_index();
-            let primitive_type = proxy.primitive_type();
-            node.content = Some(BvhNodeContent::new(object_index, primitive_type));
+            if let Some(parent_node) = parent.clone() {
+                if is_left {
+                    parent_node.borrow_mut().left = Some(current_node.clone());
+                } else {
+                    parent_node.borrow_mut().right = Some(current_node.clone());
+                }
+            } else {
+                root = Some(current_node.clone());
+            }
+
+            if span > 0 {
+                let axis = current_node.borrow().bounding_box.extent().max_axis();
+                let comparator = BvhNode::COMPARATORS[axis as usize];
+
+                let mut subarray = support[start..=end].to_vec();
+                subarray.sort_by(comparator);
+                for (i, object) in subarray.iter().enumerate() {
+                    support[start + i] = *object;
+                }
+
+                let middle = start + span / 2;
+                
+                stack.push(StackItem {
+                    start: middle + 1,
+                    end,
+                    parent: Some(current_node.clone()),
+                    is_left: false,
+                });
+
+                stack.push(StackItem {
+                    start,
+                    end: middle,
+                    parent: Some(current_node.clone()),
+                    is_left: true,
+                });
+
+                current_node.borrow_mut().axis = axis;
+            } else {
+                let proxy = &support[start];
+                let object_index = proxy.host_container_index();
+                let object_type = proxy.primitive_type();
+                current_node.borrow_mut().content = Some(BvhNodeContent::new(object_index, object_type));
+            }
         }
 
-        Rc::new(RefCell::new(node))
+        assert!(root.is_some(), "at least one node must have created a tree");
+        root.unwrap()
     }
 
-    // https://stackoverflow.com/questions/55479683/traversal-of-bounding-volume-hierachy-in-shaders/55483964#55483964
-    pub(crate) fn populate_links(bvh: &mut BvhNode, next_right_node: Option<Rc<RefCell<BvhNode>>>) {
-        if bvh.content.is_none() {
-            bvh.hit_node = bvh.left.clone();
-            bvh.miss_node = next_right_node.clone();
-            bvh.right_offset = bvh.right.clone();
-
-            if let Some(left) = bvh.left.as_mut() {
-                BvhNode::populate_links(left.borrow_mut().deref_mut(), bvh.right.clone());
+    // "Implementing a practical rendering system using GLSL" by Toshiya Hachisuka
+    pub(crate) fn make_tree_threaded(bvh: Rc<RefCell<BvhNode>>) {
+        depth_first_search(
+            bvh,
+            get_bvh_node_children,
+            |node: &mut BvhNode, next_right: BvhNodeReference| {
+                if node.content.is_none() {
+                    node.hit_node = node.left.clone();
+                    node.miss_node = next_right.clone();
+                    node.right_offset = node.right.clone();
+                } else {
+                    node.hit_node = next_right.clone();
+                    node.miss_node = next_right.clone();
+                }
             }
-            if let Some(right) = bvh.right.as_mut() {
-                BvhNode::populate_links(right.borrow_mut().deref_mut(), next_right_node);
-            }
-        } else {
-            bvh.hit_node = next_right_node.clone();
-            bvh.miss_node = next_right_node.clone();
-        }
+        );
     }
 
     #[must_use]

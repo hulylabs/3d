@@ -640,9 +640,9 @@ impl World {
                 }
         
                 {
-                    // let box_location = Transformation::new(
-                    //     Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));
-                    // scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.red_glass);
+                    let box_location = Transformation::new(
+                        Affine::from_translation(Vector::new(0.4, 0.1, 0.2)) * Affine::from_nonuniform_scale(0.9, 0.9, 0.1));
+                    scene.add_mesh(&meshes, cube_mesh, &box_location, self.materials.red_glass);
                 }
             },
             Err(mesh_loading_error) => {
