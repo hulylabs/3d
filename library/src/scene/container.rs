@@ -1,28 +1,34 @@
-﻿use crate::bvh::builder::build_serialized_bvh;
+﻿use crate::bvh::builder::{build_bvh, build_serialized_bvh, };
+use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
+use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
+use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::objects::triangle::Triangle;
-use crate::scene::gpu_ready_triangles::GpuReadyTriangles;
+use crate::scene::bvh_proxies::{proxy_of_sdf, SceneObjects};
 use crate::scene::materials_warehouse::MaterialsWarehouse;
 use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::scene::monolithic::Monolithic;
 use crate::scene::scene_object::SceneObject;
-use crate::sdf::code_generator::SdfRegistrator;
-use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::scene::sdf_warehouse::SdfWarehouse;
 use crate::scene::statistics::Statistics;
 use crate::scene::triangulated::Triangulated;
 use crate::scene::version::Version;
+use crate::sdf::code_generator::SdfRegistrator;
+use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
+use cgmath::SquareMatrix;
 use std::collections::HashMap;
+use std::io::Error;
+use std::path::Path;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 
@@ -39,7 +45,7 @@ pub struct Container {
     triangles: Vec<Triangle>,
     
     materials: MaterialsWarehouse,
-    sdfs: SdfWarehouse,
+    sdf_prototypes: SdfWarehouse,
     
     uid_generator: UidGenerator,
 }
@@ -54,14 +60,42 @@ impl Container {
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials: MaterialsWarehouse::new(),
-            sdfs: SdfWarehouse::new(sdf_classes),
+            sdf_prototypes: SdfWarehouse::new(sdf_classes),
             uid_generator: UidGenerator::new(),
         }
+    }
+    
+    pub fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
+        let mut objects_to_tree = self.make_bvh_support(0.0);
+        let sdf_list = self.sorted_of_a_kind(DataKind::Sdf as usize, self.count_of_a_kind(DataKind::Sdf));
+        
+        let bvh = build_bvh(&mut objects_to_tree);
+        save_bvh_as_dot_detailed(bvh.root(), |index| {
+            if let Some(index) = index {
+                let proxy = objects_to_tree[index];
+                match proxy.primitive_type() {
+                    PrimitiveType::Sdf => {
+                        let class_index = SdfClassIndex(sdf_list[proxy.host_container_index()].entity.payload());
+                        let name = self.sdf_prototypes.name_from_index(class_index);
+                        if let Some(name) = name {
+                            name.to_string()
+                        } else {
+                            String::new()
+                        }
+                    }
+                    _ => {
+                        String::new()
+                    }
+                }
+            } else {
+                String::new()
+            }
+        }, destination)
     }
 
     #[must_use]
     pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
-        format!("{}\n{}", base_code, self.sdfs.sdf_classes_code())
+        format!("{}\n{}", base_code, self.sdf_prototypes.sdf_classes_code())
     }
 
     #[must_use]
@@ -96,16 +130,20 @@ impl Container {
             Box::new(Monolithic::new(
                 DataKind::Parallelogram as usize,
                 Box::new(Parallelogram::new(origin, local_x, local_y, Linkage::new(uid, material))),
+                0,
+                Affine::identity(),
             ))
         })
     }
 
     pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid{
-        let index = self.sdfs.index_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
+        let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
                 Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
+                index.0,
+                *location,
             ))
         })
     }
@@ -117,7 +155,7 @@ impl Container {
         instance.put_triangles_into(&mut self.triangles);
 
         let geometry_kind = DataKind::TriangleMesh as usize;
-        self.objects.insert(links.uid(), Box::new(Triangulated::new(links, geometry_kind)));
+        self.objects.insert(links.uid(), Box::new(Triangulated::new(links, geometry_kind, 0, *transformation.forward())));
         self.per_object_kind_statistics[geometry_kind].register_new_object();
 
         links.uid()
@@ -136,7 +174,10 @@ impl Container {
     }
     
     pub fn clear_objects(&mut self) {
-        self.triangles.clear();
+        if self.objects.is_empty() {
+            return;
+        }
+        
         for object in self.objects.keys() {
             self.uid_generator.put_back(*object);
         }
@@ -144,13 +185,43 @@ impl Container {
             statistics.clear_objects();
         }
         self.objects.clear();
+        self.triangles.clear();
     }
     
     #[must_use]
-    pub(crate) fn evaluate_serialized_triangles(&mut self) -> GpuReadyTriangles {
-        let bvh = build_serialized_bvh(&mut self.triangles);
-        let triangles = serialize_batch(&self.triangles);
-        GpuReadyTriangles::new(triangles, bvh)
+    pub(crate) fn evaluate_serialized_triangles(&self) -> GpuReadySerializationBuffer {
+        assert!(!self.triangles.is_empty(), "gpu can't accept empty buffer");
+        serialize_batch(&self.triangles)
+    }
+
+    #[must_use]
+    pub(crate) fn evaluate_serialized_bvh(&self, aabb_inflation_rate: f64) -> GpuReadySerializationBuffer {
+        assert!(self.bvh_object_count() > 0, "gpu can't accept empty buffer");
+        assert!(aabb_inflation_rate >= 0.0, "aabb_inflation is negative");
+        
+        let mut objects_to_tree = self.make_bvh_support(aabb_inflation_rate);
+        build_serialized_bvh(&mut objects_to_tree)
+    }
+    
+    #[must_use]
+    fn make_bvh_support(&self, aabb_inflation_rate: f64) -> Vec<SceneObjectProxy> {
+        let mut objects_to_tree: Vec<SceneObjectProxy> = Vec::with_capacity(self.bvh_object_count());
+
+        self.triangles.make_proxies(&mut objects_to_tree, aabb_inflation_rate);
+        
+        let sdf_count = self.count_of_a_kind(DataKind::Sdf);
+        if sdf_count > 0 {
+            let sorted_of_a_kind = self.sorted_of_a_kind(DataKind::Sdf as usize, sdf_count);
+            for (index, sdf) in sorted_of_a_kind.iter().enumerate() {
+                let class_index = sdf.entity.payload();
+                let class_aabb = self.sdf_prototypes.aabb_from_index(SdfClassIndex(class_index));
+                let class_aabb = class_aabb.extent_relative_inflate(aabb_inflation_rate);
+                let instance_aabb = class_aabb.transform(sdf.entity.transformation());
+                objects_to_tree.push(proxy_of_sdf(index, instance_aabb));
+            }
+        }
+
+        objects_to_tree
     }
 
     #[must_use]
@@ -165,8 +236,23 @@ impl Container {
     }
 
     #[must_use]
+    pub(crate) fn triangles_count(&self) -> usize {
+        self.triangles.len()
+    }
+
+    #[must_use]
+    pub(crate) fn bvh_inhabited(&self) -> bool {
+        self.bvh_object_count() > 0
+    }
+
+    #[must_use]
     pub(crate) fn data_version(&self, kind: DataKind) -> Version {
         self.per_object_kind_statistics[kind as usize].data_version()
+    }
+
+    #[must_use]
+    fn bvh_object_count(&self) -> usize {
+        self.triangles.len() + self.count_of_a_kind(DataKind::Sdf)
     }
 
     #[must_use]
@@ -190,33 +276,34 @@ impl Container {
         let desired_kind = desired_kind as usize;
         let count = self.per_object_kind_statistics[desired_kind].object_count();
         assert!(count > 0, "gpu can't accept empty buffer");
-
-        let sorted_of_a_kind: Vec<(u32, &dyn SceneObject)> =
-        {
-            let mut sorted = Vec::with_capacity(count);
-            for (key, object) in self.objects.iter() {
-                if object.data_kind_uid() == desired_kind {
-                    sorted.push((key.0, object.as_ref()));
-                }
-            }
-            debug_assert_eq!(sorted.len(), count);
-
-            /*
-            We can do without sorting, serializing in the loop above. But the stable
-            order will make testing (especially automated tests) and debugging easier.
-            */
-            sorted.sort_by_key(|x| x.0);
-            sorted
-        };
+        let sorted_of_a_kind = self.sorted_of_a_kind(desired_kind, count);
         
-        let quartets_per_object = sorted_of_a_kind[0].1.serialized_quartet_count();
+        let quartets_per_object = sorted_of_a_kind[0].entity.serialized_quartet_count();
         let mut result = GpuReadySerializationBuffer::new(count, quartets_per_object);
-        for (_, object) in sorted_of_a_kind {
-            object.serialize_into(&mut result);
+        for object in sorted_of_a_kind {
+            object.entity.serialize_into(&mut result);
         }
 
         result
     }
+    
+    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<IdentifiedObject> {
+        let mut sorted = Vec::with_capacity(expected_count);
+        for (key, object) in self.objects.iter() {
+            if object.data_kind_uid() == desired_kind {
+                sorted.push(IdentifiedObject{ id: *key, entity: object.as_ref() });
+            }
+        }
+        debug_assert_eq!(sorted.len(), expected_count);
+
+        sorted.sort_by_key(|x| x.id.0);
+        sorted
+    }
+}
+
+struct IdentifiedObject<'a> {
+    id: ObjectUid,
+    entity: &'a dyn SceneObject,
 }
 
 #[cfg(test)]
@@ -231,17 +318,20 @@ mod tests {
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::scene::container::{Container, DataKind};
     use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+    use crate::scene::version::Version;
     use crate::sdf::code_generator::SdfRegistrator;
     use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
     use crate::utils::object_uid::ObjectUid;
+    use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
     use cgmath::{EuclideanSpace, SquareMatrix, Zero};
     use std::cell::RefCell;
     use std::io::Write;
     use std::path::Path;
     use std::rc::Rc;
+    use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
 
     #[must_use]
@@ -340,7 +430,7 @@ mod tests {
     
     #[test]
     fn test_add_parallelogram() {
-        let mut system_under_test = Container::new(SdfRegistrator::default());
+        let mut system_under_test = make_empty_container();
 
         const PARALLELOGRAM_TO_ADD: u32 = 4;
 
@@ -428,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_delete_mesh() {
-        let mut system_under_test = Container::new(SdfRegistrator::default());
+        let mut system_under_test = make_empty_container();
 
         let (mesh, meshes) = prepare_test_mesh();
         let dummy_material = system_under_test.materials().add(&Material::default());
@@ -447,32 +537,117 @@ mod tests {
         assert_eq!(system_under_test.material_of(to_be_kept_three), dummy_material);
 
         let triangles_in_a_cube = 12;
-        let mut serialized_triangles = system_under_test.evaluate_serialized_triangles();
-        assert_eq!(serialized_triangles.extract_geometry().total_slots_count(), expected_mesh_count * triangles_in_a_cube);
+        let serialized_triangles = system_under_test.evaluate_serialized_triangles();
+        assert_eq!(serialized_triangles.total_slots_count(), expected_mesh_count * triangles_in_a_cube);
     }
 
     #[test]
     fn test_delete_sdf() {
-        let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = Container::new(sdf_classes);
+        let mut fixture = make_filled_container();
+        
+        let sdf_to_be_deleted = fixture.sdf;
+        let sdf_to_be_kept = fixture.container.add_sdf(&Affine::identity(), &fixture.sdf_name, fixture.dummy_material);
 
-        let dummy_material = system_under_test.materials().add(&Material::default());
-        let (mesh, meshes) = prepare_test_mesh();
+        fixture.container.delete(sdf_to_be_deleted);
         
-        let to_be_deleted = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
-        let parallelogram_to_keep = system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
-        let sdf_to_keep = system_under_test.add_sdf(&Affine::identity(), &sphere_sdf_name, dummy_material);
-        let mesh_to_keep = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
-        
-        system_under_test.delete(to_be_deleted);
-        
-        assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), 1);
-        assert_eq!(system_under_test.count_of_a_kind(DataKind::Parallelogram), 1);
-        assert_eq!(system_under_test.count_of_a_kind(DataKind::TriangleMesh), 1);
+        assert_eq!(fixture.container.count_of_a_kind(DataKind::Sdf), 1);
+        assert_eq!(fixture.container.count_of_a_kind(DataKind::Parallelogram), 1);
+        assert_eq!(fixture.container.count_of_a_kind(DataKind::TriangleMesh), 1);
         
         // check if expected objects are kept: there will be a panic, if we try to get material of an absent object 
-        assert_eq!(system_under_test.material_of(parallelogram_to_keep), dummy_material);
-        assert_eq!(system_under_test.material_of(sdf_to_keep), dummy_material);
-        assert_eq!(system_under_test.material_of(mesh_to_keep), dummy_material);
+        assert_eq!(fixture.container.material_of(fixture.parallelogram), fixture.dummy_material);
+        assert_eq!(fixture.container.material_of(sdf_to_be_kept), fixture.dummy_material);
+        assert_eq!(fixture.container.material_of(fixture.mesh), fixture.dummy_material);
     }
+
+    #[test]
+    fn test_clean() {
+        let mut fixture = make_filled_container();
+
+        let version_before = get_versions(&fixture.container);
+        fixture.container.clear_objects();
+        let version_after = get_versions(&fixture.container);
+
+        assert_all_not_equal(version_before.as_slice(), version_after.as_slice());
+
+        assert_is_empty(&fixture.container);
+    }
+
+    #[test]
+    fn test_clear_already_cleared() {
+        let mut system_under_test = make_empty_container();
+
+        let version_before = get_versions(&system_under_test);
+        system_under_test.clear_objects();
+        let version_after = get_versions(&system_under_test);
+
+        assert_eq!(version_before, version_after);
+    }
+
+    #[test]
+    fn test_bvh_inhabited() {
+        let mut fixture = make_filled_container();
+        assert!(fixture.container.bvh_inhabited());
+        
+        fixture.container.delete(fixture.sdf);
+        assert!(fixture.container.bvh_inhabited());
+
+        fixture.container.delete(fixture.mesh);
+        assert_eq!(false, fixture.container.bvh_inhabited());
+    }
+
+    #[test]
+    fn test_empty_container() {
+        let system_under_test = make_empty_container();
+        
+        assert_eq!(false, system_under_test.bvh_inhabited(), "empty container expected to have bvh without primitives");
+        assert_is_empty(&system_under_test);
+    }
+
+    #[must_use]
+    fn make_empty_container() -> Container {
+        Container::new(SdfRegistrator::default())
+    }
+
+    struct FilledContainerFixture {
+        container: Container,
+        dummy_material: MaterialIndex,
+        sdf: ObjectUid,
+        sdf_name: UniqueSdfClassName,
+        parallelogram: ObjectUid,
+        mesh: ObjectUid,
+    }
+
+    #[must_use]
+    fn make_filled_container() -> FilledContainerFixture {
+        let (sdf_name, sdf_classes) = make_single_sdf_sphere();
+        let mut container = Container::new(sdf_classes);
+
+        let dummy_material = container.materials().add(&Material::default());
+        let (mesh_id, meshes) = prepare_test_mesh();
+
+        let sdf = container.add_sdf(&Affine::identity(), &sdf_name, dummy_material);
+        let parallelogram = container.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
+        let mesh = container.add_mesh(&meshes, mesh_id, &Transformation::identity(), dummy_material);
+
+        FilledContainerFixture { container, dummy_material, sdf, sdf_name, parallelogram, mesh, }
+    }
+
+    #[must_use]
+    fn get_versions(from: &Container) -> Vec<Version> {
+        let mut result: Vec<Version> = Vec::with_capacity(DataKind::COUNT);
+        for kind in DataKind::iter() {
+            result.push(from.data_version(kind));
+        }
+        result
+    }
+
+    fn assert_is_empty(fixture: &Container) {
+        assert_eq!(fixture.triangles_count(), 0);
+        for kind in DataKind::iter() {
+            assert_eq!(fixture.count_of_a_kind(kind), 0);
+        }
+        assert_eq!(false, fixture.bvh_inhabited());
+    }
+
 }

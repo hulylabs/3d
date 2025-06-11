@@ -1,9 +1,10 @@
-﻿use crate::sdf::binary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
+﻿use crate::sdf::n_ary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
 use crate::sdf::sdf_base::Sdf;
 use crate::sdf::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::shader_formatting_utils::format_scalar;
 use crate::sdf::stack::Stack;
 use std::rc::Rc;
+use crate::geometry::aabb::Aabb;
 
 pub struct SdfSubtractionSmooth {
     left: Rc<dyn Sdf>,
@@ -25,29 +26,35 @@ impl Sdf for SdfSubtractionSmooth {
         assert!(children_bodies.size() >= 2);
 
         produce_binary_operation_body(children_bodies, level
-            , |left_name, right_name| produce_smooth_union_preparation(right_name, &format!("(-{left_name})"), &self.smooth_size)
+            , |left_name, right_name| 
+                produce_smooth_union_preparation(&right_name.into(), &format!("(-{left_name})"), &self.smooth_size)
             , |left_name, right_name| {
-                let union = produce_smooth_union_return(right_name, &format!("(-{left_name})"), &self.smooth_size);
+                let union = produce_smooth_union_return(&right_name.into(), &format!("(-{left_name})"), &self.smooth_size);
                 format!("-({union})")
             }
         )
     }
 
     #[must_use]
-    fn children(&self) -> Vec<Rc<dyn Sdf>> {
+    fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.left.clone(), self.right.clone()]
+    }
+
+    #[must_use]
+    fn aabb(&self) -> Aabb {
+        self.left.aabb()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sdf::binary_operations_utils::tests::test_binary_operator_children;
+    use crate::sdf::n_ary_operations_utils::tests::test_binary_operator_descendants;
     use crate::sdf::dummy_sdf::tests::DummySdf;
 
     #[test]
     fn test_children() {
-        test_binary_operator_children(|left, right| SdfSubtractionSmooth::new(left, right, 0.25));
+        test_binary_operator_descendants(|left, right| SdfSubtractionSmooth::new(left, right, 0.25));
     }
 
     #[test]
@@ -62,7 +69,7 @@ mod tests {
 
         let actual_body = system_under_test.produce_body(&mut children_bodies, Some(0));
 
-        let expected_body = "var left_0: f32;\n { left_0 = ?_left; } var right_0: f32;\n { right_0 = !_right; } let h = max(0.25-abs(right_0-(-left_0)),0.0); return -(min(right_0, (-left_0)) - h*h*0.25/0.25);";
+        let expected_body = "var left_0: f32;\n{\nleft_0 = ?_left;\n}\nvar right_0: f32;\n{\nright_0 = !_right;\n}\nlet h = max(0.25-abs(right_0-(-left_0)),0.0);\nreturn -(min(right_0, (-left_0)) - h*h*0.25/0.25);";
         assert_eq!(actual_body.to_string(), expected_body.to_string());
     }
 }

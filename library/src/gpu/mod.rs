@@ -13,3 +13,8 @@ mod binding_groups;
 mod rasterization_pipeline;
 mod versioned_buffer;
 mod buffers_update_status;
+pub(crate) mod pipelines_factory;
+pub(crate) mod pipeline_code;
+pub(crate) mod adapter_features;
+mod resizable_buffer;
+pub(crate) mod uniforms;

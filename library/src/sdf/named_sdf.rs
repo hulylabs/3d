@@ -25,7 +25,7 @@ impl NamedSdf {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct UniqueSdfClassName(String);
 
 impl UniqueSdfClassName {

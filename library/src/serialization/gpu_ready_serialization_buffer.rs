@@ -1,8 +1,10 @@
 ﻿use std::vec;
+use crate::serialization::single_object_writer::SingleObjectWriter;
+use crate::serialization::single_quartet_writer::SingleQuartetWriter;
 
 pub(crate) const ELEMENTS_IN_QUARTET: usize = 4;
-const QUARTET_ELEMENT_SIZE_BYTES: usize = size_of::<f32>();
-const QUARTET_SIZE_BYTES: usize = QUARTET_ELEMENT_SIZE_BYTES * ELEMENTS_IN_QUARTET;
+pub(super) const QUARTET_ELEMENT_SIZE_BYTES: usize = size_of::<f32>();
+pub(super) const QUARTET_SIZE_BYTES: usize = QUARTET_ELEMENT_SIZE_BYTES * ELEMENTS_IN_QUARTET;
 
 pub(crate) const DEFAULT_PAD_VALUE: f32 = -1.0;
 
@@ -34,8 +36,7 @@ impl GpuReadySerializationBuffer {
 
         let mut result = Self::new(objects_count, quartets_per_object);
         loop {
-            if result.fully_written()
-            {
+            if result.fully_written() {
                 break;
             }
             result.write_quartet_f32(filler, filler, filler, filler);
@@ -43,12 +44,7 @@ impl GpuReadySerializationBuffer {
 
         result
     }
-
-    #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.backend.is_empty()
-    }
-
+    
     #[must_use]
     fn backend_size_bytes(objects_count_capacity: usize, quartets_per_object: usize) -> usize {
         objects_count_capacity * quartets_per_object * QUARTET_SIZE_BYTES
@@ -112,13 +108,13 @@ impl GpuReadySerializationBuffer {
 
     pub(crate) fn write_quartet_f32(&mut self, x: f32, y: f32, z: f32, w: f32) {
         self.write_quartet(|writer| {
-            writer.write_float(x).write_float(y).write_float(z).write_float(w);
+            writer.write_float_32(x).write_float_32(y).write_float_32(z).write_float_32(w);
         });
     }
 
     pub(crate) fn write_quartet_u32(&mut self, x: u32, y: u32, z: u32, w: u32) {
         self.write_quartet(|writer| {
-            writer.write_integer(x).write_integer(y).write_integer(z).write_integer(w);
+            writer.write_unsigned(x).write_unsigned(y).write_unsigned(z).write_unsigned(w);
         });
     }
 
@@ -135,88 +131,6 @@ impl GpuReadySerializationBuffer {
             execute_writing(&mut writer);
         }
         self.write_pointer += QUARTET_SIZE_BYTES;
-    }
-}
-
-pub(crate) struct SingleObjectWriter<'a> {
-    storage: &'a mut Vec<u8>,
-    write_pointer: usize,
-    quartets_written: usize,
-    quartets_per_object: usize,
-}
-
-impl<'a> SingleObjectWriter<'a> {
-    #[must_use]
-    pub(crate) fn fully_written(&self) -> bool {
-        self.quartets_written == self.quartets_per_object
-    }
-
-    fn write_element(&mut self, bytes: &[u8; QUARTET_ELEMENT_SIZE_BYTES]) {
-        self.storage[self.write_pointer..self.write_pointer + QUARTET_ELEMENT_SIZE_BYTES].copy_from_slice(bytes);
-        self.write_pointer += QUARTET_ELEMENT_SIZE_BYTES;
-    }
-
-    pub(crate) fn write_quartet_f64(&mut self, x: f64, y: f64, z: f64, w: f64) {
-        assert!(!self.fully_written());
-        self.write_element(&(x as f32).to_ne_bytes());
-        self.write_element(&(y as f32).to_ne_bytes());
-        self.write_element(&(z as f32).to_ne_bytes());
-        self.write_element(&(w as f32).to_ne_bytes());
-        self.quartets_written += 1;
-    }
-
-    #[must_use]
-    fn new(storage: &'a mut Vec<u8>, object_index: usize, quartets_per_object: usize) -> Self {
-        Self{
-            storage,
-            write_pointer: object_index * quartets_per_object * QUARTET_SIZE_BYTES,
-            quartets_written: 0,
-            quartets_per_object
-        }
-    }
-}
-
-pub(crate) struct SingleQuartetWriter<'a> {
-    storage: &'a mut Vec<u8>,
-    write_pointer: usize,
-    elements_written: usize,
-}
-
-impl Drop for SingleQuartetWriter<'_> {
-    fn drop(&mut self) {
-        while self.elements_written < ELEMENTS_IN_QUARTET {
-            self.write_float(DEFAULT_PAD_VALUE);
-        }
-    }
-}
-
-impl<'a> SingleQuartetWriter<'a> {
-    #[must_use]
-    fn new(storage: &'a mut Vec<u8>, write_pointer: usize) -> Self {
-        assert!(write_pointer + QUARTET_SIZE_BYTES <= storage.len());
-        Self {
-            storage,
-            write_pointer,
-            elements_written: 0,
-        }
-    }
-
-    fn write_element(&mut self, bytes: &[u8; QUARTET_ELEMENT_SIZE_BYTES]) {
-        self.storage[self.write_pointer..self.write_pointer + QUARTET_ELEMENT_SIZE_BYTES].copy_from_slice(bytes);
-        self.elements_written += 1;
-        self.write_pointer += QUARTET_ELEMENT_SIZE_BYTES;
-    }
-
-    pub(crate) fn write_integer(&mut self, value: u32) -> &mut Self {
-        assert!(self.elements_written < ELEMENTS_IN_QUARTET);
-        self.write_element(&value.to_ne_bytes());
-        self
-    }
-
-    pub(crate) fn write_float(&mut self, value: f32) -> &mut Self {
-        assert!(self.elements_written < ELEMENTS_IN_QUARTET);
-        self.write_element(&value.to_ne_bytes());
-        self
     }
 }
 
@@ -266,10 +180,10 @@ mod tests {
 
         system_under_test.write_quartet(|writer| {
             writer
-                .write_float(10.0)
-                .write_float(20.0)
-                .write_integer(30)
-                .write_float(40.0)
+                .write_float_32(10.0)
+                .write_signed(-20)
+                .write_unsigned(30)
+                .write_float_32(40.0)
             ;
         });
 
@@ -281,9 +195,9 @@ mod tests {
         let mut offset = 0;
         assert_eq!(f32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), 10.0);
         offset += 4;
-        assert_eq!(f32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), 20.0);
+        assert_eq!(i32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), -20);
         offset += 4;
-        assert_eq!(i32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), 30);
+        assert_eq!(u32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), 30);
         offset += 4;
         assert_eq!(f32::from_ne_bytes(backend[offset..offset+QUARTET_ELEMENT_SIZE_BYTES].try_into().unwrap()), 40.0);
     }
@@ -301,7 +215,7 @@ mod tests {
         let mut system_under_test = GpuReadySerializationBuffer::new(1, 1);
 
         system_under_test.write_quartet(|writer| {
-            writer.write_float(1.0).write_float(2.0);
+            writer.write_float_32(1.0).write_float_32(2.0);
         });
 
         assert!(system_under_test.fully_written());
@@ -348,10 +262,10 @@ mod tests {
 
         system_under_test.write_quartet(|writer| {
             writer
-                .write_integer(42)
-                .write_float(3.14)
-                .write_integer(7)
-                .write_float(2.71);
+                .write_unsigned(42)
+                .write_float_32(3.14)
+                .write_unsigned(7)
+                .write_float_32(2.71);
         });
 
         assert!(system_under_test.fully_written());
@@ -375,11 +289,11 @@ mod tests {
 
         system_under_test.write_quartet(|writer| {
             writer
-                .write_float(1.0)
-                .write_float(2.0)
-                .write_float(3.0)
-                .write_float(4.0)
-                .write_float(5.0);
+                .write_float_32(1.0)
+                .write_float_32(2.0)
+                .write_float_32(3.0)
+                .write_float_32(4.0)
+                .write_float_32(5.0);
         });
     }
 

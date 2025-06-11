@@ -1,8 +1,6 @@
-﻿use std::fmt::{Display, Formatter};
-use cgmath::{EuclideanSpace, Zero};
+﻿use crate::geometry::alias::{Point, Vector};
 use float_pretty_print::PrettyPrintFloat;
-use crate::geometry::alias::{Point, Vector};
-use crate::sdf::shader_code::conventions;
+use std::fmt::{Display, Formatter};
 
 pub(crate) struct ShaderReadyFloat {
     value: f32,
@@ -49,15 +47,6 @@ pub(crate) fn format_scalar(target: f64) -> String {
 #[must_use]
 fn format_three_dee_vector(x: ShaderReadyFloat, y: ShaderReadyFloat, z: ShaderReadyFloat) -> String {
     format!("vec3f({},{},{})", x.format(), y.format(), z.format())
-}
-
-#[must_use]
-pub(crate) fn format_sdf_parameter(center: Point) -> String {
-    if center.to_vec().is_zero() {
-        conventions::PARAMETER_NAME_THE_POINT.to_string()
-    } else {
-        format!("({}-{})", conventions::PARAMETER_NAME_THE_POINT, format_point(center))
-    }
 }
 
 #[cfg(test)]

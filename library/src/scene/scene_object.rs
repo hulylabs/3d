@@ -1,4 +1,5 @@
-﻿use crate::objects::material_index::MaterialIndex;
+﻿use crate::geometry::transform::Affine;
+use crate::objects::material_index::MaterialIndex;
 use crate::objects::triangle::Triangle;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
@@ -11,6 +12,10 @@ pub(super) trait SceneObject {
 
     #[must_use]
     fn data_kind_uid(&self) -> usize;
+    #[must_use]
+    fn payload(&self) -> usize;
+    #[must_use]
+    fn transformation(&self) -> &Affine;
     
     #[must_use]
     fn serialized_quartet_count(&self) -> usize;

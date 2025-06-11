@@ -1,14 +1,16 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
-    use std::collections::{HashMap, HashSet};
     use crate::gpu::compute_pipeline::ComputePipeline;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::output::duplex_layer::DuplexLayer;
     use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
-    use crate::gpu::resources::{ComputeRoutineEntryPoint, Resources};
+    use crate::gpu::pipeline_code::PipelineCode;
+    use crate::gpu::pipelines_factory::{ComputeRoutineEntryPoint, PipelinesFactory};
+    use crate::gpu::resources::Resources;
+    use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use bytemuck::{Pod, Zeroable};
-    use wgpu::wgt::PollType;
+    use std::collections::{HashMap, HashSet};
     use wgpu::BufferUsages;
 
     struct BindGroup {
@@ -82,19 +84,22 @@ pub(crate) mod tests {
     }
     
     #[must_use]
-    pub(crate) fn execute_code<TInput, TOutput>(input: &[TInput], gpu_code: &str, config: ExecutionConfig) -> Vec<TOutput> 
+    pub(crate) fn execute_code<TInput, TOutput>(input: &[TInput], gpu_code: String, config: ExecutionConfig) -> Vec<TOutput> 
     where TInput: Zeroable + Pod, TOutput: Zeroable + Pod
     {
         let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone(), wgpu::TextureFormat::Rgba8Unorm);
+        let resources = Resources::new(context.clone());
 
-        let module = resources.create_shader_module("test GPU function execution", gpu_code);
-
+        let module = resources.create_shader_module("test GPU function execution", &gpu_code);
+        let code = PipelineCode::new(module, seahash::hash(gpu_code.as_bytes()), "some_gpu_code".to_string());
+        
         let input_buffer = resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
         let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
         let mut output_buffer = DuplexLayer::<TOutput>::new(context.device(), buffer_size, SupportUpdateFromCpu::Yes, "output");
 
-        let mut pipeline = ComputePipeline::new(resources.create_compute_pipeline(config.entry_point, &module));
+        let mut pipeline_factory = PipelinesFactory::new(context.clone(), COMMON_PRESENTATION_FORMAT, None);
+        
+        let mut pipeline = ComputePipeline::new(pipeline_factory.create_compute_pipeline(config.entry_point, &code));
         pipeline.setup_bind_group(config.data_binding_group, Some("test data"), context.device(), |bind_group|{
             bind_group.add_entry(0, input_buffer.clone());
             bind_group.add_entry(1, output_buffer.gpu_copy());
@@ -125,7 +130,7 @@ pub(crate) mod tests {
         context.queue().submit(Some(encoder.finish()));
 
         let copy_wait = output_buffer.read_cpu_copy();
-        context.device().poll(PollType::Wait).expect("failed to poll the device");
+        context.wait();
         pollster::block_on(copy_wait);
 
         output_buffer.cpu_copy().clone()

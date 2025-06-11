@@ -21,7 +21,7 @@ where
         let candidate = traversal_front[traversal_front.len() - 1].clone();
 
         if visited.insert(candidate.data.as_ref()) {
-            for child in candidate.data.children().iter().rev() {
+            for child in candidate.data.descendants().iter().rev() {
                 traversal_front.push(Node{ data: child.clone(), levels_below: 0 });   
             }
         } else {

@@ -1,7 +1,13 @@
 ﻿use std::rc::Rc;
+use crate::gpu::resizable_buffer::{ResizableBuffer, ResizeStatus};
 use crate::gpu::resources::Resources;
 use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+
+pub(super) struct VersionedBuffer {
+    content_version: Version,
+    backend: ResizableBuffer,
+}
 
 pub(super) struct BufferUpdateStatus {
     resized: bool,
@@ -10,33 +16,31 @@ pub(super) struct BufferUpdateStatus {
 
 impl BufferUpdateStatus {
     #[must_use]
-    pub(crate) fn resized(&self) -> bool {
+    pub(super) fn resized(&self) -> bool {
         self.resized
     }
 
     #[must_use]
-    pub(crate) fn updated(&self) -> bool {
+    pub(super) fn updated(&self) -> bool {
         self.updated
     }
 
     #[must_use]
-    pub(crate) fn merge(&self, another: BufferUpdateStatus) -> Self {
+    pub(super) fn merge(&self, another: BufferUpdateStatus) -> Self {
         let resized = self.resized || another.resized;
         let updated = self.updated || another.updated;
         Self { resized, updated }
     }
 
     #[must_use]
-    pub(crate) fn new_updated(updated: bool) -> Self {
+    pub(super) fn new_updated(updated: bool) -> Self {
         Self { resized: false, updated }
     }
-}
 
-pub(super) struct VersionedBuffer {
-    content_version: Version,
-    backend: Rc<wgpu::Buffer>,
-    elements_count: usize,
-    label: &'static str,
+    #[must_use]
+    pub(super) fn new(resized: bool, updated: bool) -> Self {
+        Self { resized, updated }
+    }
 }
 
 impl VersionedBuffer {
@@ -45,11 +49,7 @@ impl VersionedBuffer {
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
-        let content = generate_data();
-        let buffer = resources.create_storage_buffer_write_only(label, content.backend());
-        let elements_count = content.total_slots_count();
-
-        Self { content_version, backend: buffer, elements_count, label }
+        Self { content_version, backend: ResizableBuffer::new(resources, label, generate_data) }
     }
 
     #[must_use]
@@ -58,7 +58,7 @@ impl VersionedBuffer {
     }
 
     #[must_use]
-    pub(super) fn try_update_and_resize<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
+    pub(super) fn try_update<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
@@ -68,27 +68,18 @@ impl VersionedBuffer {
 
         self.content_version = new_version;
 
-        let new_content = generate_data();
-        self.elements_count = new_content.total_slots_count();
-
-        if self.backend.size() >= new_content.backend().len() as u64 {
-            queue.write_buffer(self.backend.as_ref(), 0, new_content.backend());
-            return BufferUpdateStatus { resized: false, updated: true };
-        }
-
-        self.backend = resources.create_storage_buffer_write_only(self.label, new_content.backend());
-        BufferUpdateStatus { resized: true, updated: true }
+        let resized = self.backend.update(resources, queue, generate_data);
+        BufferUpdateStatus { resized: ResizeStatus::Resized == resized, updated: true }
     }
 
     #[must_use]
     pub(super) fn backend(&self) -> &Rc<wgpu::Buffer> {
-        &self.backend
+        self.backend.backend()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use wgpu::TextureFormat;
     use crate::gpu::context::Context;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use super::*;
@@ -107,17 +98,16 @@ mod tests {
 
     const SYSTEM_UNDER_TEST_INITIAL_SLOTS: usize = 2;
     const SYSTEM_UNDER_TEST_INITIAL_VERSION: Version = Version(0);
-    const SYSTEM_UNDER_TEST_LABEL: &str = "test-buffer";
 
     #[must_use]
     fn make_system_under_test() -> (VersionedBuffer, Resources, Rc<Context>) {
         let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone(), TextureFormat::Rgba8Snorm);
+        let resources = Resources::new(context.clone());
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
-        let system_under_test = VersionedBuffer::new(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, SYSTEM_UNDER_TEST_LABEL, generate_data);
+        let system_under_test = VersionedBuffer::new(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
 
-        (system_under_test, resources, context.clone())
+        (system_under_test, resources, context)
     }
 
     #[test]
@@ -133,7 +123,7 @@ mod tests {
         let (mut system_under_test, resources, context) = make_system_under_test();
         let make_new_data = || make_test_content(1);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION,
             &resources,
             context.queue(),
@@ -148,7 +138,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS - 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),
@@ -165,7 +155,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS + 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_and_resize(
+        let status = system_under_test.try_update(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),

@@ -49,7 +49,7 @@ impl FunctionBodyDossier {
                 result.push(dossier);
             }
         }
-        result.sort_by_key(|x| x.children_levels_below());
+        result.sort_by_key(|x| (x.children_levels_below(), x.name()));
         result
     }
     
@@ -85,7 +85,7 @@ impl FunctionBodyDossier {
         let mut children = Stack::<ShaderCode<FunctionBody>>::new();
         
         for dossier in bottom_up_bodies {
-            for child in dossier.any_source().children() {
+            for child in dossier.any_source().descendants() {
                 let reference = equality.get_equality_root(child);
                 let successor_body = formatted.get(&Rc::as_ptr(&reference)).unwrap();
                 children.push(successor_body.clone());
@@ -154,7 +154,7 @@ mod tests {
         
         let mut buffer: String = String::new();
         system_under_test.format_occurred_multiple_times(&mut buffer);
-        let expected_buffer = format!("fn {}({}: vec3f) -> f32 {{ {}; }}\n", multiple_occurrences_function, conventions::PARAMETER_NAME_THE_POINT, code_seven);
+        let expected_buffer = format!("fn {}({}: vec3f) -> f32 {{\n{};\n}}\n", multiple_occurrences_function, conventions::PARAMETER_NAME_THE_POINT, code_seven);
         assert_eq!(buffer, expected_buffer);
     }
 

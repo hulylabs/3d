@@ -1,4 +1,5 @@
 #![deny(warnings)]
+
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
 #![allow(clippy::needless_range_loop)]
@@ -15,9 +16,11 @@ mod gpu;
 mod tests;
 pub mod sdf;
 
+use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
+use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
-use crate::gpu::render::Renderer;
+use crate::gpu::render::{FrameBufferSettings, Renderer};
 use crate::scene::camera::Camera;
 use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
@@ -26,14 +29,14 @@ use crate::utils::sliding_time_frame::SlidingTimeFrame;
 use crate::utils::time_throttled_logger::TimeThrottledInfoLogger;
 use log::info;
 use std::cmp::max;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use wgpu::{Adapter, Trace};
+use wgpu::Trace;
 use winit::window::Window;
-use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -98,7 +101,7 @@ impl Engine {
         "wgpu=warn,naga=warn"
     }
     
-    pub async fn new(window: Arc<Window>, scene: Container, camera: Camera) -> Result<Engine, EngineInstantiationError> {
+    pub async fn new(window: Arc<Window>, scene: Container, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             flags: wgpu::InstanceFlags::empty(),
@@ -118,12 +121,15 @@ impl Engine {
             .await
             .map_err(|error| EngineInstantiationError::AdapterRequisitionError{what: error.to_string()})?;
 
-        log_adapter_info(&graphics_adapter);
+        let adapter_info = graphics_adapter.get_info();
+        log_adapter_info(&adapter_info);
+
+        let features = AdapterFeatures::new(&graphics_adapter);
         
         let (graphics_device, commands_queue) = graphics_adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some(DEVICE_LABEL),
-                required_features: wgpu::Features::default(),
+                required_features: features.desired_features(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::default(),
                 trace: Trace::Off,
@@ -146,20 +152,20 @@ impl Engine {
             }
         };
         graphics_device.set_device_lost_callback(lost_device_handler);
-
-        let context = Rc::new(Context::new(graphics_device, commands_queue));
+        
+        let context = Rc::new(Context::new(graphics_device, commands_queue, features.pipeline_caching_supported(), adapter_info));
         let output_surface_format = surface_capabilities.formats[0];
 
         let frame_buffer_size = FrameBufferSize::new(max(1, window_pixels_size.width), max(1, window_pixels_size.height));
+        let frame_buffer_settings = FrameBufferSettings::new(output_surface_format, frame_buffer_size, PIXEL_SUBDIVISION_DETERMINISTIC,);
         let renderer 
             = Renderer::new(
-                context.clone(), 
-                scene, 
-                camera, 
-                output_surface_format, 
-                frame_buffer_size, 
-                RenderStrategyId::Deterministic, 
-                PIXEL_SUBDIVISION_DETERMINISTIC,
+                context.clone(),
+                scene,
+                camera,
+                frame_buffer_settings,
+                RenderStrategyId::Deterministic,
+                caches_path,
             )
             .map_err(|e| EngineInstantiationError::InternalError {what: e.to_string()})?;
 
@@ -253,9 +259,7 @@ impl Engine {
         #[cfg(feature = "denoiser")]
         {
             if self.renderer.is_monte_carlo() {
-                self.denoising_measurer.start();
-                self.renderer.denoise_accumulated_image();
-                self.denoising_measurer.stop();   
+                self.renderer.denoise_accumulated_image(&mut self.denoising_measurer);
             }
         }
 
@@ -313,25 +317,4 @@ impl Engine {
     pub fn use_deterministic_render(&mut self) {
         self.renderer.set_render_strategy(RenderStrategyId::Deterministic, PIXEL_SUBDIVISION_DETERMINISTIC);
     }
-}
-
-fn log_adapter_info(adapter: &Adapter) {
-    let adapter_info = adapter.get_info();
-    info!(
-        "Adapter Info:\n\
-         Name: {}\n\
-         Backend: {:?}\n\
-         Vendor: {:#x}\n\
-         Device: {:#x}\n\
-         Device Type: {:?}\n\
-         Driver: {:?}\n\
-         Driver Info: {:?}",
-        adapter_info.name,
-        adapter_info.backend,
-        adapter_info.vendor,
-        adapter_info.device,
-        adapter_info.device_type,
-        adapter_info.driver,
-        adapter_info.driver_info,
-    );
 }

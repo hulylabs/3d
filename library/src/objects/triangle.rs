@@ -93,13 +93,19 @@ impl GpuSerializable for Triangle {
 
         container.write_quartet(|writer|{
             writer
-                .write_float(self.b.normal().x as f32)
-                .write_float(self.b.normal().y as f32)
-                .write_float(self.b.normal().z as f32)
-                .write_integer(self.links.uid().0);
+                .write_float_64(self.b.normal().x)
+                .write_float_64(self.b.normal().y)
+                .write_float_64(self.b.normal().z)
+                .write_unsigned(self.links.uid().0);
         });
 
-        container.write_quartet_f64(self.c.normal().x, self.c.normal().y, self.c.normal().z, self.links.material_index().0 as f64);
+        container.write_quartet(|writer|{
+            writer
+                .write_float_64(self.c.normal().x)
+                .write_float_64(self.c.normal().y)
+                .write_float_64(self.c.normal().z)
+                .write_unsigned(self.links.material_index().0 as u32);
+        });
 
         debug_assert!(container.object_fully_written());
     }
@@ -179,7 +185,7 @@ mod tests {
             c.normal().x as f32,
             c.normal().y as f32,
             c.normal().z as f32,
-            expected_linkage.material_index().0 as f32,
+            f32::from_bits(expected_linkage.material_index().0 as u32),
         ];
 
         assert_eq!(actual_state.backend(), cast_slice::<f32, u8>(&expected));

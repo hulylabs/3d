@@ -1,4 +1,5 @@
-﻿use crate::gpu::versioned_buffer::BufferUpdateStatus;
+﻿use crate::gpu::resizable_buffer::ResizeStatus;
+use crate::gpu::versioned_buffer::BufferUpdateStatus;
 
 pub(super) struct BuffersUpdateStatus {
     geometry_status: BufferUpdateStatus,
@@ -29,6 +30,13 @@ impl BuffersUpdateStatus {
         self.geometry_status.updated()
     }
 
+    pub(super) fn merge_bvh(&mut self, child_status: ResizeStatus) {
+        let updated = true;
+        let resized = child_status == ResizeStatus::Resized;
+        let status = BufferUpdateStatus::new(resized, updated);
+        self.geometry_status = self.geometry_status.merge(status);
+    }
+    
     pub(super) fn merge_geometry(&mut self, child_status: BufferUpdateStatus) {
         self.geometry_status = self.geometry_status.merge(child_status);
     }
@@ -130,5 +138,18 @@ mod tests {
         assert_eq!(system_under_test.any_resized(), true);
         assert_eq!(system_under_test.any_updated(), true);
         assert_eq!(system_under_test.geometry_updated(), true);
+    }
+
+    #[test]
+    fn test_merge_bvh() {
+        let mut system_under_test = BuffersUpdateStatus::new();
+        
+        system_under_test.merge_bvh(ResizeStatus::SizeKept);
+        assert_eq!(system_under_test.any_resized(), false);
+        assert_eq!(system_under_test.any_updated(), true);
+
+        system_under_test.merge_bvh(ResizeStatus::Resized);
+        assert_eq!(system_under_test.any_resized(), true);
+        assert_eq!(system_under_test.any_updated(), true);
     }
 }

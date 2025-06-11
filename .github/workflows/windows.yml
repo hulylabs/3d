@@ -2,14 +2,6 @@
 
 on:
 
-  push:
-    branches:
-      - '*'
-
-  pull_request:
-    branches:
-      - '*'
-
   workflow_dispatch:
 
 env:
@@ -22,6 +14,7 @@ jobs:
     runs-on: windows-latest
 
     strategy:
+      fail-fast: false
       matrix:
         build-type: [ debug, release ]
 

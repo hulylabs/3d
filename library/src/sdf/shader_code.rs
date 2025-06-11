@@ -4,6 +4,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use crate::sdf::shader_variable_name::ShaderVariableName;
 
 #[derive(Clone)]
 pub struct FunctionBody;
@@ -66,10 +67,23 @@ impl ShaderCode<FunctionBody> {
     }
 
     #[must_use]
-    pub(super) fn to_scalar_assignment(&self, variable_name: &String) -> ShaderCode<VariableAssignment> {
-        let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
-        let assignment = format!("var {name}: f32;\n {{ {assignment} }}", name=variable_name, assignment=evaluation.trim());
+    pub(super) fn to_scalar_declaration_assignment(&self, variable_name: &ShaderVariableName) -> ShaderCode<VariableAssignment> {
+        let assignment = self.make_scalar_assignment(variable_name);
+        let assignment = format!("var {name}: f32;\n{assignment}", name=variable_name, assignment=assignment);
         ShaderCode::<VariableAssignment>::new(assignment.to_string())
+    }
+
+    #[must_use]
+    pub(super) fn to_scalar_assignment(&self, variable_name: &ShaderVariableName) -> ShaderCode<VariableAssignment> {
+        let assignment = self.make_scalar_assignment(variable_name);
+        ShaderCode::<VariableAssignment>::new(assignment.to_string())
+    }
+
+    #[must_use]
+    fn make_scalar_assignment(&self, variable_name: &ShaderVariableName) -> String {
+        let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
+        let assignment = format!("{{\n{assignment}\n}}", assignment = evaluation.trim());
+        assignment
     }
 }
 
@@ -93,7 +107,7 @@ pub(crate) fn format_sdf_selection(function_to_select: &FunctionName, class_inde
 #[must_use]
 pub(crate) fn format_sdf_selection_function_opening() -> String {
     format!(
-        "fn {selection_function_name}({parameter_sdf_index}: f32, {parameter_point}: vec3f) -> f32 {{ \n",
+        "fn {selection_function_name}({parameter_sdf_index}: f32, {parameter_point}: vec3f) -> f32 {{\n",
         selection_function_name = conventions::FUNCTION_NAME_THE_SDF_SELECTION,
         parameter_sdf_index = conventions::PARAMETER_NAME_SDF_INDEX,
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
@@ -111,9 +125,9 @@ pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode<
 }
 
 pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_name: &FunctionName, buffer: &mut String) {
-    writeln!(
+    write!(
         buffer,
-        "fn {name}({parameter}: vec3f) -> f32 {{ {body} }}",
+        "fn {name}({parameter}: vec3f) -> f32 {{\n{body}\n}}\n",
         name = function_name,
         parameter = conventions::PARAMETER_NAME_THE_POINT,
         body = body
@@ -142,7 +156,7 @@ mod tests {
         format_sdf_declaration(&function_body, &function_name, &mut formatted);
 
         let expected = format!(
-            "fn {function}({parameter}: vec3f) -> f32 {{ return -7.0; }}\n",
+            "fn {function}({parameter}: vec3f) -> f32 {{\nreturn -7.0;\n}}\n",
             function = function_name,
             parameter = conventions::PARAMETER_NAME_THE_POINT
         );
@@ -152,13 +166,13 @@ mod tests {
     #[test]
     fn test_function_body_conversion_to_block_expression() {
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_scalar_assignment(&"foo".to_string())),
-            String::from("var foo: f32;\n { foo = 13; }"),
+            String::from(ShaderCode::<FunctionBody>::new("  return 13;  ".to_string()).to_scalar_declaration_assignment(&ShaderVariableName::new("foo", None))),
+            String::from("var foo: f32;\n{\nfoo = 13;\n}"),
         );
 
         assert_eq!(
-            String::from(ShaderCode::<FunctionBody>::new(" return 17; ".to_string()).to_scalar_assignment(&"zig".to_string())),
-            String::from("var zig: f32;\n { zig = 17; }"),
+            String::from(ShaderCode::<FunctionBody>::new(" return 17; ".to_string()).to_scalar_declaration_assignment(&ShaderVariableName::new("zig", None))),
+            String::from("var zig: f32;\n{\nzig = 17;\n}"),
         );
     }
 }

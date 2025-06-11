@@ -1,4 +1,5 @@
-﻿use crate::objects::common_properties::Linkage;
+﻿use crate::geometry::transform::Affine;
+use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::scene::scene_object::{SceneEnvironment, SceneObject};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -6,12 +7,14 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 pub(super) struct Triangulated {
     links: Linkage,
     geometry_kind: usize,
+    payload: usize,
+    transformation: Affine,
 }
 
 impl Triangulated {
     #[must_use]
-    pub(super) fn new(links: Linkage, geometry_kind: usize,) -> Self {
-        Self { links, geometry_kind, }
+    pub(super) fn new(links: Linkage, geometry_kind: usize, payload: usize, transformation: Affine,) -> Self {
+        Self { links, geometry_kind, payload, transformation, }
     }
 }
 
@@ -29,10 +32,20 @@ impl SceneObject for Triangulated {
         self.links.set_material_index(new_material);
     }
 
+    #[must_use]
     fn data_kind_uid(&self) -> usize {
         self.geometry_kind
     }
-    
+    #[must_use]
+    fn payload(&self) -> usize {
+        self.payload
+    }
+    #[must_use]
+    fn transformation(&self) -> &Affine {
+        &self.transformation
+    }
+
+    #[must_use]
     fn serialized_quartet_count(&self) -> usize {
         0
     }

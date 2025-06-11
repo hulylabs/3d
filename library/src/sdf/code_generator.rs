@@ -57,7 +57,7 @@ impl SdfCodeGenerator {
             
             let occurrences = self.sdf_bodies.try_find(&body);
             if let Some(occurrences) = occurrences.filter(|o| o.occurrences() > 1) {
-                for _ in candidate.children() {
+                for _ in candidate.descendants() {
                     context.descendant_bodies_deduplicated.pop();
                 }
                 context.descendant_bodies_deduplicated.push(format_sdf_invocation(occurrences.name()));
@@ -130,11 +130,12 @@ impl Default for SdfRegistrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geometry::alias::{Point, Vector};
+    use crate::geometry::alias::Vector;
     use crate::sdf::named_sdf::UniqueSdfClassName;
     use crate::sdf::sdf_base::Sdf;
     use crate::sdf::sdf_box::SdfBox;
     use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::sdf_translation::SdfTranslation;
     use crate::sdf::sdf_union::SdfUnion;
     use std::rc::Rc;
 
@@ -205,9 +206,9 @@ mod tests {
                     SdfBox::new(Vector::new(1.0, 2.0, 3.0)),
                     SdfBox::new(Vector::new(5.0, 7.0, 11.0)),
                 ),
-                SdfSphere::new_offset(13.0, Point::new(-17.0, -19.0, -23.0)),
+                SdfTranslation::new(Vector::new(-17.0, -19.0, -23.0), SdfSphere::new(13.0)),
             ),
-            SdfSphere::new_offset(29.0, Point::new(31.0, 37.0, 41.0)),
+            SdfTranslation::new(Vector::new(31.0, 37.0, 41.0), SdfSphere::new(29.0)),
         );
 
         let name = UniqueSdfClassName::new("the_name".to_string());
@@ -215,22 +216,7 @@ mod tests {
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_the_name(point: vec3f) -> f32 { \
-        var left_3: f32;\n { \
-        var left_2: f32;\n { \
-        var left_1: f32;\n { \
-        let q = abs(point)-vec3f(1.0,2.0,3.0); \
-        left_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); } \
-        var right_1: f32;\n { \
-        let q = abs(point)-vec3f(5.0,7.0,11.0); \
-        right_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0); }  \
-        left_2 = min(left_1,right_1); } \
-        var right_2: f32;\n { \
-        right_2 = length((point-vec3f(-17.0,-19.0,-23.0)))-13.0; }  \
-        left_3 = min(left_2,right_2); } \
-        var right_3: f32;\n { \
-        right_3 = length((point-vec3f(31.0,37.0,41.0)))-29.0; }  \
-        return min(left_3,right_3); }\n";
+        let expected_code = "fn sdf_the_name(point: vec3f) -> f32 {\nvar left_3: f32;\n{\nvar left_2: f32;\n{\nvar left_1: f32;\n{\nlet q = abs(point)-vec3f(1.0,2.0,3.0);\nleft_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\nvar right_1: f32;\n{\nlet q = abs(point)-vec3f(5.0,7.0,11.0);\nright_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\n\nleft_2 = min(left_1,right_1);\n}\nvar right_2: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(-17.0,-19.0,-23.0);\n{\noperand_1 = length(point)-13.0;\n}\n}\nright_2 = operand_1;\n}\n\nleft_3 = min(left_2,right_2);\n}\nvar right_3: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(31.0,37.0,41.0);\n{\noperand_1 = length(point)-29.0;\n}\n}\nright_3 = operand_1;\n}\n\nreturn min(left_3,right_3);\n}\n";
 
         assert_no_shared_code(generator_under_test);
         assert_eq!(actual_name, expected_name);
@@ -252,12 +238,12 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
         
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_1: f32;\n { left_1 = sdf_test_1(point); } var right_1: f32;\n { right_1 = sdf_test_1(point); }  return min(left_1,right_1); }\n";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\n";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 {\nvar left_1: f32;\n{\nleft_1 = sdf_test_1(point);\n}\nvar right_1: f32;\n{\nright_1 = sdf_test_1(point);\n}\n\nreturn min(left_1,right_1);\n}\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 {\nreturn length(point)-17.0;\n}\n";
         
         assert_eq!(actual_name, expected_name);
-        assert_eq!(actual_shared_code, expected_shared_code);
-        assert_eq!(actual_code, expected_code);
+        assert_eq!(actual_shared_code, expected_shared_code, "shader code differs");
+        assert_eq!(actual_code, expected_code, "unique code differs");
     }
 
     #[test]
@@ -284,12 +270,12 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 { var left_3: f32;\n { left_3 = sdf_test_1(point); } var right_3: f32;\n { var left_2: f32;\n { left_2 = sdf_test_2(point); } var right_2: f32;\n { right_2 = sdf_test_2(point); }  right_3 = min(left_2,right_2); }  return min(left_3,right_3); }\n";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 { return length(point)-17.0; }\nfn sdf_test_2(point: vec3f) -> f32 { var left: f32;\n { left = sdf_test_1(point); } var right: f32;\n { right = sdf_test_1(point); }  return min(left,right); }\n";
+        let expected_code = "fn sdf_test(point: vec3f) -> f32 {\nvar left_3: f32;\n{\nleft_3 = sdf_test_1(point);\n}\nvar right_3: f32;\n{\nvar left_2: f32;\n{\nleft_2 = sdf_test_2(point);\n}\nvar right_2: f32;\n{\nright_2 = sdf_test_2(point);\n}\n\nright_3 = min(left_2,right_2);\n}\n\nreturn min(left_3,right_3);\n}\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 {\nreturn length(point)-17.0;\n}\nfn sdf_test_2(point: vec3f) -> f32 {\nvar left: f32;\n{\nleft = sdf_test_1(point);\n}\nvar right: f32;\n{\nright = sdf_test_1(point);\n}\n\nreturn min(left,right);\n}\n";
 
         assert_eq!(actual_name, expected_name);
-        assert_eq!(actual_shared_code, expected_shared_code);
-        assert_eq!(actual_code, expected_code);
+        assert_eq!(actual_shared_code, expected_shared_code, "shared code differs");
+        assert_eq!(actual_code, expected_code, "unique code differs");
     }
     
     #[must_use]
