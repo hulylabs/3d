@@ -10,7 +10,9 @@ use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFrom
 use crate::gpu::pipeline_code::PipelineCode;
 use crate::gpu::pipelines_factory::{ComputeRoutineEntryPoint, PipelinesFactory};
 use crate::gpu::rasterization_pipeline::RasterizationPipeline;
+use crate::gpu::resizable_buffer::ResizableBuffer;
 use crate::gpu::resources::Resources;
+use crate::gpu::uniforms::Uniforms;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
@@ -29,7 +31,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::gpu::resizable_buffer::ResizableBuffer;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -92,16 +93,8 @@ impl Renderer {
     )
         -> anyhow::Result<Self>
     {
-        let mut uniforms = Uniforms {
-            frame_buffer_size: frame_buffer_settings.frame_buffer_size,
-            frame_number: 0,
-            if_reset_framebuffer: false,
-            camera,
-            parallelograms_count: 0,
-            sdf_count: 0,
-            bvh_length: 0,
-            pixel_side_subdivision: 1,
-        };
+        let pixel_side_subdivision: u32 = 1;
+        let mut uniforms = Uniforms::new(frame_buffer_settings.frame_buffer_size, camera, pixel_side_subdivision);
 
         let mut scene = scene_container;
 
@@ -212,7 +205,7 @@ impl Renderer {
         composite_status.merger_material(self.gpu.buffers.materials.try_update(self.scene.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || self.scene.materials().serialize()));
         
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
-        self.uniforms.parallelograms_count = self.scene.count_of_a_kind(DataKind::Parallelogram) as u32;
+        self.uniforms.set_parallelograms_count(self.scene.count_of_a_kind(DataKind::Parallelogram) as u32);
         
         let mut update_bvh = false;
         
@@ -226,7 +219,7 @@ impl Renderer {
         let sdf_set_version = self.scene.data_version(DataKind::Sdf);
         if self.gpu.buffers.sdf.version_diverges(sdf_set_version) {
             composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.gpu.buffers.sdf, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
-            self.uniforms.sdf_count = self.scene.count_of_a_kind(DataKind::Sdf) as u32;
+            self.uniforms.set_sdf_count(self.scene.count_of_a_kind(DataKind::Sdf) as u32);
             update_bvh = true;
         }
 
@@ -237,7 +230,7 @@ impl Renderer {
             let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(self.scene(), Self::BVH_INFLATION_RATE);
             composite_status.merge_bvh(self.gpu.buffers.bvh_inflated.update(&self.gpu.resources, self.gpu.context.queue(), || bvh_inflated));
 
-            self.uniforms.bvh_length = bvh_length;
+            self.uniforms.set_bvh_length(bvh_length);
             assert_eq!(bvh_length, bvh_inflated_length);
         }
         
@@ -276,19 +269,19 @@ impl Renderer {
         let (bvh, bvh_length) = Self::serialize_bvh(scene, 0.0);
         let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(scene, Self::BVH_INFLATION_RATE);
         assert_eq!(bvh_length, bvh_inflated_length);
-        uniforms.bvh_length = bvh_length;
+        uniforms.set_bvh_length(bvh_length);
 
         let materials = if scene.materials().count() > 0
             { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
-        uniforms.parallelograms_count = scene.count_of_a_kind(DataKind::Parallelogram) as u32;
-        uniforms.sdf_count = scene.count_of_a_kind(DataKind::Sdf) as u32;
+        uniforms.set_parallelograms_count(scene.count_of_a_kind(DataKind::Parallelogram) as u32);
+        uniforms.set_sdf_count(scene.count_of_a_kind(DataKind::Sdf) as u32);
         
         Buffers {
             uniforms: resources.create_uniform_buffer("uniforms", uniforms.serialize().backend()),
 
-            ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size),
-            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels"),
+            ray_tracing_frame_buffer: FrameBuffer::new(context.device(), uniforms.frame_buffer_size()),
+            denoised_beauty_image: FrameBufferLayer::new(context.device(), uniforms.frame_buffer_size(), SupportUpdateFromCpu::Yes, "denoised pixels"),
             
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
@@ -431,8 +424,8 @@ impl Renderer {
         if previous_frame_size < new_frame_size {
             let device = self.gpu.context.device();
 
-            self.gpu.buffers.ray_tracing_frame_buffer = FrameBuffer::new(device, self.uniforms.frame_buffer_size);
-            self.gpu.buffers.denoised_beauty_image = FrameBufferLayer::new(device, self.uniforms.frame_buffer_size, SupportUpdateFromCpu::Yes, "denoised pixels");
+            self.gpu.buffers.ray_tracing_frame_buffer = FrameBuffer::new(device, self.uniforms.frame_buffer_size());
+            self.gpu.buffers.denoised_beauty_image = FrameBufferLayer::new(device, self.uniforms.frame_buffer_size(), SupportUpdateFromCpu::Yes, "denoised pixels");
 
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, &self.gpu.buffers, self.pipeline_ray_tracing_monte_carlo.borrow_mut().deref_mut());
             Self::setup_frame_buffers_bindings_for_ray_tracing_compute(device, &self.gpu.buffers, self.pipeline_ray_tracing_deterministic.borrow_mut().deref_mut());
@@ -446,7 +439,7 @@ impl Renderer {
     #[must_use]
     pub(crate) fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
         let map = self.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
-        let index = (self.uniforms.frame_buffer_size.width() * y + x) as usize;
+        let index = (self.uniforms.frame_buffer_size().width() * y + x) as usize;
         assert!(index < map.len());
         let uid = map[index];
         
@@ -462,7 +455,7 @@ impl Renderer {
         let scene_status = self.update_buffers_if_scene_changed();
 
         {
-            let camera_changed = self.uniforms.camera.check_and_clear_updated_status();
+            let camera_changed = self.uniforms.mutable_camera().check_and_clear_updated_status();
             let geometry_changed = scene_status.geometry_updated();
             
             if scene_status.any_updated() {
@@ -534,8 +527,8 @@ impl Renderer {
         self.copy_noisy_pixels_to_cpu();
 
         {
-            let frame_buffer_width = self.uniforms.frame_buffer_size.width() as usize;
-            let frame_buffer_height = self.uniforms.frame_buffer_size.height() as usize;
+            let frame_buffer_width = self.uniforms.frame_buffer_size().width() as usize;
+            let frame_buffer_height = self.uniforms.frame_buffer_size().height() as usize;
             let (beauty, albedo, normal) = self.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
             let beauty_floats: &mut [f32] = bytemuck::cast_slice_mut(beauty);
             let albedo_floats: &[f32] = bytemuck::cast_slice(albedo);
@@ -557,7 +550,7 @@ impl Renderer {
     #[allow(dead_code)] 
     #[cfg(feature = "denoiser")]
     pub(crate) fn denoise_and_save(&mut self) {
-        let divider = self.uniforms.frame_number as f32;
+        let divider = self.uniforms.frame_number() as f32;
         fn save(name: &str, width: usize, height: usize, data: &[PodVector], divider: f32,) {
             denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
             |x,y| {
@@ -592,9 +585,9 @@ impl Renderer {
 
         let (beauty, albedo, normal) = self.gpu.buffers.ray_tracing_frame_buffer.denoiser_input();
 
-        save("_beauty", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, beauty, divider);
-        save("_albedo", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, albedo, 1.0);
-        save("_normal", self.uniforms.frame_buffer_size.width() as usize, self.uniforms.frame_buffer_size.height() as usize, normal, 1.0);
+        save("_beauty", self.uniforms.frame_buffer_size().width() as usize, self.uniforms.frame_buffer_size().height() as usize, beauty, divider);
+        save("_albedo", self.uniforms.frame_buffer_size().width() as usize, self.uniforms.frame_buffer_size().height() as usize, albedo, 1.0);
+        save("_normal", self.uniforms.frame_buffer_size().width() as usize, self.uniforms.frame_buffer_size().height() as usize, normal, 1.0);
     }
     
     pub(crate) fn present(&mut self, surface_texture: &wgpu::SurfaceTexture) {
@@ -627,7 +620,7 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            let work_groups_needed = self.uniforms.frame_buffer_size.work_groups_count(Self::WORK_GROUP_SIZE);
+            let work_groups_needed = self.uniforms.frame_buffer_size().work_groups_count(Self::WORK_GROUP_SIZE);
             compute_pipeline.set_into_pass(&mut pass);
             pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, 1);}
             
@@ -654,7 +647,7 @@ impl Renderer {
 
     #[must_use]
     pub fn camera(&mut self) -> &mut Camera {
-        &mut self.uniforms.camera
+        self.uniforms.mutable_camera()
     }
 }
 
@@ -675,81 +668,12 @@ struct Buffers {
     bvh_inflated: ResizableBuffer,
 }
 
-struct Uniforms {
-    frame_buffer_size: FrameBufferSize,
-    frame_number: u32,
-    if_reset_framebuffer: bool,
-    camera: Camera,
-    
-    parallelograms_count: u32,
-    sdf_count: u32,
-    bvh_length: u32,
-    pixel_side_subdivision: u32,
-}
-
-impl Uniforms {
-    fn reset_frame_accumulation(&mut self, value: u32) {
-        self.if_reset_framebuffer = true;
-        self.frame_number = value;
-    }
-
-    fn drop_reset_flag(&mut self) {
-        self.if_reset_framebuffer = false;
-    }
-
-    fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
-        self.frame_buffer_size = FrameBufferSize::new(new_size.width, new_size.height);
-    }
-
-    fn next_frame(&mut self, increment: u32) {
-        self.frame_number += increment;
-    }
-
-    #[must_use]
-    fn frame_buffer_area(&self) -> u32 {
-        self.frame_buffer_size.area()
-    }
-
-    fn set_pixel_side_subdivision(&mut self, level: u32) {
-        let level: u32 = if 0 == level { 1 } else { level };
-        self.pixel_side_subdivision = level;
-    }
-
-    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
-
-    #[must_use]
-    fn serialize(&self) -> GpuReadySerializationBuffer {
-        let mut result = GpuReadySerializationBuffer::new(1, Self::SERIALIZED_QUARTET_COUNT);
-
-        result.write_quartet(|writer| {
-            writer.write_unsigned(self.frame_buffer_size.width());
-            writer.write_unsigned(self.frame_buffer_size.height());
-            writer.write_unsigned(self.frame_buffer_size.area());
-            writer.write_float_32(self.frame_buffer_size.aspect());
-        });
-        
-        result.write_quartet_f32(
-           1.0 / self.frame_buffer_size.width() as f32,
-           1.0 / self.frame_buffer_size.height() as f32,
-           self.frame_number as f32,
-           if self.if_reset_framebuffer { 1.0 } else { 0.0 },
-        );
-        
-        self.camera.serialize_into(&mut result);
-
-        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.bvh_length, self.pixel_side_subdivision);
-        
-        debug_assert!(result.object_fully_written());
-        result
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
-    use cgmath::{AbsDiffEq, EuclideanSpace, SquareMatrix};
+    use cgmath::{AbsDiffEq, SquareMatrix};
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
@@ -765,147 +689,6 @@ mod tests {
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
     use rstest::rstest;
-
-    const DEFAULT_FRAME_WIDTH: u32 = 800;
-    const DEFAULT_FRAME_HEIGHT: u32 = 600;
-
-    const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
-    const DEFAULT_SDF_COUNT: u32 = 6;
-    const DEFAULT_BVH_LENGTH: u32 = 8;
-    const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
-
-    #[must_use]
-    fn make_test_uniforms_instance() -> Uniforms {
-        let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
-        let camera = Camera::new_perspective_camera(1.0, Point::origin());
-
-        Uniforms {
-            frame_buffer_size,
-            frame_number: 0,
-            if_reset_framebuffer: false,
-            camera,
-            
-            parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
-            sdf_count: DEFAULT_SDF_COUNT,
-            bvh_length: DEFAULT_BVH_LENGTH,
-            pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
-        }
-    }
-
-    const SLOT_FRAME_WIDTH: usize = 0;
-    const SLOT_FRAME_HEIGHT: usize = 1;
-    const SLOT_FRAME_AREA: usize = 2;
-    const SLOT_FRAME_ASPECT: usize = 3;
-
-    const SLOT_FRAME_INVERTED_WIDTH: usize = 4;
-    const SLOT_FRAME_INVERTED_HEIGHT: usize = 5;
-    const SLOT_FRAME_NUMBER: usize = 6;
-    const SLOT_RESET_FRAME_BUFFER: usize = 7;
-
-    const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
-    const SLOT_SDF_COUNT: usize = 41;
-    const SLOT_BVH_LENGTH: usize = 42;
-    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 43;
-
-    #[test]
-    fn test_hash() {
-        println!("{}", seahash::hash("test_string".as_bytes()));
-        println!("{}", seahash::hash("test_string".as_bytes()));
-        println!("{}", seahash::hash("test_string".as_bytes()));
-        println!("{}", seahash::hash("test_string".as_bytes()));
-    }
-
-    #[test]
-    fn test_uniforms_reset_frame_accumulation() {
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.next_frame(1);
-        system_under_test.reset_frame_accumulation(0);
-
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-
-        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 1.0);
-    }
-
-    #[test]
-    fn test_uniforms_drop_reset_flag() {
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.reset_frame_accumulation(0);
-        system_under_test.drop_reset_flag();
-
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
-    }
-
-    #[test]
-    fn test_uniforms_set_frame_size() {
-        let expected_width = 1024;
-        let expected_height = 768;
-        let new_size = PhysicalSize::new(expected_width, expected_height);
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.set_frame_size(new_size);
-
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-
-        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), expected_width);
-        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT].to_bits(), expected_height);
-        assert_eq!(actual_state_floats[SLOT_FRAME_AREA].to_bits(), expected_width * expected_height);
-        assert_eq!(actual_state_floats[SLOT_FRAME_ASPECT], expected_width as f32 / expected_height as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_WIDTH], 1.0 / expected_width as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / expected_height as f32);
-    }
-
-    #[test]
-    fn test_uniforms_next_frame() {
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.next_frame(1);
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 1.0);
-
-        system_under_test.next_frame(1);
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 2.0);
-    }
-
-    #[test]
-    fn test_uniforms_frame_buffer_area() {
-        let system_under_test = make_test_uniforms_instance();
-
-        let expected_area = DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT;
-        assert_eq!(system_under_test.frame_buffer_area(), expected_area);
-    }
-
-    #[test]
-    fn test_uniforms_serialize() {
-        let system_under_test = make_test_uniforms_instance();
-
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-
-        assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), DEFAULT_FRAME_WIDTH);
-        assert_eq!(actual_state_floats[SLOT_FRAME_HEIGHT].to_bits(), DEFAULT_FRAME_HEIGHT);
-        assert_eq!(actual_state_floats[SLOT_FRAME_AREA].to_bits(), DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT);
-        assert_eq!(actual_state_floats[SLOT_FRAME_ASPECT], DEFAULT_FRAME_WIDTH as f32 / DEFAULT_FRAME_HEIGHT as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_WIDTH], 1.0 / DEFAULT_FRAME_WIDTH as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / DEFAULT_FRAME_HEIGHT as f32);
-        assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
-        
-        assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
-        assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
-        assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
-        assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
-    }
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 256;

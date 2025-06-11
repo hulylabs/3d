@@ -1,7 +1,7 @@
 ﻿#[cfg(test)]
 mod tests {
     use crate::bvh::builder::build_serialized_bvh;
-    use crate::geometry::alias::Vector;
+    use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::Affine;
     use crate::gpu::pipelines_factory::ComputeRoutineEntryPoint;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
@@ -24,9 +24,12 @@ mod tests {
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use bytemuck::{Pod, Zeroable};
     use cgmath::num_traits::float::FloatCore;
-    use cgmath::{Array, ElementWise, InnerSpace, Matrix4};
+    use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
     use std::f32::consts::SQRT_2;
     use std::fmt::Write;
+    use crate::gpu::frame_buffer_size::FrameBufferSize;
+    use crate::gpu::uniforms::Uniforms;
+    use crate::scene::camera::Camera;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
@@ -268,20 +271,21 @@ mod tests {
         create_argument_formatter!("{argument}.position.xyz, {argument}.to_light.xyz, {argument}.light_size, {argument}.min_ray_offset, {argument}.max_ray_offset"));
 
         /*
-        case 1:               case 2:
-              * - light         * - light 
-        |----------|            
-        |          |            
-        |          |            
-        |__________|           
-                                
-             * - position       * - position 
+        case 1:                  case 2:
+                                            
+              * - light            * - light 
+        |----------|               
+        |          |               
+        |          |               
+        |__________|              
+                                   
+             * - position          * - position 
         ________________________________________
         */
         
         let instance_transformation = Affine::from_nonuniform_scale(1.0, 3.0, 1.0);
-        let buffer = make_single_serialized_sdf_instance(instance_transformation, &identity_box_class);
-        let execution_config = config_sdf_tracing(buffer);
+        let buffer = make_single_serialized_sdf_instance(&identity_box_class, &instance_transformation);
+        let execution_config = config_sdf_shadow_sampling(buffer);
 
         #[repr(C)]
         #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -370,8 +374,8 @@ mod tests {
         create_argument_formatter!("{argument}.position.xyz, {argument}.direction.xyz"));
 
         let instance_transformation = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
-        let buffer = make_single_serialized_sdf_instance(instance_transformation, &identity_box_class);
-        let execution_config = config_sdf_tracing(buffer);
+        let buffer = make_single_serialized_sdf_instance(&identity_box_class, &instance_transformation);
+        let execution_config = config_sdf_sampling(buffer);
         
         let test_input = [
             PositionAndDirection {
@@ -432,21 +436,51 @@ mod tests {
     }
     
     #[must_use]
-    fn config_sdf_tracing(serialized_sdf: SdfInstances) -> ExecutionConfig {
-        let mut execution_config = {
-            let mut ware = ExecutionConfig::new();
-            ware
-                .common_test_config()
-                .add_dummy_binding_group(1, vec![])
-                .add_binding_group(0, vec![], vec![
-                    // the only value we need (in uniforms) is sdf instances count which is 1
-                    BindGroupSlot::new(0, bytemuck::cast_slice(&vec![1_u32; 48])),
-                ])
-            ;
-            ware
-        };
+    fn config_common_sdf_buffers() -> ExecutionConfig {
+        let mut uniforms = make_test_uniforms();
+        uniforms.set_bvh_length(1);
+        uniforms.set_sdf_count(1);
+        uniforms.set_parallelograms_count(0);
+        
+        let mut ware = ExecutionConfig::new();
+        ware
+            .common_test_config()
+            .add_dummy_binding_group(1, vec![])
+            .add_binding_group(0, vec![], vec![
+                // the only value we need (in uniforms) is sdf instances count which is 1
+                BindGroupSlot::new(0, uniforms.serialize().backend()),
+            ])
+        ;
+        ware
+    }
+
+    #[must_use]
+    fn make_test_uniforms() -> Uniforms {
+        let dummy_camera = Camera::new_orthographic_camera(1.0, Point::origin());
+        let dummy_frame_buffer_size = FrameBufferSize::new(1, 1);
+        Uniforms::new(dummy_frame_buffer_size, dummy_camera, 1)
+    }
+
+    #[must_use]
+    fn config_sdf_sampling(serialized_sdf: SdfInstances) -> ExecutionConfig {
+        let mut execution_config = config_common_sdf_buffers();
         execution_config.add_binding_group(2, vec![], vec![
             BindGroupSlot::new(1, serialized_sdf.instances.backend()),
+            BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+        ]);
+        execution_config
+    }
+
+    #[must_use]
+    fn config_sdf_shadow_sampling(serialized_sdf: SdfInstances) -> ExecutionConfig {
+        let mut execution_config = config_common_sdf_buffers();
+        let dummy_buffer = [0_u8; 96];
+        execution_config.add_binding_group(2, vec![], vec![
+            BindGroupSlot::new(0, &dummy_buffer),
+            BindGroupSlot::new(1, serialized_sdf.instances.backend()),
+            BindGroupSlot::new(2, &dummy_buffer),
+            BindGroupSlot::new(3, &dummy_buffer),
+            BindGroupSlot::new(4, serialized_sdf.bvh.backend()),
             BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
         ]);
         execution_config
@@ -454,22 +488,29 @@ mod tests {
     
     struct SdfInstances {
         instances: GpuReadySerializationBuffer,
+        bvh: GpuReadySerializationBuffer,
         inflated_bvh: GpuReadySerializationBuffer,
     }
     
     #[must_use]
-    fn make_single_serialized_sdf_instance(instance_transformation: Matrix4<f64>, class: &NamedSdf) -> SdfInstances {
+    fn make_single_serialized_sdf_instance(class: &NamedSdf, instance_transformation: &Affine) -> SdfInstances {
         let dummy_linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
         
-        let sdf_instance = SdfInstance::new(instance_transformation, SdfClassIndex(0), dummy_linkage);
+        let sdf_instance = SdfInstance::new(instance_transformation.clone(), SdfClassIndex(0), dummy_linkage);
         let mut instances = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         sdf_instance.serialize_into(&mut instances);
 
-        let aabb = class.sdf().aabb().transform(&instance_transformation).extent_relative_inflate(0.1);
-        let mut support = [proxy_of_sdf(0, aabb)];
-        let inflated_bvh = build_serialized_bvh(&mut support);
+        #[must_use]
+        fn make_bvh(sdf: &NamedSdf, instance_transformation: &Affine, inflation: f64) -> GpuReadySerializationBuffer {
+            let aabb = sdf.sdf().aabb().transform(&instance_transformation).extent_relative_inflate(inflation);
+            let mut support = [proxy_of_sdf(0, aabb)];
+            build_serialized_bvh(&mut support) 
+        }
+
+        let inflated_bvh = make_bvh(class, instance_transformation, 0.1);
+        let bvh = make_bvh(class, instance_transformation, 0.0);
         
-        SdfInstances { instances, inflated_bvh }
+        SdfInstances { instances, bvh, inflated_bvh }
     }
     
     #[must_use]

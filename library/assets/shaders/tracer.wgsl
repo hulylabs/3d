@@ -158,8 +158,6 @@ struct ScatterRecord {
 	skip_pdf_ray : Ray
 }
 
-/// common
-
 fn at(ray : Ray, t : f32) -> vec3f {
 	return ray.origin + t * ray.direction;
 }
@@ -265,7 +263,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 	let denom = dot(quad.normal, ray.direction);
 
-	// No hit if the ray is paraller to the plane
+	// no hit if the ray is paraller to the plane
 	if(abs(denom) < 1e-8) {
 		return false;
 	}
@@ -289,8 +287,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	hitRec.p = quad.Q + quad.v * beta + quad.u * alpha;
 	hitRec.normal = quad.normal;
 	hitRec.front_face = denom < 0.0;
-	if(false == hitRec.front_face)
-	{
+	if(false == hitRec.front_face) {
 		hitRec.normal = -hitRec.normal;
 	}
 
@@ -315,7 +312,7 @@ fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
 	let dao = cross(ao, ray.direction);
 
 	// calculate dist to triangle & barycentric coordinates of intersection point
-	let invDet = 1 / determinant;
+	let invDet = 1.0 / determinant;
 	let dst = dot(ao, normal) * invDet;
 	let u = dot(AC, dao) * invDet;
 	let v = -dot(AB, dao) * invDet;
@@ -371,8 +368,6 @@ fn get_lights() {
 	}
 }
 
-/// main
-
 fn evaluate_pixel_index(
     global_invocation_id: vec3<u32>,
     num_workgroups: vec3<u32>,) -> u32 {
@@ -390,7 +385,7 @@ fn setup_pixel_coordinates(pixel_index: u32) {
 }
 
 fn setup_camera() {
-    fovFactor = 1 / tan(60 * (PI / 180) / 2);
+    fovFactor = 1.0 / tan(60 * (PI / 180.0) / 2.0);
 	cam_origin = uniforms.view_matrix[3].xyz;
 }
 
@@ -445,8 +440,6 @@ fn make_common_color_evaluation_setup(pixel_index: u32) {
 	    pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
 	}
 }
-
-/// shootRay
 
 /*
 x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
@@ -557,8 +550,6 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 	return Ray(ray_origin_world_space, direction);
 }
 
-/// hitRay
-
 fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
 	var closest_so_far = max_ray_patameter;
 	var hit_anything = false;
@@ -600,8 +591,6 @@ fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
     hitMaterial = materials[hitRec.material_id];
 	return hit_anything;
 }
-
-/// traceRay
 
 // https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing#Implementation
 
@@ -677,8 +666,6 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 
 	return accumulated_radiance;
 }
-
-/// scatterRay
 
 var<private> doSpecular : f32;
 fn material_scatter(ray_in : Ray) -> Ray {
@@ -770,8 +757,6 @@ fn glass_scatter(hit: HitRecord, refractive_index_eta: f32, in_ray_direction: ve
 
     return Ray(hit.p, direction);
 }
-
-/// importanceSampling
 
 fn reflectance(cosine : f32, ref_idx : f32) -> f32 {
 	var r0 = (1 - ref_idx) / (1 + ref_idx);
@@ -899,17 +884,17 @@ fn light_pdf(ray : Ray, quad : Parallelogram) -> f32 {
 }
 
 //===================================================================
-/// final image output (aka resolve): tone mapping + gamma correction
+// final image output (aka resolve): tone mapping + gamma correction
 //===================================================================
 
-const full_screen_quad_positions: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
-    vec2<f32>(-1.0, -1.0),
-    vec2<f32> (1.0, -1.0),
-    vec2<f32>(-1.0,  1.0),
+const full_screen_quad_positions = array<vec2f, 6>(
+    vec2f(-1.0, -1.0),
+    vec2f (1.0, -1.0),
+    vec2f(-1.0,  1.0),
 
-    vec2<f32>(-1.0,  1.0),
-    vec2<f32>( 1.0, -1.0),
-    vec2<f32>( 1.0,  1.0),
+    vec2f(-1.0,  1.0),
+    vec2f( 1.0, -1.0),
+    vec2f( 1.0,  1.0),
 );
 
 // ACES approximation for tone mapping
@@ -948,7 +933,7 @@ fn pixel_global_index(pixel_position: vec2f) -> u32 {
 }
 
 //===================================================================
-/// deterministic ray tracing
+// deterministic ray tracing
 //===================================================================
 
 @compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_deterministic(
