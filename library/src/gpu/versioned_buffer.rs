@@ -1,7 +1,7 @@
 ﻿use std::rc::Rc;
+use crate::container::version::Version;
 use crate::gpu::resizable_buffer::{ResizableBuffer, ResizeStatus};
 use crate::gpu::resources::Resources;
-use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(super) struct VersionedBuffer {

@@ -312,10 +312,10 @@ pub(crate) mod tests {
     use crate::geometry::vertex::Vertex;
     use cgmath::{Zero, assert_abs_diff_eq};
     use strum::EnumCount;
+    use crate::container::bvh_proxies::proxy_of_triangle;
     use crate::objects::common_properties::{Linkage, ObjectUid};
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::triangle::Triangle;
-    use crate::scene::bvh_proxies::proxy_of_triangle;
 
     #[must_use]
     pub(crate) fn make_triangle(vertex_data: [f64; VERTICES_IN_TRIANGLE * Axis::COUNT]) -> Triangle {

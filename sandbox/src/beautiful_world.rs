@@ -1,9 +1,10 @@
 use cgmath::Deg;
+use library::container::container::Container;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::Affine;
 use library::objects::material::{Material, MaterialClass};
 use library::objects::material_index::MaterialIndex;
-use library::scene::container::Container;
+use library::scene::scene::Scene;
 use library::sdf::code_generator::SdfRegistrator;
 use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
@@ -194,8 +195,10 @@ pub(super) struct BeautifulMaterials {
 impl BeautifulMaterials {
     #[must_use]
     pub(super) fn new(scene: &mut Container) -> Self {
+        let materials = scene.materials_mutable();
+        
         // Rose gold - warm metallic
-        let rose_gold = scene.materials().add(
+        let rose_gold = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.96, 0.67, 0.64)
@@ -205,7 +208,7 @@ impl BeautifulMaterials {
         );
         
         // Copper
-        let copper = scene.materials().add(
+        let copper = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.72, 0.45, 0.20)
@@ -215,7 +218,7 @@ impl BeautifulMaterials {
         );
         
         // Brass
-        let brass = scene.materials().add(
+        let brass = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.71, 0.65, 0.26)
@@ -225,7 +228,7 @@ impl BeautifulMaterials {
         );
         
         // Sapphire - deep blue glass
-        let sapphire = scene.materials().add(
+        let sapphire = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Glass)
                 .with_albedo(0.06, 0.32, 0.73)
@@ -233,7 +236,7 @@ impl BeautifulMaterials {
         );
         
         // Emerald - rich green glass
-        let emerald = scene.materials().add(
+        let emerald = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Glass)
                 .with_albedo(0.07, 0.66, 0.42)
@@ -241,7 +244,7 @@ impl BeautifulMaterials {
         );
         
         // Amethyst - purple glass
-        let amethyst = scene.materials().add(
+        let amethyst = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Glass)
                 .with_albedo(0.60, 0.28, 0.70)
@@ -249,7 +252,7 @@ impl BeautifulMaterials {
         );
         
         // Ruby - deep red glass
-        let ruby = scene.materials().add(
+        let ruby = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Glass)
                 .with_albedo(0.88, 0.07, 0.37)
@@ -257,7 +260,7 @@ impl BeautifulMaterials {
         );
         
         // Marble - white with subtle veining
-        let marble = scene.materials().add(
+        let marble = materials.add(
             &Material::new()
                 .with_albedo(0.95, 0.93, 0.88)
                 .with_specular(0.4, 0.4, 0.4)
@@ -266,7 +269,7 @@ impl BeautifulMaterials {
         );
         
         // Jade - translucent green
-        let jade = scene.materials().add(
+        let jade = materials.add(
             &Material::new()
                 .with_albedo(0.31, 0.78, 0.47)
                 .with_specular(0.5, 0.8, 0.6)
@@ -275,7 +278,7 @@ impl BeautifulMaterials {
         );
         
         // Obsidian - glossy black
-        let obsidian = scene.materials().add(
+        let obsidian = materials.add(
             &Material::new()
                 .with_albedo(0.08, 0.08, 0.09)
                 .with_specular(0.9, 0.9, 0.9)
@@ -284,7 +287,7 @@ impl BeautifulMaterials {
         );
         
         // Pearl material
-        let pearl_material = scene.materials().add(
+        let pearl_material = materials.add(
             &Material::new()
                 .with_albedo(0.98, 0.96, 0.90)
                 .with_specular(0.95, 0.88, 0.80)
@@ -293,7 +296,7 @@ impl BeautifulMaterials {
         );
         
         // Opal - iridescent
-        let opal = scene.materials().add(
+        let opal = materials.add(
             &Material::new()
                 .with_albedo(0.95, 0.95, 0.98)
                 .with_specular(0.7, 0.85, 0.95)
@@ -302,7 +305,7 @@ impl BeautifulMaterials {
         );
         
         // Crystal clear glass
-        let crystal_clear = scene.materials().add(
+        let crystal_clear = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Glass)
                 .with_albedo(0.98, 0.98, 0.98)
@@ -310,13 +313,13 @@ impl BeautifulMaterials {
         );
         
         // Warm light - sunset glow
-        let warm_light = scene.materials().add(
+        let warm_light = materials.add(
             &Material::new()
                 .with_emission(2.5, 2.2, 1.8)
         );
         
         // Velvet purple
-        let velvet_purple = scene.materials().add(
+        let velvet_purple = materials.add(
             &Material::new()
                 .with_albedo(0.29, 0.08, 0.51)
                 .with_specular(0.1, 0.05, 0.15)
@@ -325,7 +328,7 @@ impl BeautifulMaterials {
         );
         
         // Silk teal
-        let silk_teal = scene.materials().add(
+        let silk_teal = materials.add(
             &Material::new()
                 .with_albedo(0.07, 0.66, 0.66)
                 .with_specular(0.4, 0.8, 0.8)
@@ -334,7 +337,7 @@ impl BeautifulMaterials {
         );
         
         // Matte coral
-        let matte_coral = scene.materials().add(
+        let matte_coral = materials.add(
             &Material::new()
                 .with_albedo(0.98, 0.50, 0.45)
                 .with_specular(0.3, 0.2, 0.2)
@@ -380,7 +383,7 @@ impl BeautifulWorld {
         }
     }
     
-    fn make_light_panel(&mut self, scene: &mut Container) {
+    fn make_light_panel(&mut self, scene: &mut Scene) {
         // Warm sunset light from above
         self.light_panel = Some(
             scene.add_parallelogram(
@@ -392,7 +395,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_zen_garden_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_zen_garden_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
         
         // Light source
@@ -533,7 +536,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_crystal_palace_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_crystal_palace_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
         
         // Light source
@@ -631,7 +634,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_underwater_treasure_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_underwater_treasure_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
         
         // Light source with blue tint

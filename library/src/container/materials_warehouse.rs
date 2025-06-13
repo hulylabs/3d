@@ -1,6 +1,6 @@
-﻿use crate::objects::material::Material;
+﻿use crate::container::version::Version;
+use crate::objects::material::Material;
 use crate::objects::material_index::MaterialIndex;
-use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 

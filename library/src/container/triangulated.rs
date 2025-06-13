@@ -1,7 +1,7 @@
-﻿use crate::geometry::transform::Affine;
+﻿use crate::container::scene_object::{SceneEnvironment, SceneObject};
+use crate::geometry::transform::Affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
-use crate::scene::scene_object::{SceneEnvironment, SceneObject};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(super) struct Triangulated {
@@ -13,8 +13,13 @@ pub(super) struct Triangulated {
 
 impl Triangulated {
     #[must_use]
-    pub(super) fn new(links: Linkage, geometry_kind: usize, payload: usize, transformation: Affine,) -> Self {
-        Self { links, geometry_kind, payload, transformation, }
+    pub(super) fn new(links: Linkage, geometry_kind: usize, payload: usize, transformation: Affine) -> Self {
+        Self {
+            links,
+            geometry_kind,
+            payload,
+            transformation,
+        }
     }
 }
 

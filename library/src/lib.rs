@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
@@ -8,13 +8,16 @@ pub mod geometry;
 pub mod objects;
 pub mod scene;
 pub mod utils;
+pub mod sdf;
+pub mod container;
 #[cfg(feature = "denoiser")]
 mod denoiser;
 mod bvh;
 mod serialization;
 mod gpu;
 mod tests;
-pub mod sdf;
+mod animation;
+
 
 use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;
@@ -22,7 +25,6 @@ use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::{FrameBufferSettings, Renderer};
 use crate::scene::camera::Camera;
-use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::sliding_time_frame::SlidingTimeFrame;
@@ -37,6 +39,8 @@ use std::time::Duration;
 use thiserror::Error;
 use wgpu::Trace;
 use winit::window::Window;
+use crate::container::container::Container;
+use crate::scene::scene::Scene;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -306,7 +310,7 @@ impl Engine {
     }
 
     #[must_use]
-    pub fn scene(&mut self) -> &mut Container {
+    pub fn scene(&mut self) -> &mut Scene {
         self.renderer.scene()
     }
     

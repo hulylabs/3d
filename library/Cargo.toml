@@ -29,8 +29,9 @@ derive_more = { version = "2.0.1", features = ["display"] }
 disjoint = "0.8.0"
 serde_json = "1.0.140"
 serde = { version = "1.0.219", features = ["derive"] }
-bitflags = "2.9.0"
+bitflags = "2.9.1"
 seahash = "4.1.0"
+more-asserts = "0.3.1"
 
 [dev-dependencies]
 tempfile = "3.20.0"
@@ -39,7 +40,6 @@ exr = "1.73.0"
 rstest = "0.25.0"
 tinytemplate = "1.2.1"
 serde = "1.0.219"
-more-asserts = "0.3.1"
 
 [build-dependencies]
 glob = "0.3.2"

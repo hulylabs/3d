@@ -1,8 +1,8 @@
-﻿use crate::geometry::transform::Affine;
+﻿use crate::container::scene_object::{SceneEnvironment, SceneObject};
+use crate::geometry::transform::Affine;
 use crate::objects::material_index::MaterialIndex;
-use crate::scene::scene_object::{SceneEnvironment, SceneObject};
-use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::objects::ray_traceable::RayTraceable;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(super) struct Monolithic {
     geometry_kind: usize,
@@ -13,8 +13,13 @@ pub(super) struct Monolithic {
 
 impl Monolithic {
     #[must_use]
-    pub(super) fn new(geometry_kind: usize, backend: Box<dyn RayTraceable>, payload: usize, transformation: Affine,) -> Self {
-        Self { geometry_kind, geometry: backend, payload, transformation, }
+    pub(super) fn new(geometry_kind: usize, backend: Box<dyn RayTraceable>, payload: usize, transformation: Affine) -> Self {
+        Self {
+            geometry_kind,
+            geometry: backend,
+            payload,
+            transformation,
+        }
     }
 }
 
@@ -51,38 +56,36 @@ impl SceneObject for Monolithic {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::Deg;
-    use crate::serialization::serializable_for_gpu::GpuSerializable;
     use super::*;
+    use crate::serialization::serializable_for_gpu::GpuSerializable;
+    use cgmath::Deg;
 
     struct DummyRayTraceable;
-    
+
     impl GpuSerializable for DummyRayTraceable {
-        fn serialize_into(&self, _buffer: &mut GpuReadySerializationBuffer) {
-        }
+        fn serialize_into(&self, _buffer: &mut GpuReadySerializationBuffer) {}
     }
-    
+
     impl RayTraceable for DummyRayTraceable {
         #[must_use]
         fn material(&self) -> MaterialIndex {
             MaterialIndex(0)
         }
 
-        fn set_material(&mut self, _material_index: MaterialIndex) {
-        }
+        fn set_material(&mut self, _material_index: MaterialIndex) {}
 
         #[must_use]
         fn serialized_quartet_count(&self) -> usize {
             0
         }
     }
-    
+
     #[test]
     fn test_payload_pass_through() {
         let expected_geometry_kind = 17;
         let expected_payload = 3;
-        let system_under_test = Monolithic::new(expected_geometry_kind, Box::new(DummyRayTraceable{}), expected_payload, Affine::from_angle_y(Deg(45.0)));
-        
+        let system_under_test = Monolithic::new(expected_geometry_kind, Box::new(DummyRayTraceable {}), expected_payload, Affine::from_angle_y(Deg(45.0)));
+
         assert_eq!(system_under_test.payload(), expected_payload);
         assert_eq!(system_under_test.data_kind_uid(), expected_geometry_kind);
     }

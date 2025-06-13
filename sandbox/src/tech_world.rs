@@ -4,8 +4,6 @@ use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
 use library::objects::material_index::MaterialIndex;
-use library::scene::container::Container;
-use library::scene::mesh_warehouse::MeshWarehouse;
 use library::sdf::code_generator::SdfRegistrator;
 use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
@@ -38,6 +36,9 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
+use library::container::container::Container;
+use library::container::mesh_warehouse::MeshWarehouse;
+use library::scene::scene::Scene;
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -237,12 +238,15 @@ pub(super) struct Materials {
     silver_material: MaterialIndex,
     green_material: MaterialIndex,
     selected_object_material: MaterialIndex,
+    large_box_material: MaterialIndex,
 }
 
 impl Materials {
     #[must_use]
     pub(super) fn new(scene: &mut Container) -> Self {
-        let gold_metal = scene.materials().add(
+        let materials = scene.materials_mutable();
+        
+        let gold_metal = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(1.0, 0.5, 0.0)
@@ -251,31 +255,32 @@ impl Materials {
                 .with_refractive_index_eta(0.0),
         );
 
-        let blue_glass = scene
-            .materials()
+        let large_box_material = materials.add(&Material::new()
+            .with_albedo(0.95, 0.95, 0.95)
+            .with_refractive_index_eta(2.5));
+
+        let blue_glass = materials
             .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(0.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
-        let purple_glass = scene
-            .materials()
+        let purple_glass = materials
             .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
-        let red_glass = scene
-            .materials()
+        let red_glass = materials
             .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.2, 0.0).with_refractive_index_eta(1.4));
 
-        let green_mirror = scene.materials().add(
+        let green_mirror = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.64, 0.77, 0.22)
                 .with_refractive_index_eta(1.4),
         );
 
-        let light_material = scene.materials().add(
+        let light_material = materials.add(
             &Material::new()
                 .with_emission(2.0, 2.0, 2.0)
         );
 
-        let black_material = scene.materials().add(
+        let black_material = materials.add(
             &Material::new()
                 .with_albedo(0.2, 0.2, 0.2)
                 .with_specular(0.2, 0.2, 0.2)
@@ -283,7 +288,7 @@ impl Materials {
                 .with_roughness(0.95),
         );
 
-        let coral_material = scene.materials().add(
+        let coral_material = materials.add(
             &Material::new()
                 .with_albedo(1.0, 0.5, 0.3)
                 .with_specular(0.2, 0.2, 0.2)
@@ -291,7 +296,7 @@ impl Materials {
                 .with_roughness(0.0),
         );
 
-        let red_material = scene.materials().add(
+        let red_material = materials.add(
             &Material::new()
                 .with_albedo(0.75, 0.1, 0.1)
                 .with_specular(0.75, 0.1, 0.1)
@@ -299,7 +304,7 @@ impl Materials {
                 .with_roughness(0.95),
         );
 
-        let blue_material = scene.materials().add(
+        let blue_material = materials.add(
             &Material::new()
                 .with_albedo(0.1, 0.1, 0.75)
                 .with_specular(0.1, 0.1, 0.75)
@@ -307,7 +312,7 @@ impl Materials {
                 .with_roughness(0.95),
         );
 
-        let bright_red_material = scene.materials().add(
+        let bright_red_material = materials.add(
             &Material::new()
                 .with_albedo(1.0, 0.0, 0.0)
                 .with_specular(1.0, 1.0, 1.0)
@@ -315,7 +320,7 @@ impl Materials {
                 .with_roughness(0.95),
         );
 
-        let silver_material = scene.materials().add(
+        let silver_material = materials.add(
             &Material::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.75, 0.75, 0.75)
@@ -324,7 +329,7 @@ impl Materials {
                 .with_roughness(0.0),
         );
 
-        let green_material = scene.materials().add(
+        let green_material = materials.add(
             &Material::new()
                 .with_albedo(0.05, 0.55, 0.05)
                 .with_specular(0.05, 0.55, 0.05)
@@ -332,7 +337,7 @@ impl Materials {
                 .with_roughness(0.95),
         );
 
-        let selected_object_material = scene.materials().add(
+        let selected_object_material = materials.add(
             &Material::new()
                 .with_albedo(0.05, 0.05, 2.05)
                 .with_specular(0.05, 0.05, 0.55)
@@ -355,11 +360,12 @@ impl Materials {
             silver_material,
             green_material,
             selected_object_material,
+            large_box_material,
         }
     }
 }
 
-pub(super) struct World {
+pub(super) struct TechWorld {
     sdf_classes: SdfClasses,
     materials: Materials,
     
@@ -368,7 +374,7 @@ pub(super) struct World {
     light_panel_x: f64,
 }
 
-impl World {
+impl TechWorld {
     #[must_use]
     pub(super) fn new(sdf_classes: SdfClasses, materials: Materials) -> Self {
         Self { 
@@ -381,37 +387,37 @@ impl World {
         self.materials.selected_object_material
     }
 
-    pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Container) {
+    pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Scene) {
         self.light_panel_z += sign * 0.01;
         self.invalidate_light_panel(scene);
     }
     
-    pub(super) fn move_light_x(&mut self, sign: f64, scene: &mut Container) {
+    pub(super) fn move_light_x(&mut self, sign: f64, scene: &mut Scene) {
         self.light_panel_x += sign * 0.01;
         self.invalidate_light_panel(scene);
     }
 
-    fn invalidate_light_panel(&mut self, scene: &mut Container) {
+    fn invalidate_light_panel(&mut self, scene: &mut Scene) {
         if let Some(light_panel) = self.light_panel {
             scene.delete(light_panel);
         }
         self.make_light_panel(scene);
     }
 
-    fn make_light_panel(&mut self, scene: &mut Container) {
+    fn make_light_panel(&mut self, scene: &mut Scene) {
         self.light_panel = Some(
             scene.add_parallelogram(Point::new(self.light_panel_x, 1.0, self.light_panel_z), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light_material)
         );
     }
 
-    fn make_common_scene_walls(&mut self, scene: &mut Container) {
+    fn make_common_scene_walls(&mut self, scene: &mut Scene) {
         self.make_light_panel(scene);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
     }
 
-    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -437,7 +443,7 @@ impl World {
             self.materials.blue_material);
     }
 
-    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
 
         self.make_common_scene_walls(scene);
@@ -549,7 +555,7 @@ impl World {
         exe_directory.join(file_name)
     }
 
-    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
         self.make_common_scene_walls(scene);
 
@@ -572,7 +578,7 @@ impl World {
         }
     }
     
-    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Container) {
+    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Scene) {
         scene.clear_objects();
         
         scene.add_sdf(
@@ -618,14 +624,11 @@ impl World {
         
         match cube_mesh_or_error {
             Ok(cube_mesh) => {
-                let large_box_material = scene.materials().add(&Material::new()
-                    .with_albedo(0.95, 0.95, 0.95)
-                    .with_refractive_index_eta(2.5));
                 let large_box_location =
                     Transformation::new(
                         Affine::from_translation(Vector::new(0.15, 0.6, -1.0)) *
                             Affine::from_nonuniform_scale(3.65, 0.8, 0.25));
-                scene.add_mesh(&meshes, cube_mesh, &large_box_location, large_box_material);
+                scene.add_mesh(&meshes, cube_mesh, &large_box_location, self.materials.large_box_material);
         
                 {
                     let box_location =Transformation::new(

@@ -1,4 +1,4 @@
-﻿use crate::scene::version::Version;
+﻿use crate::container::version::Version;
 
 #[derive(Default, Copy, Clone)]
 pub(super) struct Statistics {
@@ -11,13 +11,13 @@ impl Statistics {
         self.object_count += 1;
         self.data_version += 1;
     }
-    
+
     pub(super) fn delete_object(&mut self) {
         assert!(self.object_count > 0);
         self.object_count -= 1;
         self.data_version += 1;
     }
-    
+
     pub(super) fn register_object_mutation(&mut self) {
         self.data_version += 1;
     }
@@ -31,7 +31,7 @@ impl Statistics {
     pub(super) fn object_count(&self) -> usize {
         self.object_count
     }
-    
+
     pub(super) fn clear_objects(&mut self) {
         self.object_count = 0;
         self.data_version += 1;
@@ -63,11 +63,11 @@ mod tests {
     #[test]
     fn test_register_new_object() {
         let mut system_under_test = Statistics::default();
-        
+
         system_under_test.register_new_object();
         assert_eq!(system_under_test.object_count(), 1);
         assert_eq!(system_under_test.data_version(), Version(1));
-        
+
         system_under_test.register_new_object();
         assert_eq!(system_under_test.object_count(), 2);
         assert_eq!(system_under_test.data_version(), Version(2));
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn test_register_object_mutation() {
         let mut system_under_test = Statistics::default();
-        
+
         system_under_test.register_new_object();
         assert_eq!(system_under_test.object_count(), 1);
         assert_eq!(system_under_test.data_version(), Version(1));
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn test_multiple_mutations() {
         let mut system_under_test = Statistics::default();
-        
+
         system_under_test.register_new_object();
         assert_eq!(system_under_test.object_count(), 1);
         assert_eq!(system_under_test.data_version(), Version(1));

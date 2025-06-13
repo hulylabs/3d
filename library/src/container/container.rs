@@ -9,15 +9,6 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::objects::triangle::Triangle;
-use crate::scene::bvh_proxies::{proxy_of_sdf, SceneObjects};
-use crate::scene::materials_warehouse::MaterialsWarehouse;
-use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
-use crate::scene::monolithic::Monolithic;
-use crate::scene::scene_object::SceneObject;
-use crate::scene::sdf_warehouse::SdfWarehouse;
-use crate::scene::statistics::Statistics;
-use crate::scene::triangulated::Triangulated;
-use crate::scene::version::Version;
 use crate::sdf::code_generator::SdfRegistrator;
 use crate::sdf::named_sdf::UniqueSdfClassName;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -31,6 +22,15 @@ use std::io::Error;
 use std::path::Path;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
+use crate::container::bvh_proxies::{proxy_of_sdf, SceneObjects};
+use crate::container::materials_warehouse::MaterialsWarehouse;
+use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+use crate::container::monolithic::Monolithic;
+use crate::container::scene_object::SceneObject;
+use crate::container::sdf_warehouse::SdfWarehouse;
+use crate::container::statistics::Statistics;
+use crate::container::triangulated::Triangulated;
+use crate::container::version::Version;
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
 pub(crate) enum DataKind {
@@ -65,7 +65,7 @@ impl Container {
         }
     }
     
-    pub fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
+    pub(crate) fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
         let mut objects_to_tree = self.make_bvh_support(0.0);
         let sdf_list = self.sorted_of_a_kind(DataKind::Sdf as usize, self.count_of_a_kind(DataKind::Sdf));
         
@@ -99,11 +99,16 @@ impl Container {
     }
 
     #[must_use]
-    pub fn materials(&mut self) -> &mut MaterialsWarehouse {
+    pub fn materials_mutable(&mut self) -> &mut MaterialsWarehouse {
         &mut self.materials
     }
+    
+    #[must_use]
+    pub(crate) fn materials(&self) -> &MaterialsWarehouse {
+        &self.materials
+    }
 
-    pub fn set_material(&mut self, victim: ObjectUid, material: MaterialIndex) {
+    pub(crate) fn set_material(&mut self, victim: ObjectUid, material: MaterialIndex) {
         match self.objects.get_mut(&victim) {
             Some(object) => {
                 if object.material() != material {
@@ -116,7 +121,7 @@ impl Container {
     }
 
     #[must_use]
-    pub fn material_of(&self, victim: ObjectUid) -> MaterialIndex {
+    pub(crate) fn material_of(&self, victim: ObjectUid) -> MaterialIndex {
         match self.objects.get(&victim) {
             Some(object) => {
                 object.material()
@@ -136,7 +141,7 @@ impl Container {
         })
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid{
+    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
         let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
@@ -161,7 +166,7 @@ impl Container {
         links.uid()
     }
 
-    pub fn delete(&mut self, target: ObjectUid) {
+    pub(crate) fn delete(&mut self, target: ObjectUid) {
         let removed_or_none = self.objects.remove(&target);
         if let Some(removed) = removed_or_none {
             self.per_object_kind_statistics[removed.data_kind_uid()].delete_object();
@@ -173,7 +178,7 @@ impl Container {
         }
     }
     
-    pub fn clear_objects(&mut self) {
+    pub(crate) fn clear_objects(&mut self) {
         if self.objects.is_empty() {
             return;
         }
@@ -316,9 +321,6 @@ mod tests {
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::scene::container::{Container, DataKind};
-    use crate::scene::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
-    use crate::scene::version::Version;
     use crate::sdf::code_generator::SdfRegistrator;
     use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_sphere::SdfSphere;
@@ -333,6 +335,9 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
+    use crate::container::container::{Container, DataKind};
+    use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+    use crate::container::version::Version;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -356,8 +361,8 @@ mod tests {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
         let system_under_test = Rc::new(RefCell::new(Container::new(sdf_classes)));
         
-        let material_one = system_under_test.borrow_mut().materials().add(&Material::default());
-        let material_two = system_under_test.borrow_mut().materials().add(&Material::default());
+        let material_one = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
+        let material_two = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
 
         let assert_material_changed = |from: MaterialIndex, to: MaterialIndex, victim: ObjectUid| {
             assert_eq!(system_under_test.borrow().material_of(victim), from);
@@ -403,7 +408,7 @@ mod tests {
                 .with_specular(2.0, 4.6, 8.4)
                 .with_roughness(-3.0);
         
-        let expected_material = system_under_test.materials().add(&material);
+        let expected_material = system_under_test.materials_mutable().add(&material);
         let expected_transform = Affine::identity();
 
         let mut expected_serialized = GpuReadySerializationBuffer::new(SDF_TO_ADD as usize, <SdfInstance as GpuSerializationSize>::SERIALIZED_QUARTET_COUNT);
@@ -434,7 +439,7 @@ mod tests {
 
         const PARALLELOGRAM_TO_ADD: u32 = 4;
 
-        let expected_material = system_under_test.materials().add(&Material::default().with_albedo(1.0, 0.0, 0.0));
+        let expected_material = system_under_test.materials_mutable().add(&Material::default().with_albedo(1.0, 0.0, 0.0));
         let expected_origin = Point::new(1.0, 2.0, 3.0);
         let expected_x = Vector::new(3.0, 5.0, 7.0);
         let expected_y = Vector::new(4.0, 6.0, 8.0);
@@ -521,7 +526,7 @@ mod tests {
         let mut system_under_test = make_empty_container();
 
         let (mesh, meshes) = prepare_test_mesh();
-        let dummy_material = system_under_test.materials().add(&Material::default());
+        let dummy_material = system_under_test.materials_mutable().add(&Material::default());
         
         let to_be_kept_one = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
         let to_be_deleted = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
@@ -623,7 +628,7 @@ mod tests {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
         let mut container = Container::new(sdf_classes);
 
-        let dummy_material = container.materials().add(&Material::default());
+        let dummy_material = container.materials_mutable().add(&Material::default());
         let (mesh_id, meshes) = prepare_test_mesh();
 
         let sdf = container.add_sdf(&Affine::identity(), &sdf_name, dummy_material);

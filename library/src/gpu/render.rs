@@ -19,7 +19,6 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
-use crate::scene::container::{Container, DataKind};
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
@@ -31,6 +30,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
+use crate::container::container::{Container, DataKind};
+use crate::scene::scene::Scene;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -70,7 +71,7 @@ pub(crate) struct Renderer {
     color_buffer_evaluation: ColorBufferEvaluationStrategy,
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
-    scene: Container,
+    scene: Scene,
     
     #[cfg(feature = "denoiser")]
     denoiser: denoiser::Denoiser,
@@ -85,7 +86,7 @@ impl Renderer {
     
     pub(crate) fn new(
         context: Rc<Context>,
-        scene_container: Container,
+        objects_container: Container,
         camera: Camera,
         frame_buffer_settings: FrameBufferSettings,
         strategy: RenderStrategyId,
@@ -96,14 +97,14 @@ impl Renderer {
         let pixel_side_subdivision: u32 = 1;
         let mut uniforms = Uniforms::new(frame_buffer_settings.frame_buffer_size, camera, pixel_side_subdivision);
 
-        let mut scene = scene_container;
+        let mut objects = objects_container;
 
         let resources = Resources::new(context.clone());
-        let buffers = Self::init_buffers(&mut scene, &context, &mut uniforms, &resources);
+        let buffers = Self::init_buffers(&mut objects, &context, &mut uniforms, &resources);
         let pipelines_factory = PipelinesFactory::new(context.clone(), frame_buffer_settings.presentation_format, caches_path);
         let mut gpu = Gpu { context, resources, buffers, pipelines_factory };
 
-        let shader_source_text = scene.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
+        let shader_source_text = objects.append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
         let shader_source_hash = seahash::hash(shader_source_text.as_bytes());
 
         let shader_module = gpu.resources.create_shader_module("ray tracer shader", shader_source_text.as_str());
@@ -131,7 +132,7 @@ impl Renderer {
             color_buffer_evaluation: default_strategy,
             pipeline_surface_attributes: surface_attributes,
             pipeline_final_image_rasterization: final_image_rasterization,
-            scene,
+            scene: Scene::new(objects),
 
             #[cfg(feature = "denoiser")]
             denoiser: denoiser::Denoiser::new(),
@@ -142,7 +143,7 @@ impl Renderer {
     }
 
     #[must_use]
-    pub(crate) fn scene(&mut self) -> &mut Container {
+    pub(crate) fn scene(&mut self) -> &mut Scene {
         &mut self.scene
     }
     
@@ -200,34 +201,36 @@ impl Renderer {
     
     #[must_use]
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
+        let container = self.scene.container();
+        
         let mut composite_status = BuffersUpdateStatus::new();
 
-        composite_status.merger_material(self.gpu.buffers.materials.try_update(self.scene.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || self.scene.materials().serialize()));
+        composite_status.merger_material(self.gpu.buffers.materials.try_update(container.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || container.materials().serialize()));
         
-        composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
-        self.uniforms.set_parallelograms_count(self.scene.count_of_a_kind(DataKind::Parallelogram) as u32);
+        composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, container, self.gpu.context.queue()));
+        self.uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
         
         let mut update_bvh = false;
         
-        let triangles_set_version = self.scene.data_version(DataKind::TriangleMesh);
+        let triangles_set_version = container.data_version(DataKind::TriangleMesh);
         if self.gpu.buffers.triangles.version_diverges(triangles_set_version) {
-            let serialized_triangles = Self::serialize_triangles(self.scene());
+            let serialized_triangles = Self::serialize_triangles(container);
             composite_status.merge_geometry(self.gpu.buffers.triangles.try_update(triangles_set_version, &self.gpu.resources, self.gpu.context.queue(), || serialized_triangles));
             update_bvh = true;
         }
 
-        let sdf_set_version = self.scene.data_version(DataKind::Sdf);
+        let sdf_set_version = container.data_version(DataKind::Sdf);
         if self.gpu.buffers.sdf.version_diverges(sdf_set_version) {
-            composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.gpu.buffers.sdf, &self.gpu.resources, &self.scene, self.gpu.context.queue()));
-            self.uniforms.set_sdf_count(self.scene.count_of_a_kind(DataKind::Sdf) as u32);
+            composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.gpu.buffers.sdf, &self.gpu.resources, container, self.gpu.context.queue()));
+            self.uniforms.set_sdf_count(container.count_of_a_kind(DataKind::Sdf) as u32);
             update_bvh = true;
         }
 
         if update_bvh {
-            let (bvh, bvh_length) = Self::serialize_bvh(self.scene(), 0.0);
+            let (bvh, bvh_length) = Self::serialize_bvh(container, 0.0);
             composite_status.merge_bvh(self.gpu.buffers.bvh.update(&self.gpu.resources, self.gpu.context.queue(), || bvh));
 
-            let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(self.scene(), Self::BVH_INFLATION_RATE);
+            let (bvh_inflated, bvh_inflated_length) = Self::serialize_bvh(container, Self::BVH_INFLATION_RATE);
             composite_status.merge_bvh(self.gpu.buffers.bvh_inflated.update(&self.gpu.resources, self.gpu.context.queue(), || bvh_inflated));
 
             self.uniforms.set_bvh_length(bvh_length);
@@ -271,8 +274,8 @@ impl Renderer {
         assert_eq!(bvh_length, bvh_inflated_length);
         uniforms.set_bvh_length(bvh_length);
 
-        let materials = if scene.materials().count() > 0
-            { scene.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
+        let materials = if scene.materials_mutable().count() > 0
+            { scene.materials_mutable().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
         uniforms.set_parallelograms_count(scene.count_of_a_kind(DataKind::Parallelogram) as u32);
         uniforms.set_sdf_count(scene.count_of_a_kind(DataKind::Sdf) as u32);
@@ -285,7 +288,7 @@ impl Renderer {
             
             parallelograms: Self::make_buffer::<Parallelogram>(scene, resources, &DataKind::Parallelogram),
             sdf: Self::make_buffer::<SdfInstance>(scene, resources, &DataKind::Sdf),
-            materials: VersionedBuffer::new(scene.materials().data_version(), resources, "materials", || materials),
+            materials: VersionedBuffer::new(scene.materials_mutable().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::new(scene.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
             bvh: ResizableBuffer::new(resources,"bvh", || bvh),
             bvh_inflated: ResizableBuffer::new(resources,"bvh inflated", || bvh_inflated),
@@ -733,7 +736,7 @@ mod tests {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
         let mut scene = Container::new(SdfRegistrator::default());
-        let test_material = scene.materials().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
+        let test_material = scene.materials_mutable().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(
             Point::new(-0.5, -0.5, 0.0), 
@@ -769,7 +772,7 @@ mod tests {
         let test_material = Material::new()
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);
-        let test_material_uid = scene.materials().add(&test_material);
+        let test_material_uid = scene.materials_mutable().add(&test_material);
         scene.add_sdf(&Affine::identity(), &test_box_name, test_material_uid);
 
         let context = create_headless_wgpu_context();

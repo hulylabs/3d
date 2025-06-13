@@ -1,16 +1,19 @@
 ﻿#[cfg(test)]
 mod tests {
     use crate::bvh::builder::build_serialized_bvh;
+    use crate::container::bvh_proxies::proxy_of_sdf;
+    use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::Affine;
+    use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::pipelines_factory::ComputeRoutineEntryPoint;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
+    use crate::gpu::uniforms::Uniforms;
     use crate::objects::common_properties::Linkage;
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::sdf::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::scene::bvh_proxies::proxy_of_sdf;
-    use crate::scene::sdf_warehouse::SdfWarehouse;
+    use crate::scene::camera::Camera;
     use crate::sdf::code_generator::SdfRegistrator;
     use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_box::SdfBox;
@@ -27,9 +30,6 @@ mod tests {
     use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
     use std::f32::consts::SQRT_2;
     use std::fmt::Write;
-    use crate::gpu::frame_buffer_size::FrameBufferSize;
-    use crate::gpu::uniforms::Uniforms;
-    use crate::scene::camera::Camera;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     

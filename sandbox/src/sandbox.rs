@@ -1,10 +1,9 @@
 ﻿use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulWorld};
-use crate::world::{Materials, SdfClasses, World};
+use crate::tech_world::{Materials, SdfClasses, TechWorld};
 use cgmath::Deg;
 use library::geometry::alias::Point;
 use library::objects::material_index::MaterialIndex;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
-use library::scene::container::Container;
 use library::sdf::code_generator::SdfRegistrator;
 use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use library::utils::object_uid::ObjectUid;
@@ -16,6 +15,7 @@ use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
+use library::container::container::Container;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -37,7 +37,7 @@ struct SelectedObject {
 
 pub(super) struct Sandbox {
     engine: Engine,
-    tech_world: World,
+    tech_world: TechWorld,
     beautiful_world: BeautifulWorld,
     
     left_mouse_down: bool,
@@ -187,14 +187,15 @@ impl Sandbox {
         let tech_materials = Materials::new(&mut scene);
         let beautiful_materials = BeautifulMaterials::new(&mut scene);
         
-        let mut tech_world = World::new(tech_sdf_classes, tech_materials);
-        tech_world.load_to_ui_box_scene(&mut scene);
+        let mut tech_world = TechWorld::new(tech_sdf_classes, tech_materials);
         let selected_object_material = tech_world.selected_object_material();
         
         let beautiful_world = BeautifulWorld::new(beautiful_sdf_classes, beautiful_materials);
 
         let caches_path = Some(PathBuf::from("./.caches"));
-        let engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
+        let mut engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
+
+        tech_world.load_to_ui_box_scene(engine.scene());
         
         timer.stop();
         info!("sandbox initialized in {} seconds", timer.max_time().as_secs_f64());
