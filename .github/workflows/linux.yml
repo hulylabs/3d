@@ -83,7 +83,7 @@ jobs:
 
       - name: Upload coverage reports as artifacts
         if: matrix.build-type == 'debug'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-reports
           path: coverage/
