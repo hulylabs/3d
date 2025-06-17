@@ -1,10 +1,10 @@
 use cgmath::Deg;
-use library::container::container::Container;
+use library::container::visual_objects::VisualObjects;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::Affine;
 use library::objects::material::{Material, MaterialClass};
 use library::objects::material_index::MaterialIndex;
-use library::scene::scene::Scene;
+use library::scene::hub::Hub;
 use library::sdf::code_generator::SdfRegistrator;
 use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
@@ -194,7 +194,7 @@ pub(super) struct BeautifulMaterials {
 
 impl BeautifulMaterials {
     #[must_use]
-    pub(super) fn new(scene: &mut Container) -> Self {
+    pub(super) fn new(scene: &mut VisualObjects) -> Self {
         let materials = scene.materials_mutable();
         
         // Rose gold - warm metallic
@@ -383,7 +383,7 @@ impl BeautifulWorld {
         }
     }
     
-    fn make_light_panel(&mut self, scene: &mut Scene) {
+    fn make_light_panel(&mut self, scene: &mut Hub) {
         // Warm sunset light from above
         self.light_panel = Some(
             scene.add_parallelogram(
@@ -395,7 +395,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_zen_garden_scene(&mut self, scene: &mut Scene) {
+    pub(super) fn load_zen_garden_scene(&mut self, scene: &mut Hub) {
         scene.clear_objects();
         
         // Light source
@@ -536,7 +536,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_crystal_palace_scene(&mut self, scene: &mut Scene) {
+    pub(super) fn load_crystal_palace_scene(&mut self, scene: &mut Hub) {
         scene.clear_objects();
         
         // Light source
@@ -634,7 +634,7 @@ impl BeautifulWorld {
         );
     }
     
-    pub(super) fn load_underwater_treasure_scene(&mut self, scene: &mut Scene) {
+    pub(super) fn load_underwater_treasure_scene(&mut self, scene: &mut Hub) {
         scene.clear_objects();
         
         // Light source with blue tint

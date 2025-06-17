@@ -52,7 +52,7 @@ mod tests {
               6.0,
         ];
 
-        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz"));
+        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz, 0.0"));
 
         let actual_distances = execute_code(&input_points, function_execution, ExecutionConfig::default());
         

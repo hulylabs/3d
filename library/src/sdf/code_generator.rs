@@ -216,7 +216,7 @@ mod tests {
         let (actual_name, actual_code, generator_under_test) = generate_code(tree.clone(), name.clone());
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_the_name(point: vec3f) -> f32 {\nvar left_3: f32;\n{\nvar left_2: f32;\n{\nvar left_1: f32;\n{\nlet q = abs(point)-vec3f(1.0,2.0,3.0);\nleft_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\nvar right_1: f32;\n{\nlet q = abs(point)-vec3f(5.0,7.0,11.0);\nright_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\n\nleft_2 = min(left_1,right_1);\n}\nvar right_2: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(-17.0,-19.0,-23.0);\n{\noperand_1 = length(point)-13.0;\n}\n}\nright_2 = operand_1;\n}\n\nleft_3 = min(left_2,right_2);\n}\nvar right_3: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(31.0,37.0,41.0);\n{\noperand_1 = length(point)-29.0;\n}\n}\nright_3 = operand_1;\n}\n\nreturn min(left_3,right_3);\n}\n";
+        let expected_code = "fn sdf_the_name(point: vec3f, time: f32) -> f32 {\nvar left_3: f32;\n{\nvar left_2: f32;\n{\nvar left_1: f32;\n{\nlet q = abs(point)-vec3f(1.0,2.0,3.0);\nleft_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\nvar right_1: f32;\n{\nlet q = abs(point)-vec3f(5.0,7.0,11.0);\nright_1 = length(max(q,vec3f(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);\n}\n\nleft_2 = min(left_1,right_1);\n}\nvar right_2: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(-17.0,-19.0,-23.0);\n{\noperand_1 = length(point)-13.0;\n}\n}\nright_2 = operand_1;\n}\n\nleft_3 = min(left_2,right_2);\n}\nvar right_3: f32;\n{\nvar operand_1: f32;\n{\nlet point = point-vec3f(31.0,37.0,41.0);\n{\noperand_1 = length(point)-29.0;\n}\n}\nright_3 = operand_1;\n}\n\nreturn min(left_3,right_3);\n}\n";
 
         assert_no_shared_code(generator_under_test);
         assert_eq!(actual_name, expected_name);
@@ -238,8 +238,8 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
         
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 {\nvar left_1: f32;\n{\nleft_1 = sdf_test_1(point);\n}\nvar right_1: f32;\n{\nright_1 = sdf_test_1(point);\n}\n\nreturn min(left_1,right_1);\n}\n";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 {\nreturn length(point)-17.0;\n}\n";
+        let expected_code = "fn sdf_test(point: vec3f, time: f32) -> f32 {\nvar left_1: f32;\n{\nleft_1 = sdf_test_1(point,time);\n}\nvar right_1: f32;\n{\nright_1 = sdf_test_1(point,time);\n}\n\nreturn min(left_1,right_1);\n}\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f, time: f32) -> f32 {\nreturn length(point)-17.0;\n}\n";
         
         assert_eq!(actual_name, expected_name);
         assert_eq!(actual_shared_code, expected_shared_code, "shader code differs");
@@ -270,8 +270,8 @@ mod tests {
         generator_under_test.generate_shared_code(&mut actual_shared_code);
 
         let expected_name = FunctionName::from(&name);
-        let expected_code = "fn sdf_test(point: vec3f) -> f32 {\nvar left_3: f32;\n{\nleft_3 = sdf_test_1(point);\n}\nvar right_3: f32;\n{\nvar left_2: f32;\n{\nleft_2 = sdf_test_2(point);\n}\nvar right_2: f32;\n{\nright_2 = sdf_test_2(point);\n}\n\nright_3 = min(left_2,right_2);\n}\n\nreturn min(left_3,right_3);\n}\n";
-        let expected_shared_code = "fn sdf_test_1(point: vec3f) -> f32 {\nreturn length(point)-17.0;\n}\nfn sdf_test_2(point: vec3f) -> f32 {\nvar left: f32;\n{\nleft = sdf_test_1(point);\n}\nvar right: f32;\n{\nright = sdf_test_1(point);\n}\n\nreturn min(left,right);\n}\n";
+        let expected_code = "fn sdf_test(point: vec3f, time: f32) -> f32 {\nvar left_3: f32;\n{\nleft_3 = sdf_test_1(point,time);\n}\nvar right_3: f32;\n{\nvar left_2: f32;\n{\nleft_2 = sdf_test_2(point,time);\n}\nvar right_2: f32;\n{\nright_2 = sdf_test_2(point,time);\n}\n\nright_3 = min(left_2,right_2);\n}\n\nreturn min(left_3,right_3);\n}\n";
+        let expected_shared_code = "fn sdf_test_1(point: vec3f, time: f32) -> f32 {\nreturn length(point)-17.0;\n}\nfn sdf_test_2(point: vec3f, time: f32) -> f32 {\nvar left: f32;\n{\nleft = sdf_test_1(point,time);\n}\nvar right: f32;\n{\nright = sdf_test_1(point,time);\n}\n\nreturn min(left,right);\n}\n";
 
         assert_eq!(actual_name, expected_name);
         assert_eq!(actual_shared_code, expected_shared_code, "shared code differs");

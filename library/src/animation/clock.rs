@@ -14,12 +14,14 @@ impl Clock {
             global_clock_start: current_time,
         }
     }
-
+    
     #[must_use]
-    pub(super) fn now(parameters: ClockAnimationAct<PhaseAlive>) -> Self {
-        Self::new(Instant::now(), parameters)
+    pub(super) fn ticking(&self, global_time: Instant) -> bool {
+        self.parameters.get_time_to_live()
+            .is_none_or( 
+                |time_to_live| global_time.duration_since(self.global_clock_start) < time_to_live.span())
     }
-
+    
     #[must_use]
     pub(super) fn local_time(&self, global_time: Instant) -> f64 {
         let local_forward_time = self.local_forward_time(global_time);

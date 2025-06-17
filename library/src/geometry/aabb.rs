@@ -3,7 +3,7 @@ use crate::geometry::axis::Axis;
 use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use alias::Point;
 use alias::Vector;
-use cgmath::{AbsDiffEq, Transform};
+use cgmath::{AbsDiffEq, EuclideanSpace, Transform};
 use strum::EnumCount;
 use crate::geometry::transform::Affine;
 
@@ -70,6 +70,11 @@ impl Aabb {
         }
     }
 
+    #[must_use]
+    pub(crate) fn center(&self) -> Point {
+        Point::from_vec((self.max().to_vec() + self.min().to_vec()) * 0.5)
+    }
+    
     #[must_use]
     pub fn translate(&self, translation: Vector) -> Aabb {
         Self { min: self.min + translation, max: self.max + translation }

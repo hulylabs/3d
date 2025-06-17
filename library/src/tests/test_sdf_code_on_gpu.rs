@@ -1,8 +1,8 @@
 ﻿#[cfg(test)]
 mod tests {
-    use crate::geometry::aabb::Aabb;
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::axis::Axis;
+    use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
     use crate::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
     use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::sdf_base::Sdf;
@@ -22,22 +22,21 @@ mod tests {
     use crate::sdf::sdf_solid_angle::SdfSolidAngle;
     use crate::sdf::sdf_sphere::SdfSphere;
     use crate::sdf::sdf_torus_xz::SdfTorusXz;
+    use crate::sdf::sdf_translation::SdfTranslation;
     use crate::sdf::sdf_triangular_prism::SdfTriangularPrism;
     use crate::sdf::sdf_union::SdfUnion;
     use crate::sdf::sdf_vesica_segment::SdfVesicaSegment;
     use crate::sdf::shader_function_name::FunctionName;
     use crate::serialization::pod_vector::PodVector;
-    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::sdf_sample_cases::tests::SdfSampleCases;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
-    use cgmath::{Deg, EuclideanSpace, InnerSpace};
+    use crate::utils::tests::assert_utils::tests::assert_eq;
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use cgmath::{Deg, InnerSpace};
     use more_asserts::{assert_ge, assert_gt};
     use std::fmt::Write;
     use std::rc::Rc;
-    use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
-    use crate::sdf::sdf_translation::SdfTranslation;
-    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
 
     #[test]
     fn test_sdf_union_spheres() {
@@ -398,20 +397,13 @@ mod tests {
         BorderOrOutside,
         Outside,
     }
-
-    impl Aabb {
-        #[must_use]
-        pub(crate) fn center(&self) -> Point {
-            Point::from_vec((self.max().to_vec() + self.min().to_vec()) * 0.5)
-        }
-    }
-
+    
     #[must_use]
     fn execute_function(input: &[PodVector], function_name: &FunctionName, function_code: &String) -> Vec<f32> {
         let template = ShaderFunction::new("vec4f", "f32", function_name.0.as_str())
             .with_additional_shader_code(function_code.as_str());
         
-        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz"));
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz, 0.0"));
 
         execute_code(input, function_execution, ExecutionConfig::default())
     }

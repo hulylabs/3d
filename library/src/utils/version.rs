@@ -1,6 +1,6 @@
 ﻿use std::ops::{Add, AddAssign};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub(crate) struct Version(pub u64);
 
 impl AddAssign<u64> for Version {

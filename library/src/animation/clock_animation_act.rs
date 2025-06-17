@@ -85,7 +85,7 @@ impl ClockAnimationAct<PhaseConstruction> {
     const INFINITY: Option<LifeSpan> = None;
 
     #[must_use]
-    pub(crate) fn make(self) -> ClockAnimationAct<PhaseAlive> {
+    pub fn make(self) -> ClockAnimationAct<PhaseAlive> {
         if let Some(ttl) = self.time_to_live {
             if ttl.direction == TimeDirection::Backward {
                 assert_gt!(ttl.span, self.birth_time_offset)
@@ -179,11 +179,6 @@ impl<Phase> ClockAnimationAct<Phase> {
     pub(crate) fn get_end_action(&self) -> EndActionKind {
         self.end_action
     }
-
-    #[must_use]
-    pub(crate) fn is_infinite(&self) -> bool {
-        self.time_to_live.is_none()
-    }
 }
 
 impl Default for ClockAnimationAct<PhaseConstruction> {
@@ -216,14 +211,12 @@ mod tests {
         assert_eq!(system_under_test.get_playback_speed_multiplier(), 1.0);
         assert_eq!(system_under_test.get_periodization()            , None);
         assert_eq!(system_under_test.get_end_action()               , EndActionKind::LeaveAsIs);
-        assert!(system_under_test.is_infinite());
         
         assert_eq!(default_alive.get_birth_time_offset()            , Duration::ZERO);
         assert_eq!(default_alive.get_time_to_live()                 , None);
         assert_eq!(default_alive.get_playback_speed_multiplier()    , 1.0);
         assert_eq!(default_alive.get_periodization()                , None);
         assert_eq!(default_alive.get_end_action()                   , EndActionKind::LeaveAsIs);
-        assert!(default_alive.is_infinite());
     }
 
     #[test]
@@ -245,7 +238,6 @@ mod tests {
         
         assert_eq!(system_under_test.get_birth_time_offset(), expected_birth_time_offset);
         assert_eq!(system_under_test.get_time_to_live(), Some(LifeSpan::new(expected_ttl, expected_ttl_direction)));
-        assert!(!system_under_test.is_infinite());
         assert_eq!(system_under_test.get_playback_speed_multiplier(), expected_speed_multiplier);
         assert_eq!(system_under_test.get_periodization(), expected_periodization);
         assert_eq!(system_under_test.get_end_action(), expected_end_action);
@@ -257,7 +249,6 @@ mod tests {
             .with_global_infinite_time_to_live();
 
         assert_eq!(system_under_test.get_time_to_live(), None);
-        assert!(system_under_test.is_infinite());
     }
 
     #[test]

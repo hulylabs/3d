@@ -39,3 +39,4 @@ mod equality_sets;
 pub mod sdf_translation;
 pub(super) mod shader_variable_name;
 pub(super) mod intersection;
+pub mod sdf_twister_along_axis;

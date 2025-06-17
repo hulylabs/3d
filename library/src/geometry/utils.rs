@@ -1,4 +1,5 @@
-﻿use crate::geometry::alias::Vector;
+﻿use cgmath::Vector2;
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::axis::Axis;
 
 pub(crate) trait Max {
@@ -40,6 +41,28 @@ impl Max for Vector {
     }
 }
 
+#[must_use]
+pub(crate) fn format_point(point: Point) -> String {
+    const MAX_CHARS_TO_OUTPUT: usize = 5;
+    let format_coord = |coord: f64| -> String {
+        let s = format!("{:.3}", coord);
+        if s.len() <= MAX_CHARS_TO_OUTPUT {
+            s
+        } else {
+            s.chars().take(MAX_CHARS_TO_OUTPUT).collect()
+        }
+    };
+    format!("{},{},{}", format_coord(point.x), format_coord(point.y), format_coord(point.z))
+}
+
+#[must_use]
+pub(crate) fn exclude_axis(victim: Vector, exclusion: Axis) -> Vector2<f64> {
+    let keep_a = exclusion.next();
+    let keep_b = keep_a.next();
+    Vector2::<f64>::new(victim[keep_a.as_index()], victim[keep_b.as_index()], )
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +103,13 @@ mod tests {
         assert_eq!(Vector::new(3.0, 2.0, 1.0).max(), 3.0);
         assert_eq!(Vector::new(2.0, 3.0, 1.0).max(), 3.0);
         assert_eq!(Vector::new(2.0, 1.0, 3.0).max(), 3.0);
+    }
+
+    #[test]
+    fn test_exclude_axis() {
+        let victim = Vector::new(1.0, 2.0, 3.0);
+        assert_eq!(exclude_axis(victim, Axis::X), Vector2::<f64>::new(victim[1], victim[2]));
+        assert_eq!(exclude_axis(victim, Axis::Y), Vector2::<f64>::new(victim[2], victim[0]));
+        assert_eq!(exclude_axis(victim, Axis::Z), Vector2::<f64>::new(victim[0], victim[1]));
     }
 }

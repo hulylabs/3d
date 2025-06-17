@@ -1,9 +1,12 @@
 ﻿use cgmath::Deg;
+use library::container::visual_objects::VisualObjects;
+use library::container::mesh_warehouse::MeshWarehouse;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
 use library::objects::material::{Material, MaterialClass};
 use library::objects::material_index::MaterialIndex;
+use library::scene::hub::Hub;
 use library::sdf::code_generator::SdfRegistrator;
 use library::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::sdf_box::SdfBox;
@@ -29,6 +32,7 @@ use library::sdf::sdf_subtraction_smooth::SdfSubtractionSmooth;
 use library::sdf::sdf_torus_xz::SdfTorusXz;
 use library::sdf::sdf_translation::SdfTranslation;
 use library::sdf::sdf_triangular_prism::SdfTriangularPrism;
+use library::sdf::sdf_twister_along_axis::SdfTwisterAlongAxis;
 use library::sdf::sdf_union::SdfUnion;
 use library::sdf::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::sdf_vesica_segment::SdfVesicaSegment;
@@ -36,9 +40,6 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
-use library::container::container::Container;
-use library::container::mesh_warehouse::MeshWarehouse;
-use library::scene::scene::Scene;
 
 pub(super) struct SdfClasses {
     rectangular_box: NamedSdf,
@@ -65,6 +66,8 @@ pub(super) struct SdfClasses {
     union_smooth: NamedSdf,
     subtraction_smooth: NamedSdf,
     intersection_smooth: NamedSdf,
+    
+    twisted_box: NamedSdf,
 }
 
 impl SdfClasses {
@@ -194,6 +197,16 @@ impl SdfClasses {
         ), UniqueSdfClassName::new("intersection_smooth".to_string()));
         registrator.add(&intersection_smooth);
 
+        let twist_time_scale = 1.0;
+        let twist_amplitude_scale = 4.0;
+        let infinite_twisted_box = NamedSdf::new(
+            SdfTwisterAlongAxis::new(
+                SdfBox::new(Vector::new(0.2, 0.05, 0.01)), Axis::X, twist_time_scale, twist_amplitude_scale, 
+            ),
+            UniqueSdfClassName::new("twisted_box".to_string())
+        );
+        registrator.add(&infinite_twisted_box);
+
         Self { 
             rectangular_box, 
             sphere, 
@@ -219,6 +232,7 @@ impl SdfClasses {
             union_smooth,
             subtraction_smooth,
             intersection_smooth,
+            twisted_box: infinite_twisted_box,
         }
     }
 }
@@ -243,7 +257,7 @@ pub(super) struct Materials {
 
 impl Materials {
     #[must_use]
-    pub(super) fn new(scene: &mut Container) -> Self {
+    pub(super) fn new(scene: &mut VisualObjects) -> Self {
         let materials = scene.materials_mutable();
         
         let gold_metal = materials.add(
@@ -372,53 +386,77 @@ pub(super) struct TechWorld {
     light_panel: Option<ObjectUid>,
     light_panel_z: f64,
     light_panel_x: f64,
+
+    infinitely_twisted_button: Option<ObjectUid>,
+    single_twisted_button: Option<ObjectUid>,
+    back_n_forth_twisted_button: Option<ObjectUid>,
+    very_slow_twisted_button: Option<ObjectUid>,
 }
 
 impl TechWorld {
     #[must_use]
     pub(super) fn new(sdf_classes: SdfClasses, materials: Materials) -> Self {
         Self { 
-            sdf_classes, materials, light_panel: None, light_panel_z: -1.0, light_panel_x: -1.0,
+            sdf_classes,
+            materials,
+
+            light_panel: None,
+            light_panel_z: -1.0,
+            light_panel_x: -1.0,
+
+            infinitely_twisted_button: None,
+            single_twisted_button: None,
+            back_n_forth_twisted_button: None,
+            very_slow_twisted_button: None,
         }
     }
-
+    
     #[must_use]
     pub(super) fn selected_object_material(&self) -> MaterialIndex {
         self.materials.selected_object_material
     }
 
-    pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Scene) {
+    pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Hub) {
         self.light_panel_z += sign * 0.01;
         self.invalidate_light_panel(scene);
     }
     
-    pub(super) fn move_light_x(&mut self, sign: f64, scene: &mut Scene) {
+    pub(super) fn move_light_x(&mut self, sign: f64, scene: &mut Hub) {
         self.light_panel_x += sign * 0.01;
         self.invalidate_light_panel(scene);
     }
 
-    fn invalidate_light_panel(&mut self, scene: &mut Scene) {
+    fn invalidate_light_panel(&mut self, scene: &mut Hub) {
         if let Some(light_panel) = self.light_panel {
             scene.delete(light_panel);
         }
         self.make_light_panel(scene);
     }
 
-    fn make_light_panel(&mut self, scene: &mut Scene) {
+    fn make_light_panel(&mut self, scene: &mut Hub) {
         self.light_panel = Some(
             scene.add_parallelogram(Point::new(self.light_panel_x, 1.0, self.light_panel_z), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light_material)
         );
     }
 
-    fn make_common_scene_walls(&mut self, scene: &mut Scene) {
+    fn make_common_scene_walls(&mut self, scene: &mut Hub) {
         self.make_light_panel(scene);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
         scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
     }
 
-    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Scene) {
+    fn clear_scene(&mut self, scene: &mut Hub) {
         scene.clear_objects();
+        self.infinitely_twisted_button = None;
+        self.single_twisted_button = None;
+        self.back_n_forth_twisted_button = None;
+        self.very_slow_twisted_button = None;
+        self.light_panel = None;
+    }
+
+    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
 
         self.make_common_scene_walls(scene);
 
@@ -443,8 +481,8 @@ impl TechWorld {
             self.materials.blue_material);
     }
 
-    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Scene) {
-        scene.clear_objects();
+    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
 
         self.make_common_scene_walls(scene);
 
@@ -555,8 +593,9 @@ impl TechWorld {
         exe_directory.join(file_name)
     }
 
-    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Scene) {
-        scene.clear_objects();
+    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
+
         self.make_common_scene_walls(scene);
 
         let mut meshes = MeshWarehouse::new();
@@ -577,9 +616,39 @@ impl TechWorld {
             },
         }
     }
-    
-    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Scene) {
-        scene.clear_objects();
+
+    pub(super) fn load_morphing_demo_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
+        
+        scene.add_parallelogram(Point::new(-0.15, -0.15, 2.0), Vector::new(0.3, 0.0, 0.0), Vector::new(0.0, 0.3, 0.0), self.materials.light_material);
+        
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
+        scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
+
+        self.infinitely_twisted_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.5, 0.3, 0.0)),
+            self.sdf_classes.twisted_box.name(),
+            self.materials.red_glass));
+
+        self.single_twisted_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.5, 0.1, 0.0)),
+            self.sdf_classes.twisted_box.name(),
+            self.materials.gold_metal));
+        
+        self.back_n_forth_twisted_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.5, -0.1, 0.0)),
+            self.sdf_classes.twisted_box.name(),
+            self.materials.blue_material));
+        
+        self.very_slow_twisted_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.5, -0.3, 0.0)),
+            self.sdf_classes.twisted_box.name(),
+            self.materials.green_mirror));
+    }
+
+    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.7, 0.2, -0.7))*Affine::from_angle_z(Deg(-30.0))),
@@ -652,5 +721,23 @@ impl TechWorld {
                 error!("failed to load cube mesh: {}", mesh_loading_error);
             },
         }
+    }
+
+    #[must_use]
+    pub(super) fn infinitely_twisted_button(&self) -> Option<ObjectUid> {
+        self.infinitely_twisted_button
+    }
+    #[must_use]
+    pub(super) fn single_twisted_button(&self) -> Option<ObjectUid> {
+        self.single_twisted_button
+    }
+    #[must_use]
+    pub(super) fn back_n_forth_twisted_button(&self) -> Option<ObjectUid> {
+        self.back_n_forth_twisted_button
+    }
+    
+    #[must_use]
+    pub(super) fn very_slow_twisted_button(&self) -> Option<ObjectUid> {
+        self.very_slow_twisted_button
     }
 }

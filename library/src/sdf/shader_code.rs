@@ -89,6 +89,7 @@ impl ShaderCode<FunctionBody> {
 
 pub(crate) mod conventions {
     pub(crate) const PARAMETER_NAME_THE_POINT: &str = "point";
+    pub(crate) const PARAMETER_NAME_THE_TIME: &str = "time";
     pub(crate) const PARAMETER_NAME_SDF_INDEX: &str = "sdf_index";
     
     pub(crate) const FUNCTION_NAME_THE_SDF_SELECTION: &str = "sdf_select";
@@ -97,29 +98,32 @@ pub(crate) mod conventions {
 pub(crate) fn format_sdf_selection(function_to_select: &FunctionName, class_index: SdfClassIndex, buffer: &mut String) {
     writeln!(
         buffer,
-        "if (sdf_index == {sdf_index_parameter}.0) {{ return {sdf_function_name}({point_parameter}); }}",
+        "if (sdf_index == {sdf_index_parameter}.0) {{ return {sdf_function_name}({point_parameter},{time_parameter}); }}",
         sdf_index_parameter = class_index,
         sdf_function_name = function_to_select,
         point_parameter = conventions::PARAMETER_NAME_THE_POINT,
+        time_parameter = conventions::PARAMETER_NAME_THE_TIME,
     ).expect("failed to format sdf selection");
 }
 
 #[must_use]
 pub(crate) fn format_sdf_selection_function_opening() -> String {
     format!(
-        "fn {selection_function_name}({parameter_sdf_index}: f32, {parameter_point}: vec3f) -> f32 {{\n",
+        "fn {selection_function_name}({parameter_sdf_index}: f32, {parameter_point}: vec3f, {parameter_time}: f32) -> f32 {{\n",
         selection_function_name = conventions::FUNCTION_NAME_THE_SDF_SELECTION,
         parameter_sdf_index = conventions::PARAMETER_NAME_SDF_INDEX,
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
+        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
     )
 }
 
 #[must_use]
 pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode<FunctionBody> {
     let code = format!(
-        "return {name}({parameter});",
+        "return {name}({parameter_point},{parameter_time});",
         name = function_name,
-        parameter = conventions::PARAMETER_NAME_THE_POINT,
+        parameter_point = conventions::PARAMETER_NAME_THE_POINT,
+        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
     );
     ShaderCode::<FunctionBody>::new(code)
 }
@@ -127,10 +131,11 @@ pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode<
 pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_name: &FunctionName, buffer: &mut String) {
     write!(
         buffer,
-        "fn {name}({parameter}: vec3f) -> f32 {{\n{body}\n}}\n",
+        "fn {name}({parameter_point}: vec3f, {parameter_time}: f32) -> f32 {{\n{body}\n}}\n",
         name = function_name,
-        parameter = conventions::PARAMETER_NAME_THE_POINT,
-        body = body
+        parameter_point = conventions::PARAMETER_NAME_THE_POINT,
+        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+        body = body,
     )
     .expect("failed to format sdf declaration");
 }
@@ -156,7 +161,7 @@ mod tests {
         format_sdf_declaration(&function_body, &function_name, &mut formatted);
 
         let expected = format!(
-            "fn {function}({parameter}: vec3f) -> f32 {{\nreturn -7.0;\n}}\n",
+            "fn {function}({parameter}: vec3f, time: f32) -> f32 {{\nreturn -7.0;\n}}\n",
             function = function_name,
             parameter = conventions::PARAMETER_NAME_THE_POINT
         );

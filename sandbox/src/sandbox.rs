@@ -11,11 +11,13 @@ use library::Engine;
 use log::info;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
-use library::container::container::Container;
+use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, Periodization, TimeDirection, WrapKind};
+use library::container::visual_objects::VisualObjects;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -88,7 +90,50 @@ impl Sandbox {
                 }
             }
         } else if MouseButton::Left == button {
-            self.left_mouse_down = state == ElementState::Pressed;
+            self.left_mouse_down = ElementState::Pressed == state;
+            if ElementState::Pressed == state {
+                if let Some((last_x, last_y)) = self.last_cursor_position {
+                    let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
+                    let scene = self.engine.scene();
+                    
+                    if let Some(clicked_object) = clicked_object_or_none {
+                        if scene.animator().animating(clicked_object) {
+                            scene.animator_mutable().stop(clicked_object);
+                        } else {
+                            if Some(clicked_object) == self.tech_world.infinitely_twisted_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(10.0)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            if Some(clicked_object) == self.tech_world.single_twisted_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(std::f64::consts::PI)
+                                    .with_global_finite_time_to_live(Duration::from_millis(1000), TimeDirection::Forward)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            if Some(clicked_object) == self.tech_world.back_n_forth_twisted_button() {
+                                let period = Duration::from_millis((std::f64::consts::PI * 1000.0) as u64);
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(2.0 * std::f64::consts::PI)
+                                    .periodization(Some(Periodization::new(WrapKind::Reverse, period)))
+                                    .with_global_finite_time_to_live(Duration::from_secs(1), TimeDirection::Forward)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            if Some(clicked_object) == self.tech_world.very_slow_twisted_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(std::f64::consts::PI / 3.0)
+                                    .with_global_finite_time_to_live(Duration::from_millis(2000), TimeDirection::Forward)
+                                    .end_action(EndActionKind::TeleportToZero)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                        }
+                    }
+                }
+            }
         } else if MouseButton::Middle == button && state == ElementState::Pressed {
             if let Some((last_x, last_y)) = self.last_cursor_position {
                 let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
@@ -167,6 +212,9 @@ impl Sandbox {
                 } else if "7" == letter_key {
                     self.tech_world.load_to_triangle_mesh_testing_scene(self.engine.scene());
                     self.selected_object = None;
+                } else if "8" == letter_key {
+                    self.tech_world.load_morphing_demo_scene(self.engine.scene());
+                    self.selected_object = None;
                 }
             }
             _ => (),
@@ -183,7 +231,7 @@ impl Sandbox {
         let tech_sdf_classes = SdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);
         
-        let mut scene = Container::new(sdf_registrator);
+        let mut scene = VisualObjects::new(sdf_registrator);
         let tech_materials = Materials::new(&mut scene);
         let beautiful_materials = BeautifulMaterials::new(&mut scene);
         

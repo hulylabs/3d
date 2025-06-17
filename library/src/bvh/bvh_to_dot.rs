@@ -4,25 +4,20 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
-use crate::geometry::alias::format_point;
+use crate::geometry::utils::format_point;
 
-/// This module provides functionality to visualize BVH trees using the Graphviz DOT format.
-/// The generated DOT files can be rendered using Graphviz tools like `dot`, `neato`, etc.
-/// 
-/// # Example
-/// 
-/// ```ignore
-/// 
-/// // Assuming you have a BVH tree root
-/// let bvh_root: Rc<RefCell<BvhNode>> = // ... your BVH tree
-/// 
-/// // Save as DOT file with colors
-/// save_bvh_as_dot_detailed(&bvh_root, "bvh_tree_detailed.dot").unwrap();
-/// 
-/// // Render with Graphviz (from command line):
-/// // dot -Tpng bvh_tree.dot -o bvh_tree.png
-/// // dot -Tsvg bvh_tree_detailed.dot -o bvh_tree_detailed.svg
-/// ```
+/*
+
+This module provides functionality to visualize BVH trees using the Graphviz DOT format.
+The generated DOT files can be rendered using Graphviz tools like `dot`, `neato`, etc.
+
+save_bvh_as_dot_detailed(&bvh_root, "bvh_tree_detailed.dot").unwrap();
+
+Render with Graphviz (from command line):
+dot -Tpng bvh_tree.dot -o bvh_tree.png
+dot -Tsvg bvh_tree_detailed.dot -o bvh_tree_detailed.svg
+
+*/
 pub(crate) fn save_bvh_as_dot_detailed<DescriptionDelegate: Fn(Option<usize>)->String>(
     root: &Rc<RefCell<BvhNode>>,
     describe: DescriptionDelegate,

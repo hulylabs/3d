@@ -1,4 +1,4 @@
-﻿use crate::container::version::Version;
+﻿use crate::utils::version::Version;
 use crate::objects::material::Material;
 use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;

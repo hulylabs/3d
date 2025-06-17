@@ -154,7 +154,12 @@ mod tests {
         
         let mut buffer: String = String::new();
         system_under_test.format_occurred_multiple_times(&mut buffer);
-        let expected_buffer = format!("fn {}({}: vec3f) -> f32 {{\n{};\n}}\n", multiple_occurrences_function, conventions::PARAMETER_NAME_THE_POINT, code_seven);
+        
+        let expected_buffer = format!("fn {}({}: vec3f, {}: f32) -> f32 {{\n{};\n}}\n", 
+            multiple_occurrences_function, 
+            conventions::PARAMETER_NAME_THE_POINT, 
+            conventions::PARAMETER_NAME_THE_TIME, 
+            code_seven);
         assert_eq!(buffer, expected_buffer);
     }
 

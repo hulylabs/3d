@@ -65,6 +65,25 @@ jobs:
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
             cargo test -p library --release --verbose
-          else
-            cargo test -p library --verbose
           fi
+
+      - name: Install cargo-tarpaulin
+        if: matrix.build-type == 'debug'
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate Coverage Report
+        if: matrix.build-type == 'debug'
+        run: |
+          cargo tarpaulin \
+            --verbose \
+            --all-features \
+            --workspace \
+            --out Html \
+            --output-dir coverage
+
+      - name: Upload coverage reports as artifacts
+        if: matrix.build-type == 'debug'
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: coverage/

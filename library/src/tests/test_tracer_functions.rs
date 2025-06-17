@@ -33,7 +33,7 @@ mod tests {
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
-    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(value: f32, vector: vec3f) -> f32 { return 0.0; }";
+    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(value: f32, vector: vec3f, time: f32) -> f32 { return 0.0; }";
     
     #[repr(C)]
     #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -467,6 +467,7 @@ mod tests {
         execution_config.add_binding_group(2, vec![], vec![
             BindGroupSlot::new(1, serialized_sdf.instances.backend()),
             BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }
@@ -482,6 +483,7 @@ mod tests {
             BindGroupSlot::new(3, &dummy_buffer),
             BindGroupSlot::new(4, serialized_sdf.bvh.backend()),
             BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }

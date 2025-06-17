@@ -1,45 +1,56 @@
-﻿use std::io::Error;
-use std::path::Path;
-use crate::animation::animator::Animator;
-use crate::container::container::Container;
+﻿use crate::animation::time_tracker::TimeTracker;
+use crate::container::visual_objects::VisualObjects;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::ObjectUid;
 use crate::objects::material_index::MaterialIndex;
 use crate::sdf::named_sdf::UniqueSdfClassName;
+use std::io::Error;
+use std::path::Path;
 
-pub struct Scene {
-    container: Container,
-    animator: Animator,
+pub struct Hub {
+    container: VisualObjects,
+    time_tracker: TimeTracker,
 }
 
-impl Scene {
+impl Hub {
     #[must_use]
-    pub(crate) fn new(container: Container) -> Self {
+    pub(crate) fn new(container: VisualObjects) -> Self {
         Self {
             container,
-            animator: Animator::new(),
+            time_tracker: TimeTracker::new(),
         }
     }
 
     #[must_use]
-    pub(crate) fn container(&self) -> &Container {
+    pub(crate) fn container(&self) -> &VisualObjects {
         &self.container
     }
 
     #[must_use]
-    pub fn animator(&mut self) -> &mut Animator {
-        &mut self.animator
+    pub fn animator(&self) -> &TimeTracker {
+        &self.time_tracker
+    }
+
+    #[must_use]
+    pub fn animator_mutable(&mut self) -> &mut TimeTracker {
+        &mut self.time_tracker
+    }
+
+    pub fn update_time(&mut self) {
+        self.time_tracker.update_time();
     }
     
     pub fn clear_objects(&mut self) {
         self.container.clear_objects();
-        self.animator.clear_objects();
+        self.time_tracker.clear();
     }
 
     pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
-        self.container.add_sdf(location, class_uid, material)
+        let added = self.container.add_sdf(location, class_uid, material);
+        self.time_tracker.track(added, &self.container.morphable());
+        added
     }
     
     pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
@@ -51,8 +62,8 @@ impl Scene {
     }
     
     pub fn delete(&mut self, target: ObjectUid) {
-        self.animator.end(target);
         self.container.delete(target);
+        self.time_tracker.forget(target, &self.container.morphable());
     }
 
     pub fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {

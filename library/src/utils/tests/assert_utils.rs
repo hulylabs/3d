@@ -2,6 +2,13 @@
 pub(crate) mod tests {
     use std::fmt::{Display, Write};
     
+    pub(crate) fn assert_all_unique<T: Ord>(victim: &mut Vec<T>) {
+        victim.sort();
+        if false == victim.windows(2).all(|w| w[0] != w[1]) {
+            panic!("no all are unique")
+        }
+    }
+    
     pub(crate) fn assert_eq(left: &[f32], right: &[f32], epsilon: f32) {
         assert_eq!(left.len(), right.len(), "ranges have different lengths");
 

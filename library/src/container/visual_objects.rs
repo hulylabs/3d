@@ -30,16 +30,9 @@ use crate::container::scene_object::SceneObject;
 use crate::container::sdf_warehouse::SdfWarehouse;
 use crate::container::statistics::Statistics;
 use crate::container::triangulated::Triangulated;
-use crate::container::version::Version;
+use crate::utils::version::Version;
 
-#[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
-pub(crate) enum DataKind {
-    Parallelogram,
-    Sdf,
-    TriangleMesh,
-}
-
-pub struct Container {
+pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
     objects: HashMap<ObjectUid, Box<dyn SceneObject>>,
     triangles: Vec<Triangle>,
@@ -50,7 +43,14 @@ pub struct Container {
     uid_generator: UidGenerator,
 }
 
-impl Container {
+#[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
+pub(crate) enum DataKind {
+    Parallelogram,
+    Sdf,
+    TriangleMesh,
+}
+
+impl VisualObjects {
     #[must_use]
     pub fn new(sdf_classes: SdfRegistrator) -> Self {
         let per_object_kind_statistics: Vec<Statistics> = vec![Statistics::default(); DataKind::COUNT];
@@ -191,6 +191,13 @@ impl Container {
         }
         self.objects.clear();
         self.triangles.clear();
+    }
+    
+    #[must_use]
+    pub(crate) fn morphable(&self) -> Vec<ObjectUid> {
+        let sdf_count = self.count_of_a_kind(DataKind::Sdf);
+        let identified = self.sorted_of_a_kind(DataKind::Sdf as usize, sdf_count);
+        identified.iter().map(|x| x.id).collect()
     }
     
     #[must_use]
@@ -335,9 +342,9 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
-    use crate::container::container::{Container, DataKind};
+    use crate::container::visual_objects::{VisualObjects, DataKind};
     use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
-    use crate::container::version::Version;
+    use crate::utils::version::Version;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -359,7 +366,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(Container::new(sdf_classes)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(sdf_classes)));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
@@ -397,7 +404,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = Container::new(sdf_classes);
+        let mut system_under_test = VisualObjects::new(sdf_classes);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -610,12 +617,12 @@ mod tests {
     }
 
     #[must_use]
-    fn make_empty_container() -> Container {
-        Container::new(SdfRegistrator::default())
+    fn make_empty_container() -> VisualObjects {
+        VisualObjects::new(SdfRegistrator::default())
     }
 
     struct FilledContainerFixture {
-        container: Container,
+        container: VisualObjects,
         dummy_material: MaterialIndex,
         sdf: ObjectUid,
         sdf_name: UniqueSdfClassName,
@@ -626,7 +633,7 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = Container::new(sdf_classes);
+        let mut container = VisualObjects::new(sdf_classes);
 
         let dummy_material = container.materials_mutable().add(&Material::default());
         let (mesh_id, meshes) = prepare_test_mesh();
@@ -639,7 +646,7 @@ mod tests {
     }
 
     #[must_use]
-    fn get_versions(from: &Container) -> Vec<Version> {
+    fn get_versions(from: &VisualObjects) -> Vec<Version> {
         let mut result: Vec<Version> = Vec::with_capacity(DataKind::COUNT);
         for kind in DataKind::iter() {
             result.push(from.data_version(kind));
@@ -647,7 +654,7 @@ mod tests {
         result
     }
 
-    fn assert_is_empty(fixture: &Container) {
+    fn assert_is_empty(fixture: &VisualObjects) {
         assert_eq!(fixture.triangles_count(), 0);
         for kind in DataKind::iter() {
             assert_eq!(fixture.count_of_a_kind(kind), 0);
