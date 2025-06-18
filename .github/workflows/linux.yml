@@ -76,7 +76,6 @@ jobs:
         run: |
           cargo tarpaulin \
             --verbose \
-            --all-features \
             --workspace \
             --out Html \
             --output-dir coverage
