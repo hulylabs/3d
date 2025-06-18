@@ -78,6 +78,7 @@ jobs:
             --verbose \
             --workspace \
             --out Html \
+            --out Stdout \
             --output-dir coverage
 
       - name: Upload coverage reports as artifacts

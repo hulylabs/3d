@@ -439,7 +439,6 @@ mod tests {
     fn config_common_sdf_buffers() -> ExecutionConfig {
         let mut uniforms = make_test_uniforms();
         uniforms.set_bvh_length(1);
-        uniforms.set_sdf_count(1);
         uniforms.set_parallelograms_count(0);
         
         let mut ware = ExecutionConfig::new();

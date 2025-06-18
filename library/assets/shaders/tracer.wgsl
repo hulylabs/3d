@@ -79,7 +79,6 @@ struct Uniforms {
 	view_ray_origin_matrix : mat4x4f,
 
 	parallelograms_count: u32,
-	sdf_count: u32,
 	bvh_length: u32,
 	pixel_side_subdivision: u32, // anti-aliasing level: bigger value -> slower render -> less jagged edges
 }

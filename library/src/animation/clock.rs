@@ -96,6 +96,22 @@ mod tests {
     }
 
     #[test]
+    fn test_ticking() {
+        let start = Instant::now();
+        let animation_duration = Duration::from_millis(1);
+        let act 
+            = ClockAnimationAct::new()
+                .with_global_finite_time_to_live(animation_duration, TimeDirection::Forward)
+                .make();
+        let system_under_test = Clock::new(start, act);
+
+        assert!(system_under_test.ticking(start));
+        
+        std::thread::sleep(animation_duration);
+        assert_eq!(system_under_test.ticking(Instant::now()), false);
+    }
+
+    #[test]
     fn test_local_time_basic_forward() {
         let start = Instant::now();
         let system_under_test = Clock::new(start, infinite_animation_run());

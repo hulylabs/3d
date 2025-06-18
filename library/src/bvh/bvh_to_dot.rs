@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
-use crate::geometry::utils::format_point;
+use crate::geometry::utils::debug_format_human_readable_point;
 
 /*
 
@@ -49,9 +49,13 @@ fn create_node_label(node: &BvhNode, description: String) -> String {
     if let Some(content_type) = node.content_type()  {
         label.push_str(format!("\n{:?}: {}", content_type, description).as_str());
     }
+
+    let human_readable_min = debug_format_human_readable_point(node.aabb().min());
+    let human_readable_max = debug_format_human_readable_point(node.aabb().max());
+    label.push_str(format!("\n[min({})\nmax({})]", human_readable_min, human_readable_max).as_str());
     
-    label.push_str(format!("\n[min({})\nmax({})]", format_point(node.aabb().min()), format_point(node.aabb().max())).as_str());
     label.push_str(format!("\nmiss->{:?}", node.miss_node_index_or_null()).as_str());
+    
     label
 }
 

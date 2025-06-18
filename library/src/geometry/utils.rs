@@ -42,7 +42,7 @@ impl Max for Vector {
 }
 
 #[must_use]
-pub(crate) fn format_point(point: Point) -> String {
+pub(crate) fn debug_format_human_readable_point(point: Point) -> String {
     const MAX_CHARS_TO_OUTPUT: usize = 5;
     let format_coord = |coord: f64| -> String {
         let s = format!("{:.3}", coord);
@@ -61,7 +61,6 @@ pub(crate) fn exclude_axis(victim: Vector, exclusion: Axis) -> Vector2<f64> {
     let keep_b = keep_a.next();
     Vector2::<f64>::new(victim[keep_a.as_index()], victim[keep_b.as_index()], )
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -111,5 +110,12 @@ mod tests {
         assert_eq!(exclude_axis(victim, Axis::X), Vector2::<f64>::new(victim[1], victim[2]));
         assert_eq!(exclude_axis(victim, Axis::Y), Vector2::<f64>::new(victim[2], victim[0]));
         assert_eq!(exclude_axis(victim, Axis::Z), Vector2::<f64>::new(victim[0], victim[1]));
+    }
+
+    #[test]
+    fn test_debug_format_human_readable_point() {
+        let point = Point::new(-1.0, 2.12345, -3.12345);
+        let actual_format = debug_format_human_readable_point(point);
+        assert_eq!(actual_format, "-1.00,2.123,-3.12");
     }
 }

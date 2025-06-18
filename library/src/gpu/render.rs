@@ -223,7 +223,6 @@ impl Renderer {
         let sdf_set_version = container.data_version(DataKind::Sdf);
         if self.gpu.buffers.sdf.version_diverges(sdf_set_version) {
             composite_status.merge_geometry(Self::update_buffer::<SdfInstance>(&DataKind::Sdf, &mut self.gpu.buffers.sdf, &self.gpu.resources, container, self.gpu.context.queue()));
-            self.uniforms.set_sdf_count(container.count_of_a_kind(DataKind::Sdf) as u32);
             update_bvh = true;
         }
 
@@ -297,8 +296,7 @@ impl Renderer {
             { container.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
         
         uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
-        uniforms.set_sdf_count(container.count_of_a_kind(DataKind::Sdf) as u32);
-
+        
         let per_sdf_time = Self::make_gpu_ready_animation_times_array(animator);
         
         Buffers {
@@ -510,10 +508,6 @@ impl Renderer {
         let rebuild_albedo_buffer = rebuild_geometry_buffers
             || self.gpu.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
             || scene_status.any_updated();
-        
-        self.compute_pass("ray tracing compute pass", self.color_buffer_evaluation.pipeline().deref(), |ray_tracing_pass|{
-            self.gpu.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(ray_tracing_pass);
-        });
 
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
             self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
@@ -527,7 +521,15 @@ impl Renderer {
                     self.gpu.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
                 }
             });
-            
+        }
+
+        self.compute_pass("ray tracing compute pass", self.color_buffer_evaluation.pipeline().deref(), |ray_tracing_pass|{
+            if cfg!(feature = "denoiser") {
+                self.transfer_pixel_color_from_gpu(ray_tracing_pass);   
+            }
+        });
+
+        if rebuild_geometry_buffers || rebuild_albedo_buffer {
             if rebuild_geometry_buffers {
                 if cfg!(feature = "denoiser") {
                     let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_all_aux_buffers_from_gpu();
@@ -544,6 +546,10 @@ impl Renderer {
                 pollster::block_on(copy_operation);
             }
         }
+    }
+    
+    fn transfer_pixel_color_from_gpu(&self, pass: &mut wgpu::CommandEncoder) {
+        self.gpu.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(pass);
     }
 
     #[cfg(any(test, feature = "denoiser"))]
@@ -751,6 +757,7 @@ mod tests {
         let mut system_under_test = make_render(scene, camera, strategy, ANTIALIASING_LEVEL, context.clone());
 
         system_under_test.accumulate_more_rays();
+        issue_frame_buffer_transfer_if_needed(context.clone(), &system_under_test);
         system_under_test.copy_noisy_pixels_to_cpu();
         
         assert_empty_color_buffer(&mut system_under_test);
@@ -812,10 +819,19 @@ mod tests {
         let mut system_under_test = make_render(scene, camera, RenderStrategyId::Deterministic, ANTIALIASING_LEVEL, context.clone());
         
         system_under_test.accumulate_more_rays();
+        issue_frame_buffer_transfer_if_needed(context.clone(), &system_under_test);
         system_under_test.copy_noisy_pixels_to_cpu();
         
         assert_parallelogram_ids_in_center(&mut system_under_test, "sdf_box");
         assert_parallelogram_colors_in_center(&mut system_under_test, "sdf_box");
+    }
+
+    fn issue_frame_buffer_transfer_if_needed(context: Rc<Context>, render: &Renderer) {
+        if cfg!(not(feature = "denoiser")) {
+            let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            render.transfer_pixel_color_from_gpu(&mut pass);
+            context.queue().submit(Some(pass.finish()));
+        }
     }
 
     #[cfg(feature = "denoiser")]

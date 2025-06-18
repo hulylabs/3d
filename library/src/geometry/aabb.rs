@@ -337,4 +337,14 @@ mod tests {
 
         assert_eq!(actual_inflated, expected_inflated);
     }
+
+    #[test]
+    fn test_center() {
+        let system_under_test = from_segment(Point::new(-2.0, -4.0, -8.0), Point::new(1.0, 3.0, 7.0));
+        let expected_center = Point::new(-0.5, -0.5, -0.5);
+        
+        let actual_center = system_under_test.center();
+        
+        assert_eq!(actual_center, expected_center);
+    }
 }

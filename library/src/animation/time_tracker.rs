@@ -27,7 +27,7 @@ impl TimeTracker {
         if any_updated {
             self.version += 1;
         }
-        self.animator.clean_finished();
+        self.animator.remove_finished();
     }
 
     pub fn launch(&mut self, target: ObjectUid, parameters: ClockAnimationAct<PhaseAlive>) {
@@ -203,6 +203,33 @@ mod tests {
         assert_all_unique(&mut versions);
     }
 
+    #[test]
+    fn test_stop() {
+        let mut system_under_test = TimeTracker::new();
+        let to_continue = ObjectUid(7);
+        let to_stop = ObjectUid(5);
+
+        system_under_test.track(to_continue, &[to_continue]);
+        system_under_test.track(to_stop, &[to_continue, to_stop]);
+
+        system_under_test.stop(to_continue);
+        system_under_test.stop(to_stop);
+
+        system_under_test.launch(to_continue, ClockAnimationAct::default());
+        system_under_test.launch(to_stop, ClockAnimationAct::default());
+
+        system_under_test.stop(to_stop);
+        
+        system_under_test.update_time();
+        assert!(system_under_test.animating(to_continue));
+        assert_eq!(system_under_test.animating(to_stop), false);
+
+        let mut times = vec![-5.0f32; 2];
+        system_under_test.write_times(&mut times);
+        assert_gt!(times[0], 0.0_f32);   
+        assert_eq!(times[1], 0.0_f32);   
+    }
+    
     #[test]
     fn test_forget_object() {
         let mut system_under_test = TimeTracker::new();
