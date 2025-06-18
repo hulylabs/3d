@@ -27,6 +27,10 @@ impl SdfTwisterAlongAxis {
     }
 }
 
+// struct Swizzle {
+//     
+// }
+
 impl Sdf for SdfTwisterAlongAxis {
     #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
