@@ -5,7 +5,7 @@ use crate::objects::ray_traceable::RayTraceable;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-use crate::serialization::serialize_matrix::serialize_matrix;
+use crate::serialization::serialize_matrix::serialize_matrix_3x4;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
 use more_asserts::assert_gt;
@@ -27,15 +27,15 @@ impl SdfInstance {
 }
 
 impl GpuSerializationSize for SdfInstance {
-    const SERIALIZED_QUARTET_COUNT: usize = 9;
+    const SERIALIZED_QUARTET_COUNT: usize = 7;
 }
 
 impl GpuSerializable for SdfInstance {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
-        serialize_matrix(container, &self.location);
-        serialize_matrix(container, &self.location.invert().unwrap());
+        serialize_matrix_3x4(container, &self.location);
+        serialize_matrix_3x4(container, &self.location.invert().unwrap());
 
         container.write_quartet(|writer| {
             writer.write_float_64(self.ray_marching_step_scale);

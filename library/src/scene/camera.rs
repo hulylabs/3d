@@ -1,6 +1,6 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
-use crate::serialization::serialize_matrix::serialize_matrix;
+use crate::serialization::serialize_matrix::serialize_matrix_4x4;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector2, Zero};
 use std::ops::Mul;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -222,8 +222,8 @@ impl Camera {
         let camera_space_to_world = self.world_to_camera_space.invert().unwrap();
         let view_ray_origin = self.view_ray_origin;
 
-        serialize_matrix(container, &camera_space_to_world);
-        serialize_matrix(container, &view_ray_origin);
+        serialize_matrix_4x4(container, &camera_space_to_world);
+        serialize_matrix_4x4(container, &view_ray_origin);
     }
 }
 

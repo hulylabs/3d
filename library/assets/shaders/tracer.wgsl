@@ -121,8 +121,8 @@ struct Triangle {
 }
 
 struct Sdf {
-    location : mat4x4f,
-    inverse_location : mat4x4f,
+    location : mat3x4f,
+    inverse_location : mat3x4f,
     ray_marching_step_scale: f32,
     class_index : f32,
     material_id : u32,
@@ -207,17 +207,22 @@ fn signed_distance_normal(sdf: Sdf, point: vec3f, time: f32) -> vec3f {
 }
 
 @must_use
-fn transform_point(transformation: mat4x4f, point: vec3f) -> vec3f {
-    return (transformation * vec4f(point, 1.0f)).xyz;
+fn transform_point(transformation: mat3x4f, point: vec3f) -> vec3f {
+    return vec4f(point, 1.0f) * transformation;
 }
 
 @must_use
-fn transform_vector(transformation: mat4x4f, vector: vec3f) -> vec3f {
-    return (transformation * vec4f(vector, 0.0f)).xyz;
+fn to_mat3x3(source: mat3x4f) -> mat3x3f {
+    return mat3x3<f32>(source[0].xyz,source[1].xyz,source[2].xyz);
 }
 
 @must_use
-fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
+fn transform_vector(transformation: mat3x3f, vector: vec3f) -> vec3f {
+    return vector * transformation;
+}
+
+@must_use
+fn transform_ray_parameter(transformation: mat3x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
     let point = transform_point(transformation, at(ray, parameter));
     return length(point - transformed_origin);
 }
@@ -225,7 +230,7 @@ fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, tr
 @must_use
 fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
     let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
-    let local_ray_direction = transform_vector(sdf.inverse_location, ray.direction);
+    let local_ray_direction = transform_vector(to_mat3x3(sdf.inverse_location), ray.direction);
     let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
 
     var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
@@ -245,7 +250,7 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
         if(abs(signed_distance) < t_scaled) {
             hitRec.p = transform_point(sdf.location, candidate);
             hitRec.t = length(hitRec.p - ray.origin);
-            hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(sdf, candidate, time)));
+            hitRec.normal = normalize(transform_vector(transpose(to_mat3x3(sdf.inverse_location)), signed_distance_normal(sdf, candidate, time)));
             hitRec.front_face = sample_sdf(sdf, local_ray.origin, time) >= 0;
             if(hitRec.front_face == false){
                 hitRec.normal = -hitRec.normal;
@@ -1146,7 +1151,7 @@ fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
 @must_use // expected normalized 'direction'
 fn sample_signed_distance_function(sdf: Sdf, position: vec3f, direction: vec3f, time: f32) -> f32 {
     let local_position = transform_point(sdf.inverse_location, position);
-    let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
+    let local_direction = normalize(transform_vector(to_mat3x3(sdf.inverse_location), direction));
     let local_distance = sample_sdf(sdf, local_position, time);
     let local_next = local_position + local_direction * local_distance;
 

@@ -1,7 +1,7 @@
 ﻿use crate::geometry::transform::Affine;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-pub(crate) fn serialize_matrix(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {
+pub(crate) fn serialize_matrix_4x4(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {
     assert!(container.free_quartets_of_current_object() >= 4);
 
     container.write_quartet_f64(
@@ -33,6 +33,31 @@ pub(crate) fn serialize_matrix(container: &mut GpuReadySerializationBuffer, matr
     );
 }
 
+pub(crate) fn serialize_matrix_3x4(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {
+    assert!(container.free_quartets_of_current_object() >= 4);
+
+    container.write_quartet_f64(
+        matrix.x.x,
+        matrix.y.x,
+        matrix.z.x,
+        matrix.w.x,
+    );
+
+    container.write_quartet_f64(
+        matrix.x.y,
+        matrix.y.y,
+        matrix.z.y,
+        matrix.w.y,
+    );
+
+    container.write_quartet_f64(
+        matrix.x.z,
+        matrix.y.z,
+        matrix.z.z,
+        matrix.w.z,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,7 +75,7 @@ mod tests {
 
         let mut container = GpuReadySerializationBuffer::new(1, 4);
 
-        serialize_matrix(&mut container, &test_matrix);
+        serialize_matrix_4x4(&mut container, &test_matrix);
         let serialized: &[f32] = cast_slice(&container.backend());
 
         for i in 0..MATRIX_FLOATS_COUNT {
