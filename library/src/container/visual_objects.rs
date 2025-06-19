@@ -1,27 +1,6 @@
 ﻿use crate::bvh::builder::{build_bvh, build_serialized_bvh, };
 use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
-use crate::geometry::alias::{Point, Vector};
-use crate::geometry::transform::{Affine, Transformation};
-use crate::objects::common_properties::Linkage;
-use crate::objects::material_index::MaterialIndex;
-use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfInstance;
-use crate::objects::sdf_class_index::SdfClassIndex;
-use crate::objects::triangle::Triangle;
-use crate::sdf::code_generator::SdfRegistrator;
-use crate::sdf::named_sdf::UniqueSdfClassName;
-use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::serializable_for_gpu::serialize_batch;
-use crate::utils::object_uid::ObjectUid;
-use crate::utils::remove_with_reorder::remove_with_reorder;
-use crate::utils::uid_generator::UidGenerator;
-use cgmath::SquareMatrix;
-use std::collections::HashMap;
-use std::io::Error;
-use std::path::Path;
-use strum::EnumCount;
-use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 use crate::container::bvh_proxies::{proxy_of_sdf, SceneObjects};
 use crate::container::materials_warehouse::MaterialsWarehouse;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
@@ -30,7 +9,28 @@ use crate::container::scene_object::SceneObject;
 use crate::container::sdf_warehouse::SdfWarehouse;
 use crate::container::statistics::Statistics;
 use crate::container::triangulated::Triangulated;
+use crate::geometry::alias::{Point, Vector};
+use crate::geometry::transform::{Affine, Transformation};
+use crate::objects::common_properties::Linkage;
+use crate::objects::material_index::MaterialIndex;
+use crate::objects::parallelogram::Parallelogram;
+use crate::objects::sdf::SdfInstance;
+use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::objects::triangle::Triangle;
+use crate::sdf::framework::code_generator::SdfRegistrator;
+use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::serialize_batch;
+use crate::utils::object_uid::ObjectUid;
+use crate::utils::remove_with_reorder::remove_with_reorder;
+use crate::utils::uid_generator::UidGenerator;
 use crate::utils::version::Version;
+use cgmath::SquareMatrix;
+use std::collections::HashMap;
+use std::io::Error;
+use std::path::Path;
+use strum::EnumCount;
+use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 
 pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
@@ -320,6 +320,8 @@ struct IdentifiedObject<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+    use crate::container::visual_objects::{DataKind, VisualObjects};
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::{Affine, Transformation};
     use crate::objects::common_properties::Linkage;
@@ -328,13 +330,14 @@ mod tests {
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
     use crate::utils::object_uid::ObjectUid;
     use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
+    use crate::utils::version::Version;
     use cgmath::{EuclideanSpace, SquareMatrix, Zero};
     use std::cell::RefCell;
     use std::io::Write;
@@ -342,9 +345,6 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
-    use crate::container::visual_objects::{VisualObjects, DataKind};
-    use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
-    use crate::utils::version::Version;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {

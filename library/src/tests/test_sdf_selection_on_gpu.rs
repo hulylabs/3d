@@ -2,10 +2,10 @@
 mod tests {
     use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::Vector;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_box::SdfBox;
-    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_box::SdfBox;
+    use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};

@@ -1,10 +1,10 @@
-﻿use crate::objects::sdf_class_index::SdfClassIndex;
-use crate::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
-use crate::sdf::named_sdf::UniqueSdfClassName;
-use crate::sdf::shader_code::{format_sdf_selection, format_sdf_selection_function_opening, };
+﻿use crate::geometry::aabb::Aabb;
+use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
+use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use crate::sdf::framework::shader_code::{format_sdf_selection, format_sdf_selection_function_opening};
 use std::collections::HashMap;
 use std::fmt::Write;
-use crate::geometry::aabb::Aabb;
 
 pub(crate) struct SdfWarehouse {
     properties_from_name: HashMap<UniqueSdfClassName, SdfClassIndex>,

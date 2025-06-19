@@ -1,11 +1,11 @@
 ﻿use crate::animation::time_tracker::TimeTracker;
-use crate::container::visual_objects::VisualObjects;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
+use crate::container::visual_objects::VisualObjects;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::ObjectUid;
 use crate::objects::material_index::MaterialIndex;
-use crate::sdf::named_sdf::UniqueSdfClassName;
+use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 use std::io::Error;
 use std::path::Path;
 

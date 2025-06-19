@@ -1,4 +1,6 @@
-﻿use crate::bvh::node::BvhNode;
+﻿use crate::animation::time_tracker::TimeTracker;
+use crate::bvh::node::BvhNode;
+use crate::container::visual_objects::{DataKind, VisualObjects};
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
 use crate::gpu::color_buffer_evaluation::{ColorBufferEvaluationStrategy, RenderStrategyId};
@@ -19,6 +21,7 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
+use crate::scene::hub::Hub;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
@@ -30,9 +33,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::StoreOp;
 use winit::dpi::PhysicalSize;
-use crate::animation::time_tracker::TimeTracker;
-use crate::container::visual_objects::{VisualObjects, DataKind};
-use crate::scene::hub::Hub;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -717,11 +717,7 @@ mod tests {
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
-
     use crate::geometry::transform::Affine;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_box::SdfBox;
     #[cfg(feature = "denoiser")]
     use crate::serialization::pod_vector::PodVector;
     use crate::utils::tests::assert_utils::tests::assert_all_items_equal;
@@ -729,6 +725,9 @@ mod tests {
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
     use rstest::rstest;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_box::SdfBox;
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 256;

@@ -4,7 +4,6 @@ use cgmath::Deg;
 use library::geometry::alias::Point;
 use library::objects::material_index::MaterialIndex;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
-use library::sdf::code_generator::SdfRegistrator;
 use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use library::utils::object_uid::ObjectUid;
 use library::Engine;
@@ -18,6 +17,7 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
 use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, Periodization, TimeDirection, WrapKind};
 use library::container::visual_objects::VisualObjects;
+use library::sdf::framework::code_generator::SdfRegistrator;
 
 #[must_use]
 fn make_default_camera() -> Camera {

@@ -14,9 +14,9 @@ mod tests {
     use crate::objects::sdf::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::scene::camera::Camera;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_box::SdfBox;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_box::SdfBox;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
