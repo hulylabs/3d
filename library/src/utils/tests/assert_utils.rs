@@ -1,7 +1,9 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
     use std::fmt::{Display, Write};
-    
+    use float_eq::assert_float_eq;
+    use crate::geometry::alias::Point;
+
     pub(crate) fn assert_all_unique<T: Ord>(victim: &mut Vec<T>) {
         victim.sort();
         if false == victim.windows(2).all(|w| w[0] != w[1]) {
@@ -45,5 +47,11 @@ pub(crate) mod tests {
                 panic!("element '{element}' at index {index} differs from reference", element = target[i], index = i);
             }
         }
+    }
+    
+    pub(crate) fn assert_float_point_equals(left: Point, right: Point, ulps: u64, message_prefix: &str) {
+        assert_float_eq!(left.x, right.x, ulps <= ulps, "{}: x component mismatch", message_prefix);
+        assert_float_eq!(left.y, right.y, ulps <= ulps, "{}: y component mismatch", message_prefix);
+        assert_float_eq!(left.z, right.z, ulps <= ulps, "{}: z component mismatch", message_prefix);
     }
 }
