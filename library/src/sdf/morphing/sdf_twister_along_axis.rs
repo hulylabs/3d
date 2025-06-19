@@ -1,14 +1,12 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
-use crate::geometry::cylinder::Cylinder;
-use crate::geometry::utils::exclude_axis;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
 use crate::sdf::framework::shader_formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
+use crate::sdf::morphing::common::circumscribed_cylinder;
 use crate::sdf::morphing::morphing_swizzle::{morphing_swizzle_from_axis, Swizzle};
-use cgmath::InnerSpace;
 use more_asserts::assert_gt;
 use std::rc::Rc;
 
@@ -69,14 +67,7 @@ impl Sdf for SdfTwisterAlongAxis {
 
     #[must_use]
     fn aabb(&self) -> Aabb {
-        let source_aabb = self.target.aabb();
-        let source_aabb_extent = source_aabb.extent();
-
-        let length = source_aabb_extent[self.axis.as_index()];
-        let radius = exclude_axis(source_aabb_extent, self.axis) / 2.0;
-
-        let circumscribed_cylinder = Cylinder::new(source_aabb.center(), self.axis, length, radius.magnitude());
-
+        let circumscribed_cylinder = circumscribed_cylinder(&self.target.aabb(), self.axis);
         circumscribed_cylinder.aabb()
     }
 }

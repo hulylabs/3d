@@ -1,34 +1,32 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
-use crate::geometry::cylinder::Cylinder;
-use crate::geometry::utils::exclude_axis;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
 use crate::sdf::framework::shader_formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
+use crate::sdf::morphing::common::circumscribed_cylinder;
 use crate::sdf::morphing::morphing_swizzle::{morphing_swizzle_from_axis, Swizzle};
-use cgmath::InnerSpace;
 use more_asserts::assert_gt;
 use std::rc::Rc;
 
 pub struct SdfBenderAlongAxis {
     target: Rc<dyn Sdf>,
     axis: Axis,
-    twist_time_scale: f64,
-    twist_amplitude_scale: f64,
+    bend_time_scale: f64,
+    bend_amplitude_scale: f64,
 }
 
 impl SdfBenderAlongAxis {
     #[must_use]
-    pub fn new(target: Rc<dyn Sdf>, axis: Axis, twist_time_scale: f64, twist_amplitude_scale: f64) -> Rc<Self> {
-        assert_gt!(twist_time_scale, 0.0, "twist time scale expected to be positive");
-        assert_gt!(twist_amplitude_scale, 0.0, "twist amplitude scale expected to be positive");
+    pub fn new(target: Rc<dyn Sdf>, axis: Axis, bend_time_scale: f64, bend_amplitude_scale: f64) -> Rc<Self> {
+        assert_gt!(bend_time_scale, 0.0, "bend time scale expected to be positive");
+        assert_gt!(bend_amplitude_scale, 0.0, "bend amplitude scale expected to be positive");
         Rc::new(Self {
             target,
             axis,
-            twist_time_scale,
-            twist_amplitude_scale,
+            bend_time_scale,
+            bend_amplitude_scale,
         })
     }
 }
@@ -41,19 +39,16 @@ impl Sdf for SdfBenderAlongAxis {
             format!(
                 "\
                 let whole_object_angle: f32 = {time};\n\
-                let whole_object_cos = cos(whole_object_angle);\n\
-                let whole_object_sin = sin(whole_object_angle);\n\
-                let whole_object_rotor: mat2x2f = mat2x2f(whole_object_cos, whole_object_sin, -whole_object_sin, whole_object_cos);\n\
-                let twist_angle: f32 = {position}.{stable_axis} * {twist_amplitude_scale} * sin({time}*{twist_time_scale});\n\
-                let twist_cos = cos(twist_angle);\n\
-                let twist_sin = sin(twist_angle);\n\
-                let twister: mat2x2f = mat2x2f(twist_cos, -twist_sin, twist_sin, twist_cos);\n\
-                let {rotated}: vec2f = (twister * whole_object_rotor) * {position}.{rotated_pair};\n\
+                let bend_angle: f32 = {position}.{stable_axis} * {bend_amplitude_scale} * sin({time}*{bend_time_scale});\n\
+                let bend_cos = cos(bend_angle);\n\
+                let bend_sin = sin(bend_angle);\n\
+                let bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\n\
+                let {rotated}: vec2f = bender * {position}.{rotated_pair};\n\
                 let {position} = {composition};",
                 time = conventions::PARAMETER_NAME_THE_TIME,
                 position = conventions::PARAMETER_NAME_THE_POINT,
-                twist_amplitude_scale = format_scalar(self.twist_amplitude_scale),
-                twist_time_scale = format_scalar(self.twist_time_scale),
+                bend_amplitude_scale = format_scalar(self.bend_amplitude_scale),
+                bend_time_scale = format_scalar(self.bend_time_scale),
                 stable_axis = swizzle.stable_axis(),
                 rotated_pair = swizzle.rotated_pair(),
                 composition = swizzle.final_composition(),
@@ -69,14 +64,7 @@ impl Sdf for SdfBenderAlongAxis {
 
     #[must_use]
     fn aabb(&self) -> Aabb {
-        let source_aabb = self.target.aabb();
-        let source_aabb_extent = source_aabb.extent();
-
-        let length = source_aabb_extent[self.axis.as_index()];
-        let radius = exclude_axis(source_aabb_extent, self.axis) / 2.0;
-
-        let circumscribed_cylinder = Cylinder::new(source_aabb.center(), self.axis, length, radius.magnitude());
-
+        let circumscribed_cylinder = circumscribed_cylinder(&self.target.aabb(), self.axis);
         circumscribed_cylinder.aabb()
     }
 }
@@ -101,9 +89,9 @@ mod tests {
         let cube_half_size: f64 = 1.0;
         let center = Vector::new(1.0, 3.0, 5.0);
         let shifted_cube = SdfTranslation::new(center, SdfBox::new(Vector::from_value(cube_half_size)));
-        let twist_time_scale = 1.0;
-        let twist_amplitude_scale = 1.0;
-        let system_under_test = SdfBenderAlongAxis::new(shifted_cube, axis, twist_time_scale, twist_amplitude_scale);
+        let bend_time_scale = 1.0;
+        let bend_amplitude_scale = 1.0;
+        let system_under_test = SdfBenderAlongAxis::new(shifted_cube, axis, bend_time_scale, bend_amplitude_scale);
 
         let actual_aabb = system_under_test.aabb();
         let actual_extent = actual_aabb.extent();
@@ -111,18 +99,18 @@ mod tests {
 
         assert_float_point_equals(actual_aabb.center(), Point::from_vec(center), 1, "expected aabb center");
         assert_float_eq!(actual_extent[axis.as_index()], cube_half_size * 2.0, ulps <= 1, "invariant axis extent mismatch");
-        assert_float_eq!(actual_extent[axis.next().as_index()], expected_radius * 2.0, ulps <= 1, "twisted axis one mismatch");
-        assert_float_eq!(actual_extent[axis.next().next().as_index()], expected_radius * 2.0, ulps <= 1, "twisted axis two mismatch");
+        assert_float_eq!(actual_extent[axis.next().as_index()], expected_radius * 2.0, ulps <= 1, "bended axis one mismatch");
+        assert_float_eq!(actual_extent[axis.next().next().as_index()], expected_radius * 2.0, ulps <= 1, "bended axis two mismatch");
     }
 
     #[test]
     fn test_code_generation() {
-        let twist_time_scale = 1.0;
-        let twist_amplitude_scale = 1.0;
+        let bend_time_scale = 1.0;
+        let bend_amplitude_scale = 1.0;
 
         test_unary_operator_body_production(
-            |child| SdfBenderAlongAxis::new(child, Axis::Z, twist_time_scale, twist_amplitude_scale),
-            "var operand_0: f32;\n{\nlet whole_object_angle: f32 = time;\nlet whole_object_cos = cos(whole_object_angle);\nlet whole_object_sin = sin(whole_object_angle);\nlet whole_object_rotor: mat2x2f = mat2x2f(whole_object_cos, whole_object_sin, -whole_object_sin, whole_object_cos);\nlet twist_angle: f32 = point.z * 1.0 * sin(time*1.0);\nlet twist_cos = cos(twist_angle);\nlet twist_sin = sin(twist_angle);\nlet twister: mat2x2f = mat2x2f(twist_cos, -twist_sin, twist_sin, twist_cos);\nlet rotated: vec2f = (twister * whole_object_rotor) * point.xy;\nlet point = vec3f(rotated, point.z);\n{\noperand_0 = ?_left;\n}\n}\nreturn operand_0;",
+            |child| SdfBenderAlongAxis::new(child, Axis::Z, bend_time_scale, bend_amplitude_scale),
+            "var operand_0: f32;\n{\nlet whole_object_angle: f32 = time;\nlet bend_angle: f32 = point.z * 1.0 * sin(time*1.0);\nlet bend_cos = cos(bend_angle);\nlet bend_sin = sin(bend_angle);\nlet bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\nlet rotated: vec2f = bender * point.xy;\nlet point = vec3f(rotated, point.z);\n{\noperand_0 = ?_left;\n}\n}\nreturn operand_0;",
         );
     }
 }
