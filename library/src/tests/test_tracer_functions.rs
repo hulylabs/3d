@@ -497,7 +497,7 @@ mod tests {
     fn make_single_serialized_sdf_instance(class: &NamedSdf, instance_transformation: &Affine) -> SdfInstances {
         let dummy_linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
         
-        let sdf_instance = SdfInstance::new(instance_transformation.clone(), SdfClassIndex(0), dummy_linkage);
+        let sdf_instance = SdfInstance::new(instance_transformation.clone(), 1.0, SdfClassIndex(0), dummy_linkage);
         let mut instances = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         sdf_instance.serialize_into(&mut instances);
 

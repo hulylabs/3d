@@ -652,7 +652,7 @@ impl TechWorld {
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
 
         // twist demo
-        
+
         self.infinitely_twisted_button = Some(scene.add_sdf(
             &Affine::from_translation(Vector::new(0.2, 0.3, 0.0)),
             self.sdf_classes.twisted_box.name(),
@@ -674,24 +674,30 @@ impl TechWorld {
             self.materials.green_mirror));
 
         // bend demo
-        
-        self.infinitely_bended_button = Some(scene.add_sdf(
+
+        const BEND_RAY_MARCH_FIX: f64 = 0.7;
+
+        self.infinitely_bended_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, 0.3, 0.0)),
+            BEND_RAY_MARCH_FIX,
             self.sdf_classes.bended_box.name(),
             self.materials.green_material));
 
-        self.single_bended_button = Some(scene.add_sdf(
+        self.single_bended_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, 0.1, 0.0)),
+            BEND_RAY_MARCH_FIX,
             self.sdf_classes.bended_box.name(),
             self.materials.coral_material));
 
-        self.back_n_forth_bended_button = Some(scene.add_sdf(
+        self.back_n_forth_bended_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, -0.1, 0.0)),
+            BEND_RAY_MARCH_FIX,
             self.sdf_classes.bended_box.name(),
             self.materials.purple_glass));
 
-        self.very_slow_bended_button = Some(scene.add_sdf(
+        self.very_slow_bended_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, -0.3, 0.0)),
+            BEND_RAY_MARCH_FIX,
             self.sdf_classes.bended_box.name(),
             self.materials.red_material));
     }

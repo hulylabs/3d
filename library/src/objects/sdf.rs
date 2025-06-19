@@ -1,25 +1,28 @@
 ﻿use crate::geometry::transform::Affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
-use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
-use crate::serialization::serialize_matrix::serialize_matrix;
 use crate::objects::ray_traceable::RayTraceable;
+use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+use crate::serialization::serialize_matrix::serialize_matrix;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
-use crate::objects::sdf_class_index::SdfClassIndex;
-use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+use more_asserts::assert_gt;
 
 pub(crate) struct SdfInstance {
     location: Affine,
+    ray_marching_step_scale: f64,
     class: SdfClassIndex,
     links: Linkage,
 }
 
 impl SdfInstance {
     #[must_use]
-    pub(crate) fn new(location: Affine, class: SdfClassIndex, links: Linkage) -> Self {
-        assert!(abs(location.determinant()) > 0.0);
-        Self { location, class, links }
+    pub(crate) fn new(location: Affine, ray_marching_step_scale: f64, class: SdfClassIndex, links: Linkage) -> Self {
+        assert_gt!(abs(location.determinant()), 0.0, "location should not change basis orientation, or ray marching will break");
+        assert_gt!(ray_marching_step_scale, 0.0);
+        Self { location, ray_marching_step_scale, class, links }
     }
 }
 
@@ -35,6 +38,7 @@ impl GpuSerializable for SdfInstance {
         serialize_matrix(container, &self.location.invert().unwrap());
 
         container.write_quartet(|writer| {
+            writer.write_float_64(self.ray_marching_step_scale);
             writer.write_float_64(self.class.as_f64());
             writer.write_unsigned(self.links.material_index().0 as u32);
             writer.write_unsigned(self.links.uid().0);
@@ -65,7 +69,7 @@ mod tests {
     use super::*;
     use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
     use crate::objects::material_index::MaterialIndex;
-    use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET};
+    use crate::serialization::gpu_ready_serialization_buffer::ELEMENTS_IN_QUARTET;
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::cast_slice;
 
@@ -83,8 +87,9 @@ mod tests {
         let expected_class = SdfClassIndex(17);
         let expected_material_index = MaterialIndex(4);
         let expected_object_uid = ObjectUid(7);
+        let expected_ray_marching_scale = 5.0;
         
-        let system_under_test = SdfInstance::new(expected_location, expected_class, Linkage::new(expected_object_uid, expected_material_index));
+        let system_under_test = SdfInstance::new(expected_location, expected_ray_marching_scale, expected_class, Linkage::new(expected_object_uid, expected_material_index));
 
         let mut container = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
@@ -113,13 +118,13 @@ mod tests {
         assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[MATRIX_FLOATS_COUNT..MATRIX_FLOATS_COUNT * 2]);
         values_checked += MATRIX_FLOATS_COUNT;
 
+        assert_eq!(serialized[values_checked], expected_ray_marching_scale as f32);
+        values_checked += 1;
         assert_eq!(serialized[values_checked], expected_class.as_f64() as f32);
         values_checked += 1;
         assert_eq!(serialized[values_checked].to_bits(), expected_material_index.0 as u32);
         values_checked += 1;
         assert_eq!(serialized[values_checked].to_bits(), expected_object_uid.0);
-        values_checked += 1;
-        assert_eq!(serialized[values_checked], DEFAULT_PAD_VALUE);
         values_checked += 1;
         
         assert_eq!(values_checked, SdfInstance::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);

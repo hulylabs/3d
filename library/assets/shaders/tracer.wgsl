@@ -123,6 +123,7 @@ struct Triangle {
 struct Sdf {
     location : mat4x4f,
     inverse_location : mat4x4f,
+    ray_marching_step_scale: f32,
     class_index : f32,
     material_id : u32,
     object_uid : u32,
@@ -252,7 +253,7 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
             hitRec.material_id = sdf.material_id;
             return true;
         }
-        let step_size = max(abs(signed_distance), t_scaled);
+        let step_size = max(abs(signed_distance) * sdf.ray_marching_step_scale, t_scaled);
         local_t += step_size;
         i = i + 1;
     }

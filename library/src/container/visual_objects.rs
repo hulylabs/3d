@@ -141,12 +141,12 @@ impl VisualObjects {
         })
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
+    pub fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
         let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
-                Box::new(SdfInstance::new(*location, *index, Linkage::new(uid, material))),
+                Box::new(SdfInstance::new(*location, ray_marching_step_scale, *index, Linkage::new(uid, material))),
                 index.0,
                 *location,
             ))
@@ -384,7 +384,7 @@ mod tests {
         
         assert_material_changed(material_two, material_one, parallelogram);
         
-        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), &sphere_sdf_name, material_one);
+        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), 1.0, &sphere_sdf_name, material_one);
         let version_before = system_under_test.borrow().data_version(DataKind::Sdf);
         assert_material_changed(material_one, material_two, sdf);
         assert_ne!(system_under_test.borrow().data_version(DataKind::Sdf), version_before);
@@ -423,13 +423,13 @@ mod tests {
         {
             {
                 let linkage = Linkage::new(ObjectUid(i+1), expected_material);
-                let expected_sdf = SdfInstance::new(Affine::identity(), SdfClassIndex(0), linkage);
+                let expected_sdf = SdfInstance::new(Affine::identity(), 1.0, SdfClassIndex(0), linkage);
                 expected_sdf.serialize_into(&mut expected_serialized);
             }
             assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), i as usize);
             {
                 let data_version_before_addition = system_under_test.data_version(DataKind::Sdf);
-                system_under_test.add_sdf(&expected_transform, &sphere_sdf_name, expected_material);
+                system_under_test.add_sdf(&expected_transform, 1.0, &sphere_sdf_name, expected_material);
                 let data_version_after_addition = system_under_test.data_version(DataKind::Sdf);
                 assert_ne!(data_version_before_addition, data_version_after_addition);
             }
@@ -558,7 +558,7 @@ mod tests {
         let mut fixture = make_filled_container();
         
         let sdf_to_be_deleted = fixture.sdf;
-        let sdf_to_be_kept = fixture.container.add_sdf(&Affine::identity(), &fixture.sdf_name, fixture.dummy_material);
+        let sdf_to_be_kept = fixture.container.add_sdf(&Affine::identity(), 1.0, &fixture.sdf_name, fixture.dummy_material);
 
         fixture.container.delete(sdf_to_be_deleted);
         
@@ -638,7 +638,7 @@ mod tests {
         let dummy_material = container.materials_mutable().add(&Material::default());
         let (mesh_id, meshes) = prepare_test_mesh();
 
-        let sdf = container.add_sdf(&Affine::identity(), &sdf_name, dummy_material);
+        let sdf = container.add_sdf(&Affine::identity(), 1.0, &sdf_name, dummy_material);
         let parallelogram = container.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
         let mesh = container.add_mesh(&meshes, mesh_id, &Transformation::identity(), dummy_material);
 

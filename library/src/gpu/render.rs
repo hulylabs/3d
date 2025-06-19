@@ -810,7 +810,7 @@ mod tests {
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);
         let test_material_uid = scene.materials_mutable().add(&test_material);
-        scene.add_sdf(&Affine::identity(), &test_box_name, test_material_uid);
+        scene.add_sdf(&Affine::identity(), 1.0, &test_box_name, test_material_uid);
 
         let context = create_headless_wgpu_context();
 

@@ -47,10 +47,15 @@ impl Hub {
         self.time_tracker.clear();
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
-        let added = self.container.add_sdf(location, class_uid, material);
+    pub fn add_sdf_with_ray_march_fix(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
+        let added = self.container.add_sdf(location, ray_marching_step_scale, class_uid, material);
         self.time_tracker.track(added, &self.container.morphable());
         added
+    }
+    
+    pub fn add_sdf(&mut self, location: &Affine, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
+        const RAY_MARCHING_STEP_ID_SCALE: f64 = 1.0;
+        self.add_sdf_with_ray_march_fix(location, RAY_MARCHING_STEP_ID_SCALE, class_uid, material)
     }
     
     pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
