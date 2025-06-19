@@ -27,6 +27,15 @@ impl Swizzle {
 }
 
 #[must_use]
+pub fn axis_address(axis: Axis) -> &'static str {
+    match axis {
+        Axis::X => "x",
+        Axis::Y => "y",
+        Axis::Z => "z",
+    }
+}
+
+#[must_use]
 pub fn morphing_swizzle_from_axis(axis: Axis) -> Swizzle {
     match axis {
         Axis::X => Swizzle {
@@ -42,7 +51,7 @@ pub fn morphing_swizzle_from_axis(axis: Axis) -> Swizzle {
             rotated_pair: "xz",
             stable_axis: "y",
             final_composition: format!(
-                "vec3f({rotated}.x, {parameter}.y, {rotated}.z)",
+                "vec3f({rotated}.x, {parameter}.y, {rotated}.y)",
                 parameter = conventions::PARAMETER_NAME_THE_POINT,
                 rotated = Swizzle::ROTATED_PAIR_VARIABLE_NAME,
             ),

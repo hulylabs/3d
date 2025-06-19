@@ -37,6 +37,9 @@ mod tests {
     use more_asserts::{assert_ge, assert_gt};
     use std::fmt::Write;
     use std::rc::Rc;
+    use rstest::rstest;
+    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
+    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
 
     #[test]
     fn test_sdf_union_spheres() {
@@ -59,7 +62,39 @@ mod tests {
 
         test_sdf_evaluation(system_under_test, "spheres_union", &test_cases);
     }
-    
+
+    #[rstest]
+    #[case(Axis::X)]
+    #[case(Axis::Y)]
+    #[case(Axis::Z)]
+    fn test_identity_bending(#[case] axis: Axis) {
+        let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
+        let system_under_test = SdfBenderAlongAxis::new(subject, axis, Axis::X, 1.0, 1.0);
+
+        let mut test_cases = SdfSampleCases::<f32>::new();
+        test_cases.add_case(1.0,  3.0 , 6.0 ,-2.0_f32);
+        test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
+        test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
+
+        test_sdf_evaluation(system_under_test, "bend_sphere", &test_cases);
+    }
+
+    #[rstest]
+    #[case(Axis::X)]
+    #[case(Axis::Y)]
+    #[case(Axis::Z)]
+    fn test_identity_twister(#[case] axis: Axis) {
+        let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
+        let system_under_test = SdfTwisterAlongAxis::new(subject, axis, 1.0, 1.0);
+
+        let mut test_cases = SdfSampleCases::<f32>::new();
+        test_cases.add_case(1.0,  3.0 , 6.0 ,-2.0_f32);
+        test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
+        test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
+
+        test_sdf_evaluation(system_under_test, "twist_sphere", &test_cases);
+    }
+
     #[test]
     fn test_sdf_sphere() {
         let system_under_test = SdfSphere::new(17.0);

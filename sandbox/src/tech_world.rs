@@ -19,6 +19,7 @@ use library::sdf::composition::sdf_union::SdfUnion;
 use library::sdf::composition::sdf_union_smooth::SdfUnionSmooth;
 use library::sdf::framework::code_generator::SdfRegistrator;
 use library::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+use library::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
 use library::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
 use library::sdf::object::sdf_box::SdfBox;
 use library::sdf::object::sdf_box_frame::SdfBoxFrame;
@@ -68,6 +69,7 @@ pub(super) struct SdfClasses {
     intersection_smooth: NamedSdf,
     
     twisted_box: NamedSdf,
+    bended_box: NamedSdf,
 }
 
 impl SdfClasses {
@@ -197,15 +199,27 @@ impl SdfClasses {
         ), UniqueSdfClassName::new("intersection_smooth".to_string()));
         registrator.add(&intersection_smooth);
 
+        let box_to_morph = SdfBox::new(Vector::new(0.2, 0.05, 0.01));
+
         let twist_time_scale = 1.0;
         let twist_amplitude_scale = 4.0;
-        let infinite_twisted_box = NamedSdf::new(
+        let twisted_box = NamedSdf::new(
             SdfTwisterAlongAxis::new(
-                SdfBox::new(Vector::new(0.2, 0.05, 0.01)), Axis::X, twist_time_scale, twist_amplitude_scale, 
+                box_to_morph.clone(), Axis::X, twist_time_scale, twist_amplitude_scale,
             ),
             UniqueSdfClassName::new("twisted_box".to_string())
         );
-        registrator.add(&infinite_twisted_box);
+        registrator.add(&twisted_box);
+
+        let bend_time_scale = 1.0;
+        let bend_amplitude_scale = 3.0;
+        let bended_box = NamedSdf::new(
+            SdfBenderAlongAxis::new(
+                box_to_morph.clone(), Axis::Y, Axis::X, bend_time_scale, bend_amplitude_scale,
+            ),
+            UniqueSdfClassName::new("bended_box".to_string())
+        );
+        registrator.add(&bended_box);
 
         Self { 
             rectangular_box, 
@@ -232,7 +246,8 @@ impl SdfClasses {
             union_smooth,
             subtraction_smooth,
             intersection_smooth,
-            twisted_box: infinite_twisted_box,
+            twisted_box,
+            bended_box,
         }
     }
 }
@@ -391,6 +406,11 @@ pub(super) struct TechWorld {
     single_twisted_button: Option<ObjectUid>,
     back_n_forth_twisted_button: Option<ObjectUid>,
     very_slow_twisted_button: Option<ObjectUid>,
+
+    infinitely_bended_button: Option<ObjectUid>,
+    single_bended_button: Option<ObjectUid>,
+    back_n_forth_bended_button: Option<ObjectUid>,
+    very_slow_bended_button: Option<ObjectUid>,
 }
 
 impl TechWorld {
@@ -408,6 +428,11 @@ impl TechWorld {
             single_twisted_button: None,
             back_n_forth_twisted_button: None,
             very_slow_twisted_button: None,
+
+            infinitely_bended_button: None,
+            single_bended_button: None,
+            back_n_forth_bended_button: None,
+            very_slow_bended_button: None,
         }
     }
     
@@ -626,25 +651,49 @@ impl TechWorld {
         scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
         scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
 
+        // twist demo
+        
         self.infinitely_twisted_button = Some(scene.add_sdf(
-            &Affine::from_translation(Vector::new(0.5, 0.3, 0.0)),
+            &Affine::from_translation(Vector::new(0.2, 0.3, 0.0)),
             self.sdf_classes.twisted_box.name(),
             self.materials.red_glass));
 
         self.single_twisted_button = Some(scene.add_sdf(
-            &Affine::from_translation(Vector::new(0.5, 0.1, 0.0)),
+            &Affine::from_translation(Vector::new(0.2, 0.1, 0.0)),
             self.sdf_classes.twisted_box.name(),
             self.materials.gold_metal));
-        
+
         self.back_n_forth_twisted_button = Some(scene.add_sdf(
-            &Affine::from_translation(Vector::new(0.5, -0.1, 0.0)),
+            &Affine::from_translation(Vector::new(0.2, -0.1, 0.0)),
             self.sdf_classes.twisted_box.name(),
             self.materials.blue_material));
-        
+
         self.very_slow_twisted_button = Some(scene.add_sdf(
-            &Affine::from_translation(Vector::new(0.5, -0.3, 0.0)),
+            &Affine::from_translation(Vector::new(0.2, -0.3, 0.0)),
             self.sdf_classes.twisted_box.name(),
             self.materials.green_mirror));
+
+        // bend demo
+        
+        self.infinitely_bended_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.7, 0.3, 0.0)),
+            self.sdf_classes.bended_box.name(),
+            self.materials.green_material));
+
+        self.single_bended_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.7, 0.1, 0.0)),
+            self.sdf_classes.bended_box.name(),
+            self.materials.coral_material));
+
+        self.back_n_forth_bended_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.7, -0.1, 0.0)),
+            self.sdf_classes.bended_box.name(),
+            self.materials.purple_glass));
+
+        self.very_slow_bended_button = Some(scene.add_sdf(
+            &Affine::from_translation(Vector::new(0.7, -0.3, 0.0)),
+            self.sdf_classes.bended_box.name(),
+            self.materials.red_material));
     }
 
     pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Hub) {
@@ -735,9 +784,25 @@ impl TechWorld {
     pub(super) fn back_n_forth_twisted_button(&self) -> Option<ObjectUid> {
         self.back_n_forth_twisted_button
     }
-    
     #[must_use]
     pub(super) fn very_slow_twisted_button(&self) -> Option<ObjectUid> {
         self.very_slow_twisted_button
+    }
+
+    #[must_use]
+    pub(super) fn infinitely_bended_button(&self) -> Option<ObjectUid> {
+        self.infinitely_bended_button
+    }
+    #[must_use]
+    pub(super) fn single_bended_button(&self) -> Option<ObjectUid> {
+        self.single_bended_button
+    }
+    #[must_use]
+    pub(super) fn back_n_forth_bended_button(&self) -> Option<ObjectUid> {
+        self.back_n_forth_bended_button
+    }
+    #[must_use]
+    pub(super) fn very_slow_bended_button(&self) -> Option<ObjectUid> {
+        self.very_slow_bended_button
     }
 }

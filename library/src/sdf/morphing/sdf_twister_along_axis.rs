@@ -5,7 +5,7 @@ use crate::sdf::framework::sdf_base::Sdf;
 use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
 use crate::sdf::framework::shader_formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
-use crate::sdf::morphing::common::circumscribed_cylinder;
+use crate::sdf::morphing::utils::circumscribed_cylinder;
 use crate::sdf::morphing::morphing_swizzle::{morphing_swizzle_from_axis, Swizzle};
 use more_asserts::assert_gt;
 use std::rc::Rc;
