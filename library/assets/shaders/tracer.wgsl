@@ -53,6 +53,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 3) var<storage, read> materials: array<Material>;
 @group(2) @binding( 4) var<storage, read> bvh: array<BvhNode>;
 @group(2) @binding( 5) var<storage, read> bvh_inflated: array<BvhNode>;
+@group(2) @binding( 6) var<storage, read> sdf_time: array<f32>;
 
 var<private> randState: u32 = 0u;
 var<private> pixelCoords: vec2f;
@@ -78,7 +79,6 @@ struct Uniforms {
 	view_ray_origin_matrix : mat4x4f,
 
 	parallelograms_count: u32,
-	sdf_count: u32,
 	bvh_length: u32,
 	pixel_side_subdivision: u32, // anti-aliasing level: bigger value -> slower render -> less jagged edges
 }
@@ -121,8 +121,9 @@ struct Triangle {
 }
 
 struct Sdf {
-    location : mat4x4f,
-    inverse_location : mat4x4f,
+    location : mat3x4f,
+    inverse_location : mat3x4f,
+    ray_marching_step_scale: f32,
     class_index : f32,
     material_id : u32,
     object_uid : u32,
@@ -192,34 +193,53 @@ fn near_zero_scalar(v : f32) -> bool {
 }
 
 @must_use
-fn signed_distance_normal(point: vec3f, sdf: Sdf) -> vec3f {
+fn sample_sdf(sdf: Sdf, point: vec3f, time: f32) -> f32 {
+    return sdf_select(sdf.class_index, point, time);
+}
+
+@must_use
+fn signed_distance_normal(sdf: Sdf, point: vec3f, time: f32) -> vec3f {
     let e = vec2f(1.0,-1.0)*0.5773*0.0005;
-    return normalize( e.xyy * sdf_select( sdf.class_index, point + e.xyy ) +
-					  e.yyx * sdf_select( sdf.class_index, point + e.yyx ) +
-					  e.yxy * sdf_select( sdf.class_index, point + e.yxy ) +
-					  e.xxx * sdf_select( sdf.class_index, point + e.xxx ) );
+    return normalize( e.xyy * sample_sdf( sdf, point + e.xyy, time ) +
+					  e.yyx * sample_sdf( sdf, point + e.yyx, time ) +
+					  e.yxy * sample_sdf( sdf, point + e.yxy, time ) +
+					  e.xxx * sample_sdf( sdf, point + e.xxx, time ) );
 }
 
 @must_use
-fn transform_point(transformation: mat4x4f, point: vec3f) -> vec3f {
-    return (transformation * vec4f(point, 1.0f)).xyz;
+fn transform_point(transformation: mat3x4f, point: vec3f) -> vec3f {
+    return vec4f(point, 1.0f) * transformation;
 }
 
 @must_use
-fn transform_vector(transformation: mat4x4f, vector: vec3f) -> vec3f {
-    return (transformation * vec4f(vector, 0.0f)).xyz;
+fn to_mat3x3(source: mat3x4f) -> mat3x3f {
+    return mat3x3f(source[0].xyz, source[1].xyz, source[2].xyz);
 }
 
 @must_use
-fn transform_ray_parameter(transformation: mat4x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
+fn transform_vector(transformation: mat3x3f, vector: vec3f) -> vec3f {
+    return vector * transformation;
+}
+
+@must_use
+fn transform_transposed_vector(transformation: mat3x3f, vector: vec3f) -> vec3f {
+    /*Sdf matrices come from CPU in row-major format, so
+    we need to multiply like v * M. Swaping operands like
+    M * v equals to v * transpose(M).*/
+    return transformation * vector;
+}
+
+@must_use
+fn transform_ray_parameter(transformation: mat3x4f, ray: Ray, parameter: f32, transformed_origin: vec3f) -> f32 {
     let point = transform_point(transformation, at(ray, parameter));
     return length(point - transformed_origin);
 }
 
 @must_use
-fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
+fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
+    let sdf_location_inverse = to_mat3x3(sdf.inverse_location);
     let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
-    let local_ray_direction = transform_vector(sdf.inverse_location, ray.direction);
+    let local_ray_direction = transform_vector(to_mat3x3(sdf.inverse_location), ray.direction);
     let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
 
     var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
@@ -234,20 +254,20 @@ fn hit_sdf(sdf: Sdf, tmin: f32, tmax: f32, ray: Ray) -> bool {
             break;
         }
         let candidate = at(local_ray, local_t);
-        let signed_distance = sdf_select(sdf.class_index, candidate);
+        let signed_distance = sample_sdf(sdf, candidate, time);
         let t_scaled = 0.0001 * local_t;
         if(abs(signed_distance) < t_scaled) {
             hitRec.p = transform_point(sdf.location, candidate);
             hitRec.t = length(hitRec.p - ray.origin);
-            hitRec.normal = normalize(transform_vector(transpose(sdf.inverse_location), signed_distance_normal(candidate, sdf)));
-            hitRec.front_face = sdf_select(sdf.class_index, local_ray.origin) >= 0;
+            hitRec.normal = normalize(transform_transposed_vector(sdf_location_inverse, signed_distance_normal(sdf, candidate, time)));
+            hitRec.front_face = sample_sdf(sdf, local_ray.origin, time) >= 0;
             if(hitRec.front_face == false){
                 hitRec.normal = -hitRec.normal;
             }
             hitRec.material_id = sdf.material_id;
             return true;
         }
-        let step_size = max(abs(signed_distance), t_scaled);
+        let step_size = max(abs(signed_distance) * sdf.ray_marching_step_scale, t_scaled);
         local_t += step_size;
         i = i + 1;
     }
@@ -513,7 +533,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     }
                 } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
                     let sdf = sdf[node.primitive_index];
-                    if(hit_sdf(sdf, aabb_hit.ray_parameter, closest_so_far, ray)){
+                    if(hit_sdf(sdf, sdf_time[node.primitive_index], ray, aabb_hit.ray_parameter, closest_so_far)){
                         hit_uid = sdf.object_uid;
                         hit_material_id = sdf.material_id;
                         hit_normal = hitRec.normal;
@@ -576,7 +596,7 @@ fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
                         closest_so_far = hitRec.t;
                     }
                 } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
-                    if(hit_sdf(sdf[node.primitive_index], aabb_hit.ray_parameter, closest_so_far, ray)) {
+                    if(hit_sdf(sdf[node.primitive_index], sdf_time[node.primitive_index], ray, aabb_hit.ray_parameter, closest_so_far)) {
                         hit_anything = true;
                         closest_so_far = hitRec.t;
                     }
@@ -1122,7 +1142,8 @@ fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
         if(inside_aabb(node.aabb_min, node.aabb_max, position)) {
             if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
                 let sdf = sdf[node.primitive_index];
-                let candidate_distance = sample_signed_distance_function(sdf, position, direction);
+                let time = sdf_time[node.primitive_index];
+                let candidate_distance = sample_signed_distance_function(sdf, position, direction, time);
                 if (candidate_distance < record) {
                     record = candidate_distance;
                 }
@@ -1137,10 +1158,10 @@ fn sample_signed_distance(position: vec3f, direction: vec3f) -> f32 {
 }
 
 @must_use // expected normalized 'direction'
-fn sample_signed_distance_function(sdf: Sdf, position: vec3f, direction: vec3f) -> f32 {
+fn sample_signed_distance_function(sdf: Sdf, position: vec3f, direction: vec3f, time: f32) -> f32 {
     let local_position = transform_point(sdf.inverse_location, position);
-    let local_direction = normalize(transform_vector(sdf.inverse_location, direction));
-    let local_distance = sdf_select(sdf.class_index, local_position);
+    let local_direction = normalize(transform_vector(to_mat3x3(sdf.inverse_location), direction));
+    let local_distance = sample_sdf(sdf, local_position, time);
     let local_next = local_position + local_direction * local_distance;
 
     let global_next = transform_point(sdf.location, local_next);

@@ -74,7 +74,7 @@ mod tests {
     use super::*;
     use crate::bvh::node::tests::make_triangle;
     use crate::bvh::proxy::PrimitiveType;
-    use crate::scene::bvh_proxies::{proxy_of_triangle, SceneObjects};
+    use crate::container::bvh_proxies::{proxy_of_triangle, SceneObjects};
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
     #[test]

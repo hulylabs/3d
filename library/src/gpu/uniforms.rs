@@ -10,7 +10,6 @@ pub(crate) struct Uniforms {
     camera: Camera,
     
     parallelograms_count: u32,
-    sdf_count: u32,
     bvh_length: u32,
     pixel_side_subdivision: u32,
 }
@@ -24,7 +23,6 @@ impl Uniforms {
             if_reset_framebuffer: false,
             camera,
             parallelograms_count: 0,
-            sdf_count: 0,
             bvh_length: 0,
             pixel_side_subdivision,
         }
@@ -59,10 +57,6 @@ impl Uniforms {
 
     pub(crate) fn set_parallelograms_count(&mut self, parallelograms_count: u32) {
         self.parallelograms_count = parallelograms_count;
-    }
-
-    pub(crate) fn set_sdf_count(&mut self, sdf_count: u32) {
-        self.sdf_count = sdf_count;
     }
 
     pub(crate) fn set_bvh_length(&mut self, bvh_length: u32) {
@@ -107,7 +101,7 @@ impl Uniforms {
         
         self.camera.serialize_into(&mut result);
 
-        result.write_quartet_u32(self.parallelograms_count, self.sdf_count, self.bvh_length, self.pixel_side_subdivision);
+        result.write_quartet_u32(self.parallelograms_count, self.bvh_length, self.pixel_side_subdivision, 0);
         
         debug_assert!(result.object_fully_written());
         result
@@ -124,7 +118,6 @@ mod tests {
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
 
     const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
-    const DEFAULT_SDF_COUNT: u32 = 6;
     const DEFAULT_BVH_LENGTH: u32 = 8;
     const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
 
@@ -139,9 +132,8 @@ mod tests {
     const SLOT_RESET_FRAME_BUFFER: usize = 7;
 
     const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
-    const SLOT_SDF_COUNT: usize = 41;
-    const SLOT_BVH_LENGTH: usize = 42;
-    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 43;
+    const SLOT_BVH_LENGTH: usize = 41;
+    const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 42;
     
     #[must_use]
     pub(crate) fn make_test_uniforms_instance() -> Uniforms {
@@ -155,7 +147,6 @@ mod tests {
             camera,
 
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
-            sdf_count: DEFAULT_SDF_COUNT,
             bvh_length: DEFAULT_BVH_LENGTH,
             pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
         }
@@ -248,7 +239,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
 
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
-        assert_eq!(actual_state_floats[SLOT_SDF_COUNT].to_bits(), DEFAULT_SDF_COUNT);
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
         assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
     }

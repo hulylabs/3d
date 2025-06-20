@@ -12,7 +12,7 @@ fn main() {
             ("windows", _) => link_with_oidn_windows_dll(),
             ("macos", "aarch64") => link_with_oidn_macos_arm_dylib(),
             _ => {
-                panic!("unsupported target OS: {}, {}", target_os, target_arch);
+                panic!("unsupported target OS for denoiser: {}, {}", target_os, target_arch);
             }
         }
     }

@@ -8,13 +8,16 @@ pub mod geometry;
 pub mod objects;
 pub mod scene;
 pub mod utils;
+pub mod sdf;
+pub mod container;
 #[cfg(feature = "denoiser")]
 mod denoiser;
 mod bvh;
 mod serialization;
 mod gpu;
 mod tests;
-pub mod sdf;
+pub mod animation;
+
 
 use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;
@@ -22,7 +25,6 @@ use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::{FrameBufferSettings, Renderer};
 use crate::scene::camera::Camera;
-use crate::scene::container::Container;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::sliding_time_frame::SlidingTimeFrame;
@@ -37,6 +39,8 @@ use std::time::Duration;
 use thiserror::Error;
 use wgpu::Trace;
 use winit::window::Window;
+use crate::container::visual_objects::VisualObjects;
+use crate::scene::hub::Hub;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -101,7 +105,7 @@ impl Engine {
         "wgpu=warn,naga=warn"
     }
     
-    pub async fn new(window: Arc<Window>, scene: Container, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
+    pub async fn new(window: Arc<Window>, scene: VisualObjects, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             flags: wgpu::InstanceFlags::empty(),
@@ -248,6 +252,8 @@ impl Engine {
             // TODO: schedule surface reconfigure?
         }
 
+        self.renderer.start_new_frame();
+        
         if self.renderer.is_monte_carlo() {
             for _ in 0..RAYS_ACCUMULATIONS_PER_FRAME {
                 self.renderer.accumulate_more_rays();
@@ -306,7 +312,7 @@ impl Engine {
     }
 
     #[must_use]
-    pub fn scene(&mut self) -> &mut Container {
+    pub fn scene(&mut self) -> &mut Hub {
         self.renderer.scene()
     }
     

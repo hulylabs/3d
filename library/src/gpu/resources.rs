@@ -2,7 +2,6 @@
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
 use wgpu::BufferUsages;
-// TODO: work in progress
 
 pub(crate) struct Resources {
     context: Rc<Context>,
@@ -31,8 +30,6 @@ impl Resources {
             contents: buffer_data,
             usage,
         });
-        self.context.queue().write_buffer(&buffer, 0, buffer_data);
-
         Rc::new(buffer)
     }
 

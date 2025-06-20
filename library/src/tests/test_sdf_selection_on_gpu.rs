@@ -1,17 +1,17 @@
 ﻿#[cfg(test)]
 mod tests {
+    use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::Vector;
-    use crate::scene::sdf_warehouse::SdfWarehouse;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_box::SdfBox;
-    use crate::sdf::sdf_sphere::SdfSphere;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_box::SdfBox;
+    use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
-    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
-    use std::fmt::Write;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
+    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use std::fmt::Write;
 
     #[test]
     fn test_sdf_selection_evaluation() {
@@ -52,7 +52,7 @@ mod tests {
               6.0,
         ];
 
-        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz"));
+        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz, 0.0"));
 
         let actual_distances = execute_code(&input_points, function_execution, ExecutionConfig::default());
         

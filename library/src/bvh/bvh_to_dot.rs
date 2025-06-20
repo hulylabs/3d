@@ -4,25 +4,20 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::rc::Rc;
-use crate::geometry::alias::format_point;
+use crate::geometry::utils::debug_format_human_readable_point;
 
-/// This module provides functionality to visualize BVH trees using the Graphviz DOT format.
-/// The generated DOT files can be rendered using Graphviz tools like `dot`, `neato`, etc.
-/// 
-/// # Example
-/// 
-/// ```ignore
-/// 
-/// // Assuming you have a BVH tree root
-/// let bvh_root: Rc<RefCell<BvhNode>> = // ... your BVH tree
-/// 
-/// // Save as DOT file with colors
-/// save_bvh_as_dot_detailed(&bvh_root, "bvh_tree_detailed.dot").unwrap();
-/// 
-/// // Render with Graphviz (from command line):
-/// // dot -Tpng bvh_tree.dot -o bvh_tree.png
-/// // dot -Tsvg bvh_tree_detailed.dot -o bvh_tree_detailed.svg
-/// ```
+/*
+
+This module provides functionality to visualize BVH trees using the Graphviz DOT format.
+The generated DOT files can be rendered using Graphviz tools like `dot`, `neato`, etc.
+
+save_bvh_as_dot_detailed(&bvh_root, "bvh_tree_detailed.dot").unwrap();
+
+Render with Graphviz (from command line):
+dot -Tpng bvh_tree.dot -o bvh_tree.png
+dot -Tsvg bvh_tree_detailed.dot -o bvh_tree_detailed.svg
+
+*/
 pub(crate) fn save_bvh_as_dot_detailed<DescriptionDelegate: Fn(Option<usize>)->String>(
     root: &Rc<RefCell<BvhNode>>,
     describe: DescriptionDelegate,
@@ -54,9 +49,13 @@ fn create_node_label(node: &BvhNode, description: String) -> String {
     if let Some(content_type) = node.content_type()  {
         label.push_str(format!("\n{:?}: {}", content_type, description).as_str());
     }
+
+    let human_readable_min = debug_format_human_readable_point(node.aabb().min());
+    let human_readable_max = debug_format_human_readable_point(node.aabb().max());
+    label.push_str(format!("\n[min({})\nmax({})]", human_readable_min, human_readable_max).as_str());
     
-    label.push_str(format!("\n[min({})\nmax({})]", format_point(node.aabb().min()), format_point(node.aabb().max())).as_str());
     label.push_str(format!("\nmiss->{:?}", node.miss_node_index_or_null()).as_str());
+    
     label
 }
 

@@ -6,3 +6,4 @@ pub(crate) mod epsilon;
 pub(crate) mod fundamental_constants;
 pub(crate) mod utils;
 pub(crate) mod vertex;
+pub(crate) mod cylinder;

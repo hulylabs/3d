@@ -1,19 +1,22 @@
 ﻿#[cfg(test)]
 mod tests {
     use crate::bvh::builder::build_serialized_bvh;
+    use crate::container::bvh_proxies::proxy_of_sdf;
+    use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::Affine;
+    use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::pipelines_factory::ComputeRoutineEntryPoint;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
+    use crate::gpu::uniforms::Uniforms;
     use crate::objects::common_properties::Linkage;
     use crate::objects::material_index::MaterialIndex;
-    use crate::objects::sdf::SdfInstance;
+    use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::scene::bvh_proxies::proxy_of_sdf;
-    use crate::scene::sdf_warehouse::SdfWarehouse;
-    use crate::sdf::code_generator::SdfRegistrator;
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_box::SdfBox;
+    use crate::scene::camera::Camera;
+    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::object::sdf_box::SdfBox;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
@@ -27,13 +30,10 @@ mod tests {
     use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
     use std::f32::consts::SQRT_2;
     use std::fmt::Write;
-    use crate::gpu::frame_buffer_size::FrameBufferSize;
-    use crate::gpu::uniforms::Uniforms;
-    use crate::scene::camera::Camera;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
-    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(value: f32, vector: vec3f) -> f32 { return 0.0; }";
+    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(value: f32, vector: vec3f, time: f32) -> f32 { return 0.0; }";
     
     #[repr(C)]
     #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -439,7 +439,6 @@ mod tests {
     fn config_common_sdf_buffers() -> ExecutionConfig {
         let mut uniforms = make_test_uniforms();
         uniforms.set_bvh_length(1);
-        uniforms.set_sdf_count(1);
         uniforms.set_parallelograms_count(0);
         
         let mut ware = ExecutionConfig::new();
@@ -467,6 +466,7 @@ mod tests {
         execution_config.add_binding_group(2, vec![], vec![
             BindGroupSlot::new(1, serialized_sdf.instances.backend()),
             BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }
@@ -482,6 +482,7 @@ mod tests {
             BindGroupSlot::new(3, &dummy_buffer),
             BindGroupSlot::new(4, serialized_sdf.bvh.backend()),
             BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }
@@ -496,7 +497,7 @@ mod tests {
     fn make_single_serialized_sdf_instance(class: &NamedSdf, instance_transformation: &Affine) -> SdfInstances {
         let dummy_linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
         
-        let sdf_instance = SdfInstance::new(instance_transformation.clone(), SdfClassIndex(0), dummy_linkage);
+        let sdf_instance = SdfInstance::new(instance_transformation.clone(), 1.0, SdfClassIndex(0), dummy_linkage);
         let mut instances = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         sdf_instance.serialize_into(&mut instances);
 

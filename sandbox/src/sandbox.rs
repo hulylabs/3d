@@ -1,21 +1,23 @@
 ﻿use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulWorld};
-use crate::world::{Materials, SdfClasses, World};
+use crate::tech_world::{Materials, SdfClasses, TechWorld};
 use cgmath::Deg;
 use library::geometry::alias::Point;
 use library::objects::material_index::MaterialIndex;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
-use library::scene::container::Container;
-use library::sdf::code_generator::SdfRegistrator;
 use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use library::utils::object_uid::ObjectUid;
 use library::Engine;
 use log::info;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, MouseButton};
 use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
+use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, Periodization, TimeDirection, WrapKind};
+use library::container::visual_objects::VisualObjects;
+use library::sdf::framework::code_generator::SdfRegistrator;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -37,7 +39,7 @@ struct SelectedObject {
 
 pub(super) struct Sandbox {
     engine: Engine,
-    tech_world: World,
+    tech_world: TechWorld,
     beautiful_world: BeautifulWorld,
     
     left_mouse_down: bool,
@@ -88,7 +90,52 @@ impl Sandbox {
                 }
             }
         } else if MouseButton::Left == button {
-            self.left_mouse_down = state == ElementState::Pressed;
+            self.left_mouse_down = ElementState::Pressed == state;
+            if ElementState::Pressed == state {
+                if let Some((last_x, last_y)) = self.last_cursor_position {
+                    let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
+                    let scene = self.engine.scene();
+                    
+                    if let Some(clicked_object) = clicked_object_or_none {
+                        if scene.animator().animating(clicked_object) {
+                            scene.animator_mutable().stop(clicked_object);
+                        } else {
+                            let probe = Some(clicked_object);
+                            
+                            if probe == self.tech_world.infinitely_twisted_button() || probe == self.tech_world.infinitely_bent_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(10.0)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            else if probe == self.tech_world.single_twisted_button() || probe == self.tech_world.single_bent_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(std::f64::consts::PI)
+                                    .with_global_finite_time_to_live(Duration::from_millis(1000), TimeDirection::Forward)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            else if probe == self.tech_world.back_n_forth_twisted_button() || probe == self.tech_world.back_n_forth_bent_button() {
+                                let period = Duration::from_millis((std::f64::consts::PI * 1000.0) as u64);
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(2.0 * std::f64::consts::PI)
+                                    .periodization(Some(Periodization::new(WrapKind::Reverse, period)))
+                                    .with_global_finite_time_to_live(Duration::from_secs(1), TimeDirection::Forward)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                            else if probe == self.tech_world.very_slow_twisted_button() || probe == self.tech_world.very_slow_bent_button() {
+                                let animation = ClockAnimationAct::new()
+                                    .playback_speed_multiplier(std::f64::consts::PI / 3.0)
+                                    .with_global_finite_time_to_live(Duration::from_millis(2000), TimeDirection::Forward)
+                                    .end_action(EndActionKind::TeleportToZero)
+                                    .make();
+                                scene.animator_mutable().launch(clicked_object, animation);
+                            }
+                        }
+                    }
+                }
+            }
         } else if MouseButton::Middle == button && state == ElementState::Pressed {
             if let Some((last_x, last_y)) = self.last_cursor_position {
                 let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
@@ -167,6 +214,9 @@ impl Sandbox {
                 } else if "7" == letter_key {
                     self.tech_world.load_to_triangle_mesh_testing_scene(self.engine.scene());
                     self.selected_object = None;
+                } else if "8" == letter_key {
+                    self.tech_world.load_morphing_demo_scene(self.engine.scene());
+                    self.selected_object = None;
                 }
             }
             _ => (),
@@ -183,18 +233,19 @@ impl Sandbox {
         let tech_sdf_classes = SdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);
         
-        let mut scene = Container::new(sdf_registrator);
+        let mut scene = VisualObjects::new(sdf_registrator);
         let tech_materials = Materials::new(&mut scene);
         let beautiful_materials = BeautifulMaterials::new(&mut scene);
         
-        let mut tech_world = World::new(tech_sdf_classes, tech_materials);
-        tech_world.load_to_ui_box_scene(&mut scene);
+        let mut tech_world = TechWorld::new(tech_sdf_classes, tech_materials);
         let selected_object_material = tech_world.selected_object_material();
         
         let beautiful_world = BeautifulWorld::new(beautiful_sdf_classes, beautiful_materials);
 
         let caches_path = Some(PathBuf::from("./.caches"));
-        let engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
+        let mut engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
+
+        tech_world.load_to_ui_box_scene(engine.scene());
         
         timer.stop();
         info!("sandbox initialized in {} seconds", timer.max_time().as_secs_f64());
