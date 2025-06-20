@@ -130,7 +130,7 @@ pub(crate) mod tests {
         context.queue().submit(Some(encoder.finish()));
 
         let copy_wait = output_buffer.read_cpu_copy();
-        context.wait();
+        context.wait(None);
         pollster::block_on(copy_wait);
 
         output_buffer.cpu_copy().clone()

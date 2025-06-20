@@ -31,7 +31,7 @@ use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
-use wgpu::StoreOp;
+use wgpu::{StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
 
 #[cfg(feature = "denoiser")]
@@ -509,53 +509,58 @@ impl Renderer {
             || self.gpu.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
             || scene_status.any_updated();
 
+        let mut surface_properties_pass_or_none: Option<SubmissionIndex> = None;
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
-            self.compute_pass("nearest surface properties compute pass", &self.pipeline_surface_attributes, |after_pass| {
-                if rebuild_geometry_buffers {
-                    if cfg!(feature = "denoiser") {
-                        self.gpu.buffers.ray_tracing_frame_buffer.prepare_all_aux_buffers_copy_from_gpu(after_pass);
-                    } else {
-                        self.gpu.buffers.ray_tracing_frame_buffer.prepare_object_id_copy_from_gpu(after_pass);
+            let label = "nearest surface properties compute pass";
+            surface_properties_pass_or_none = Some(
+                self.compute_pass(label, &self.pipeline_surface_attributes, |pass| {
+                    if rebuild_geometry_buffers {
+                        if cfg!(feature = "denoiser") {
+                            self.gpu.buffers.ray_tracing_frame_buffer.prepare_all_aux_buffers_copy_from_gpu(pass);
+                        } else {
+                            self.gpu.buffers.ray_tracing_frame_buffer.prepare_object_id_copy_from_gpu(pass);
+                        }
+                    } else if cfg!(feature = "denoiser") && rebuild_albedo_buffer {
+                        self.gpu.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(pass);
                     }
-                } else if cfg!(feature = "denoiser") && rebuild_albedo_buffer {
-                    self.gpu.buffers.ray_tracing_frame_buffer.prepare_albedo_copy_from_gpu(after_pass);
-                }
-            });
+                })
+            );
         }
 
-        self.compute_pass("ray tracing compute pass", self.color_buffer_evaluation.pipeline().deref(), |ray_tracing_pass|{
+        let label = "ray tracing compute pass";
+        self.compute_pass(label, self.color_buffer_evaluation.pipeline().deref(), |pass|{
             if cfg!(feature = "denoiser") {
-                self.transfer_pixel_color_from_gpu(ray_tracing_pass);   
+                self.prepare_pixel_color_copy_from_gpu(pass);   
             }
         });
 
-        if rebuild_geometry_buffers || rebuild_albedo_buffer {
+        if surface_properties_pass_or_none.is_some() {
             if rebuild_geometry_buffers {
                 if cfg!(feature = "denoiser") {
                     let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_all_aux_buffers_from_gpu();
-                    self.gpu.context.wait();
+                    self.gpu.context.wait(surface_properties_pass_or_none);
                     pollster::block_on(copy_operation);
                 } else {
                     let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_object_id_from_gpu();
-                    self.gpu.context.wait();
+                    self.gpu.context.wait(surface_properties_pass_or_none);
                     pollster::block_on(copy_operation);
                 }
             } else if cfg!(feature = "denoiser") && rebuild_albedo_buffer {
                 let copy_operation = self.gpu.buffers.ray_tracing_frame_buffer.copy_albedo_from_gpu();
-                self.gpu.context.wait();
+                self.gpu.context.wait(surface_properties_pass_or_none);
                 pollster::block_on(copy_operation);
             }
         }
     }
     
-    fn transfer_pixel_color_from_gpu(&self, pass: &mut wgpu::CommandEncoder) {
+    fn prepare_pixel_color_copy_from_gpu(&self, pass: &mut wgpu::CommandEncoder) {
         self.gpu.buffers.ray_tracing_frame_buffer.prepare_pixel_color_copy_from_gpu(pass);
     }
 
     #[cfg(any(test, feature = "denoiser"))]
     fn copy_noisy_pixels_to_cpu(&mut self) {
         let pixel_colors_buffer_gpu_to_cpu_transfer = self.gpu.buffers.ray_tracing_frame_buffer.copy_pixel_colors_from_gpu();
-        self.gpu.context.wait();
+        self.gpu.context.wait(None);
         pollster::block_on(pixel_colors_buffer_gpu_to_cpu_transfer);
     }
 
@@ -648,8 +653,8 @@ impl Renderer {
         self.final_image_rasterization_pass(&mut render_pass_descriptor, &self.pipeline_final_image_rasterization,);
     }
 
-    fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate)
-        where CustomizationDelegate : FnOnce(&mut wgpu::CommandEncoder) {
+    fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate) -> SubmissionIndex
+    where CustomizationDelegate : FnOnce(&mut wgpu::CommandEncoder){
         
         let mut encoder = self.create_command_encoder("compute pass encoder"); {
 
@@ -665,7 +670,7 @@ impl Renderer {
             customize(&mut encoder);
         }
         let command_buffer = encoder.finish();
-        self.gpu.context.queue().submit(Some(command_buffer));
+        self.gpu.context.queue().submit(Some(command_buffer))
     }
 
     fn final_image_rasterization_pass(&self, rasterization_pass_descriptor: &mut wgpu::RenderPassDescriptor, rasterization_pipeline: &RasterizationPipeline) {
@@ -828,7 +833,7 @@ mod tests {
     fn issue_frame_buffer_transfer_if_needed(context: Rc<Context>, render: &Renderer) {
         if cfg!(not(feature = "denoiser")) {
             let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            render.transfer_pixel_color_from_gpu(&mut pass);
+            render.prepare_pixel_color_copy_from_gpu(&mut pass);
             context.queue().submit(Some(pass.finish()));
         }
     }

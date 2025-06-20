@@ -163,7 +163,7 @@ mod tests {
         context.queue().submit(Some(encoder.finish()));
 
         let gpu_to_cpu_copy = system_under_test.copy_all_aux_buffers_from_gpu();
-        context.wait();
+        context.wait(None);
         pollster::block_on(gpu_to_cpu_copy);
 
         system_under_test

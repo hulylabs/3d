@@ -141,7 +141,7 @@ mod tests {
             assert_eq!(data.len(), buffer_size.area() as usize);
             *callback_spy_call_counter.borrow_mut() += 1;
         });
-        let poll_status = context.wait();
+        let poll_status = context.wait(None);
         assert_eq!(poll_status, PollStatus::QueueEmpty);
         pollster::block_on(read_callback);
 
