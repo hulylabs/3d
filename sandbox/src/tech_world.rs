@@ -473,10 +473,17 @@ impl TechWorld {
 
     fn clear_scene(&mut self, scene: &mut Hub) {
         scene.clear_objects();
+        
         self.infinitely_twisted_button = None;
         self.single_twisted_button = None;
         self.back_n_forth_twisted_button = None;
         self.very_slow_twisted_button = None;
+
+        self.infinitely_bended_button = None;
+        self.single_bended_button = None;
+        self.back_n_forth_bended_button = None;
+        self.very_slow_bended_button = None;
+        
         self.light_panel = None;
     }
 
