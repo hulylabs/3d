@@ -50,7 +50,7 @@ impl Hub {
     }
 
     pub fn add_sdf_with_ray_march_fix(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
-        assert!(is_affine(&location), "projection matrices are not supported");
+        assert!(is_affine(location), "projection matrices are not supported");
         assert_gt!(ray_marching_step_scale, 0.0);
         let added = self.container.add_sdf(location, ray_marching_step_scale, class_uid, material);
         self.time_tracker.track(added, &self.container.morphable());

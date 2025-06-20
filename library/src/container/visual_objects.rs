@@ -144,7 +144,7 @@ impl VisualObjects {
     }
 
     pub fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
-        assert!(is_affine(&location), "projection matrices are not supported");
+        assert!(is_affine(location), "projection matrices are not supported");
         assert_gt!(ray_marching_step_scale, 0.0);
         let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
