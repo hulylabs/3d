@@ -1,12 +1,22 @@
 ﻿use cgmath::Vector2;
+use float_cmp::approx_eq;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::axis::Axis;
+use crate::geometry::transform::Affine;
 
 pub(crate) trait Max {
     fn max_axis(self) -> Axis;
 
     #[cfg(test)]
     fn max(self) -> f64;
+}
+
+#[must_use]
+pub(crate) fn is_affine(matrix: &Affine) -> bool {
+    approx_eq!(f64, matrix.x.w, 0.0, epsilon = f64::EPSILON) &&
+    approx_eq!(f64, matrix.y.w, 0.0, epsilon = f64::EPSILON) && 
+    approx_eq!(f64, matrix.z.w, 0.0, epsilon = f64::EPSILON) && 
+    approx_eq!(f64, matrix.w.w, 1.0, epsilon = f64::EPSILON)
 }
 
 impl Max for Vector {
@@ -64,6 +74,7 @@ pub(crate) fn exclude_axis(victim: Vector, exclusion: Axis) -> Vector2<f64> {
 
 #[cfg(test)]
 mod tests {
+    use cgmath::{Array, SquareMatrix};
     use super::*;
 
     #[test]
@@ -117,5 +128,20 @@ mod tests {
         let point = Point::new(-1.0, 2.12345, -3.12345);
         let actual_format = debug_format_human_readable_point(point);
         assert_eq!(actual_format, "-1.00,2.123,-3.12");
+    }
+
+    #[test]
+    fn test_is_affine() {
+        let mut probe = Affine::identity();
+        assert!(is_affine(&probe));
+        
+        probe.x.w = 0.0000001;
+        assert_eq!(is_affine(&probe), false);
+
+        probe = Affine::from_translation(Vector::from_value(7.9));
+        assert!(is_affine(&probe));
+
+        probe.w.w = 1.0000001;
+        assert_eq!(is_affine(&probe), false);
     }
 }

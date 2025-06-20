@@ -81,8 +81,8 @@ mod tests {
     use crate::sdf::transformation::sdf_translation::SdfTranslation;
     use crate::utils::tests::assert_utils::tests::assert_float_point_equals;
     use cgmath::{Array, EuclideanSpace};
-    use float_eq::assert_float_eq;
     use rstest::rstest;
+    use crate::assert_approx_eq;
 
     #[rstest]
     #[case(Axis::X)]
@@ -101,9 +101,9 @@ mod tests {
         let expected_radius = (cube_half_size * cube_half_size + cube_half_size * cube_half_size).sqrt();
 
         assert_float_point_equals(actual_aabb.center(), Point::from_vec(center), 1, "expected aabb center");
-        assert_float_eq!(actual_extent[axis.as_index()], cube_half_size * 2.0, ulps <= 1, "invariant axis extent mismatch");
-        assert_float_eq!(actual_extent[axis.next().as_index()], expected_radius * 2.0, ulps <= 1, "twisted axis one mismatch");
-        assert_float_eq!(actual_extent[axis.next().next().as_index()], expected_radius * 2.0, ulps <= 1, "twisted axis two mismatch");
+        assert_approx_eq!(f64, actual_extent[axis.as_index()], cube_half_size * 2.0, ulps = 1, "invariant axis extent mismatch");
+        assert_approx_eq!(f64, actual_extent[axis.next().as_index()], expected_radius * 2.0, ulps = 1, "twisted axis one mismatch");
+        assert_approx_eq!(f64, actual_extent[axis.next().next().as_index()], expected_radius * 2.0, ulps = 1, "twisted axis two mismatch");
     }
 
     #[test]

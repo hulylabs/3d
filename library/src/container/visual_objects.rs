@@ -14,7 +14,7 @@ use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfInstance;
+use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::objects::triangle::Triangle;
 use crate::sdf::framework::code_generator::SdfRegistrator;
@@ -29,8 +29,10 @@ use cgmath::SquareMatrix;
 use std::collections::HashMap;
 use std::io::Error;
 use std::path::Path;
+use more_asserts::assert_gt;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
+use crate::geometry::utils::is_affine;
 
 pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
@@ -142,6 +144,8 @@ impl VisualObjects {
     }
 
     pub fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
+        assert!(is_affine(&location), "projection matrices are not supported");
+        assert_gt!(ray_marching_step_scale, 0.0);
         let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
@@ -328,7 +332,7 @@ mod tests {
     use crate::objects::material::Material;
     use crate::objects::material_index::MaterialIndex;
     use crate::objects::parallelogram::Parallelogram;
-    use crate::objects::sdf::SdfInstance;
+    use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::sdf::framework::code_generator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
