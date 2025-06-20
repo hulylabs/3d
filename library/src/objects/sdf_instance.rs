@@ -75,14 +75,6 @@ mod tests {
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::cast_slice;
 
-    #[must_use]
-    fn matrix_at(index: usize, matrix: &Affine) -> f32 {
-        let matrix_side_size = 4;
-        let column = index / matrix_side_size;
-        let row = index % matrix_side_size;
-        matrix[column][row] as f32
-    }
-
     #[test]
     fn test_sdf_box_serialize_into() {
         let expected_location = Affine::from_nonuniform_scale(0.5, 0.6, 0.7);
@@ -97,28 +89,21 @@ mod tests {
         system_under_test.serialize_into(&mut container);
 
         let location_serialized = {
-            let mut location_serialized = vec![0.0_f32; MATRIX_FLOATS_COUNT * 2];
-            let mut counter = 0;
-            for i in 0..MATRIX_FLOATS_COUNT {
-                location_serialized[counter] = matrix_at(i, &expected_location);
-                counter += 1;
-            }
+            let mut location_serialized = GpuReadySerializationBuffer::new(2, 3);
+            serialize_matrix_3x4(&mut location_serialized, &expected_location);
             let inverted_location = expected_location.invert().unwrap();
-            for i in 0..MATRIX_FLOATS_COUNT {
-                location_serialized[counter] = matrix_at(i, &inverted_location);
-                counter += 1;
-            }
-
-            location_serialized
+            serialize_matrix_3x4(&mut location_serialized, &inverted_location);
+            cast_slice::<u8, f32>(&location_serialized.backend()).to_vec()
         };
-
+        let matrix_3x4_floats = MATRIX_FLOATS_COUNT - 4;
+        
         let serialized: &[f32] = cast_slice(&container.backend());
-
+        
         let mut values_checked = 0;
-        assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[0..MATRIX_FLOATS_COUNT]);
-        values_checked += MATRIX_FLOATS_COUNT;
-        assert_eq!(&serialized[values_checked..values_checked + MATRIX_FLOATS_COUNT], &location_serialized[MATRIX_FLOATS_COUNT..MATRIX_FLOATS_COUNT * 2]);
-        values_checked += MATRIX_FLOATS_COUNT;
+        assert_eq!(&serialized[values_checked..values_checked + matrix_3x4_floats], &location_serialized[0..matrix_3x4_floats]);
+        values_checked += matrix_3x4_floats;
+        assert_eq!(&serialized[values_checked..values_checked + matrix_3x4_floats], &location_serialized[matrix_3x4_floats..(matrix_3x4_floats) * 2]);
+        values_checked += matrix_3x4_floats;
 
         assert_eq!(serialized[values_checked], expected_ray_marching_scale as f32);
         values_checked += 1;

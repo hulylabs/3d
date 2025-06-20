@@ -6,7 +6,7 @@ pub(crate) mod tests {
     pub(crate) fn assert_all_unique<T: Ord>(victim: &mut Vec<T>) {
         victim.sort();
         if false == victim.windows(2).all(|w| w[0] != w[1]) {
-            panic!("no all are unique")
+            panic!("not all elements of the vector are unique")
         }
     }
     

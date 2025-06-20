@@ -102,20 +102,20 @@ impl Sandbox {
                         } else {
                             let probe = Some(clicked_object);
                             
-                            if probe == self.tech_world.infinitely_twisted_button() || probe == self.tech_world.infinitely_bended_button() {
+                            if probe == self.tech_world.infinitely_twisted_button() || probe == self.tech_world.infinitely_bent_button() {
                                 let animation = ClockAnimationAct::new()
                                     .playback_speed_multiplier(10.0)
                                     .make();
                                 scene.animator_mutable().launch(clicked_object, animation);
                             }
-                            else if probe == self.tech_world.single_twisted_button() || probe == self.tech_world.single_bended_button() {
+                            else if probe == self.tech_world.single_twisted_button() || probe == self.tech_world.single_bent_button() {
                                 let animation = ClockAnimationAct::new()
                                     .playback_speed_multiplier(std::f64::consts::PI)
                                     .with_global_finite_time_to_live(Duration::from_millis(1000), TimeDirection::Forward)
                                     .make();
                                 scene.animator_mutable().launch(clicked_object, animation);
                             }
-                            else if probe == self.tech_world.back_n_forth_twisted_button() || probe == self.tech_world.back_n_forth_bended_button() {
+                            else if probe == self.tech_world.back_n_forth_twisted_button() || probe == self.tech_world.back_n_forth_bent_button() {
                                 let period = Duration::from_millis((std::f64::consts::PI * 1000.0) as u64);
                                 let animation = ClockAnimationAct::new()
                                     .playback_speed_multiplier(2.0 * std::f64::consts::PI)
@@ -124,7 +124,7 @@ impl Sandbox {
                                     .make();
                                 scene.animator_mutable().launch(clicked_object, animation);
                             }
-                            else if probe == self.tech_world.very_slow_twisted_button() || probe == self.tech_world.very_slow_bended_button() {
+                            else if probe == self.tech_world.very_slow_twisted_button() || probe == self.tech_world.very_slow_bent_button() {
                                 let animation = ClockAnimationAct::new()
                                     .playback_speed_multiplier(std::f64::consts::PI / 3.0)
                                     .with_global_finite_time_to_live(Duration::from_millis(2000), TimeDirection::Forward)

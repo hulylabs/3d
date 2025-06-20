@@ -101,8 +101,8 @@ mod tests {
 
         assert_float_point_equals(actual_aabb.center(), Point::from_vec(center), 1, "expected aabb center");
         assert_approx_eq!(f64, actual_extent[stable_axis.as_index()], cube_half_size * 2.0, ulps = 1, "invariant axis extent mismatch");
-        assert_approx_eq!(f64, actual_extent[stable_axis.next().as_index()], expected_radius * 2.0, ulps = 1, "bended axis one mismatch");
-        assert_approx_eq!(f64, actual_extent[stable_axis.next().next().as_index()], expected_radius * 2.0, ulps = 1, "bended axis two mismatch");
+        assert_approx_eq!(f64, actual_extent[stable_axis.next().as_index()], expected_radius * 2.0, ulps = 1, "bent axis one mismatch");
+        assert_approx_eq!(f64, actual_extent[stable_axis.next().next().as_index()], expected_radius * 2.0, ulps = 1, "bent axis two mismatch");
     }
 
     #[test]

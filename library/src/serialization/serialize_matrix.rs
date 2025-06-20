@@ -34,7 +34,7 @@ pub(crate) fn serialize_matrix_4x4(container: &mut GpuReadySerializationBuffer, 
 }
 
 pub(crate) fn serialize_matrix_3x4(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {
-    assert!(container.free_quartets_of_current_object() >= 4);
+    assert!(container.free_quartets_of_current_object() >= 3);
 
     container.write_quartet_f64(
         matrix.x.x,

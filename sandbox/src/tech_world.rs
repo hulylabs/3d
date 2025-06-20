@@ -69,7 +69,7 @@ pub(super) struct SdfClasses {
     intersection_smooth: NamedSdf,
     
     twisted_box: NamedSdf,
-    bended_box: NamedSdf,
+    bent_box: NamedSdf,
 }
 
 impl SdfClasses {
@@ -213,13 +213,13 @@ impl SdfClasses {
 
         let bend_time_scale = 1.0;
         let bend_amplitude_scale = 3.0;
-        let bended_box = NamedSdf::new(
+        let bent_box = NamedSdf::new(
             SdfBenderAlongAxis::new(
                 box_to_morph.clone(), Axis::Y, Axis::X, bend_time_scale, bend_amplitude_scale,
             ),
-            UniqueSdfClassName::new("bended_box".to_string())
+            UniqueSdfClassName::new("bent_box".to_string())
         );
-        registrator.add(&bended_box);
+        registrator.add(&bent_box);
 
         Self { 
             rectangular_box, 
@@ -247,7 +247,7 @@ impl SdfClasses {
             subtraction_smooth,
             intersection_smooth,
             twisted_box,
-            bended_box,
+            bent_box,
         }
     }
 }
@@ -407,10 +407,10 @@ pub(super) struct TechWorld {
     back_n_forth_twisted_button: Option<ObjectUid>,
     very_slow_twisted_button: Option<ObjectUid>,
 
-    infinitely_bended_button: Option<ObjectUid>,
-    single_bended_button: Option<ObjectUid>,
-    back_n_forth_bended_button: Option<ObjectUid>,
-    very_slow_bended_button: Option<ObjectUid>,
+    infinitely_bent_button: Option<ObjectUid>,
+    single_bent_button: Option<ObjectUid>,
+    back_n_forth_bent_button: Option<ObjectUid>,
+    very_slow_bent_button: Option<ObjectUid>,
 }
 
 impl TechWorld {
@@ -429,10 +429,10 @@ impl TechWorld {
             back_n_forth_twisted_button: None,
             very_slow_twisted_button: None,
 
-            infinitely_bended_button: None,
-            single_bended_button: None,
-            back_n_forth_bended_button: None,
-            very_slow_bended_button: None,
+            infinitely_bent_button: None,
+            single_bent_button: None,
+            back_n_forth_bent_button: None,
+            very_slow_bent_button: None,
         }
     }
     
@@ -479,10 +479,10 @@ impl TechWorld {
         self.back_n_forth_twisted_button = None;
         self.very_slow_twisted_button = None;
 
-        self.infinitely_bended_button = None;
-        self.single_bended_button = None;
-        self.back_n_forth_bended_button = None;
-        self.very_slow_bended_button = None;
+        self.infinitely_bent_button = None;
+        self.single_bent_button = None;
+        self.back_n_forth_bent_button = None;
+        self.very_slow_bent_button = None;
         
         self.light_panel = None;
     }
@@ -684,28 +684,28 @@ impl TechWorld {
 
         const BEND_RAY_MARCH_FIX: f64 = 0.7;
 
-        self.infinitely_bended_button = Some(scene.add_sdf_with_ray_march_fix(
+        self.infinitely_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, 0.3, 0.0)),
             BEND_RAY_MARCH_FIX,
-            self.sdf_classes.bended_box.name(),
+            self.sdf_classes.bent_box.name(),
             self.materials.green_material));
 
-        self.single_bended_button = Some(scene.add_sdf_with_ray_march_fix(
+        self.single_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, 0.1, 0.0)),
             BEND_RAY_MARCH_FIX,
-            self.sdf_classes.bended_box.name(),
+            self.sdf_classes.bent_box.name(),
             self.materials.coral_material));
 
-        self.back_n_forth_bended_button = Some(scene.add_sdf_with_ray_march_fix(
+        self.back_n_forth_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, -0.1, 0.0)),
             BEND_RAY_MARCH_FIX,
-            self.sdf_classes.bended_box.name(),
+            self.sdf_classes.bent_box.name(),
             self.materials.purple_glass));
 
-        self.very_slow_bended_button = Some(scene.add_sdf_with_ray_march_fix(
+        self.very_slow_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, -0.3, 0.0)),
             BEND_RAY_MARCH_FIX,
-            self.sdf_classes.bended_box.name(),
+            self.sdf_classes.bent_box.name(),
             self.materials.red_material));
     }
 
@@ -803,19 +803,19 @@ impl TechWorld {
     }
 
     #[must_use]
-    pub(super) fn infinitely_bended_button(&self) -> Option<ObjectUid> {
-        self.infinitely_bended_button
+    pub(super) fn infinitely_bent_button(&self) -> Option<ObjectUid> {
+        self.infinitely_bent_button
     }
     #[must_use]
-    pub(super) fn single_bended_button(&self) -> Option<ObjectUid> {
-        self.single_bended_button
+    pub(super) fn single_bent_button(&self) -> Option<ObjectUid> {
+        self.single_bent_button
     }
     #[must_use]
-    pub(super) fn back_n_forth_bended_button(&self) -> Option<ObjectUid> {
-        self.back_n_forth_bended_button
+    pub(super) fn back_n_forth_bent_button(&self) -> Option<ObjectUid> {
+        self.back_n_forth_bent_button
     }
     #[must_use]
-    pub(super) fn very_slow_bended_button(&self) -> Option<ObjectUid> {
-        self.very_slow_bended_button
+    pub(super) fn very_slow_bent_button(&self) -> Option<ObjectUid> {
+        self.very_slow_bent_button
     }
 }
