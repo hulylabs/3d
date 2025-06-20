@@ -660,23 +660,29 @@ impl TechWorld {
 
         // twist demo
 
-        self.infinitely_twisted_button = Some(scene.add_sdf(
+        const TWIST_RAY_MARCH_FIX: f64 = 0.9;
+
+        self.infinitely_twisted_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.2, 0.3, 0.0)),
+            TWIST_RAY_MARCH_FIX,
             self.sdf_classes.twisted_box.name(),
             self.materials.red_glass));
 
-        self.single_twisted_button = Some(scene.add_sdf(
+        self.single_twisted_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.2, 0.1, 0.0)),
+            TWIST_RAY_MARCH_FIX,
             self.sdf_classes.twisted_box.name(),
             self.materials.gold_metal));
 
-        self.back_n_forth_twisted_button = Some(scene.add_sdf(
+        self.back_n_forth_twisted_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.2, -0.1, 0.0)),
+            TWIST_RAY_MARCH_FIX,
             self.sdf_classes.twisted_box.name(),
             self.materials.blue_material));
 
-        self.very_slow_twisted_button = Some(scene.add_sdf(
+        self.very_slow_twisted_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.2, -0.3, 0.0)),
+            TWIST_RAY_MARCH_FIX,
             self.sdf_classes.twisted_box.name(),
             self.materials.green_mirror));
 
