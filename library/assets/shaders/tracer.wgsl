@@ -900,7 +900,7 @@ const full_screen_quad_positions = array<vec2f, 6>(
 // ACES approximation for tone mapping
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/:
 fn aces_approx(v : vec3f) -> vec3f {
-    let v1 = v * 0.6f;
+    let v1 = v * 0.6f; // TODO: WTF?
     const a = 2.51f;
     const b = 0.03f;
     const c = 2.43f;
@@ -918,18 +918,32 @@ fn pixel_global_index(pixel_position: vec2f) -> u32 {
     return u32(pixel_position.y) * uniforms.frame_buffer_size.x + u32(pixel_position.x);
 }
 
+/*
+Gradient noise from Jorge Jimenez's presentation:
+Next Generation Post Processing in Call of Duty: Advanced Warfare
+http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
+
+Good post on usage: https://blog.frost.kiwi/GLSL-noise-and-radial-gradient/
+*/
+@must_use
+fn gradient_noise(uv: vec2f) -> f32 {
+	return fract(52.9829189 * fract(dot(uv, vec2f(0.06711056, 0.00583715))));
+}
+
+@must_use
+fn pseudo_dither(color: vec3f, pixel_coordinate: vec2f) -> vec3f {
+    return color + (1.0 / 255.0) * gradient_noise(pixel_coordinate) - (0.5 / 255.0);
+}
+
 @fragment fn fs(@builtin(position) fragment_coordinate: vec4f) -> @location(0) vec4f {
     let i = pixel_global_index(fragment_coordinate.xy);
     var color = pixel_color_buffer[i].xyz / uniforms.frame_number;
 
     color = aces_approx(color.xyz);
-    color = pow(color.xyz, vec3f(1.0/2.2));
+    color = pow(color.xyz, vec3f(1.0 / 2.2));
+    color = pseudo_dither(color, fragment_coordinate.xy);
 
-    if(1 == uniforms.if_reset_frame_buffer) {
-        pixel_color_buffer[i] = vec4f(0.0);
-    }
-
-    return vec4f(color, 1);
+    return vec4f(color, 1.0);
 }
 
 //===================================================================
