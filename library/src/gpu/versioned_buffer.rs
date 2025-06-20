@@ -1,7 +1,8 @@
 ﻿use std::rc::Rc;
+use bytemuck::Pod;
+use crate::utils::version::Version;
 use crate::gpu::resizable_buffer::{ResizableBuffer, ResizeStatus};
 use crate::gpu::resources::Resources;
-use crate::scene::version::Version;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(super) struct VersionedBuffer {
@@ -45,11 +46,16 @@ impl BufferUpdateStatus {
 
 impl VersionedBuffer {
     #[must_use]
-    pub(super) fn new<Generator>(content_version: Version, resources: &Resources, label: &'static str, generate_data: Generator) -> Self
+    pub(super) fn from_generator<Generator>(content_version: Version, resources: &Resources, label: &'static str, generate_data: Generator) -> Self
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
-        Self { content_version, backend: ResizableBuffer::new(resources, label, generate_data) }
+        Self { content_version, backend: ResizableBuffer::from_generator(resources, label, generate_data) }
+    }
+
+    #[must_use]
+    pub(super) fn from_slice<T: Pod>(content_version: Version, resources: &Resources, label: &'static str, slice: &[T]) -> Self {
+        Self { content_version, backend: ResizableBuffer::from_slice(resources, label, slice) }
     }
 
     #[must_use]
@@ -58,7 +64,7 @@ impl VersionedBuffer {
     }
 
     #[must_use]
-    pub(super) fn try_update<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
+    pub(super) fn try_update_with_generator<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
@@ -68,7 +74,19 @@ impl VersionedBuffer {
 
         self.content_version = new_version;
 
-        let resized = self.backend.update(resources, queue, generate_data);
+        let resized = self.backend.update_with_generator(resources, queue, generate_data);
+        BufferUpdateStatus { resized: ResizeStatus::Resized == resized, updated: true }
+    }
+
+    #[must_use]
+    pub(super) fn try_update_with_slice<T: Pod>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, slice: &[T]) -> BufferUpdateStatus {
+        if new_version == self.content_version {
+            return BufferUpdateStatus { resized: false, updated: false };
+        }
+
+        self.content_version = new_version;
+
+        let resized = self.backend.update_with_slice(resources, queue, slice);
         BufferUpdateStatus { resized: ResizeStatus::Resized == resized, updated: true }
     }
 
@@ -105,7 +123,7 @@ mod tests {
         let resources = Resources::new(context.clone());
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
-        let system_under_test = VersionedBuffer::new(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
+        let system_under_test = VersionedBuffer::from_generator(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
 
         (system_under_test, resources, context)
     }
@@ -123,7 +141,7 @@ mod tests {
         let (mut system_under_test, resources, context) = make_system_under_test();
         let make_new_data = || make_test_content(1);
 
-        let status = system_under_test.try_update(
+        let status = system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION,
             &resources,
             context.queue(),
@@ -138,7 +156,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS - 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update(
+        let status = system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),
@@ -155,7 +173,7 @@ mod tests {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS + 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update(
+        let status = system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
             &resources,
             context.queue(),

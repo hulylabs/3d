@@ -1,7 +1,7 @@
 #![deny(warnings)]
 
 mod sandbox;
-mod world;
+mod tech_world;
 mod beautiful_world;
 
 use std::env;

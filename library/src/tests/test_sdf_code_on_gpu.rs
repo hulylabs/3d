@@ -1,43 +1,45 @@
 ﻿#[cfg(test)]
 mod tests {
-    use crate::geometry::aabb::Aabb;
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::axis::Axis;
-    use crate::sdf::code_generator::{SdfCodeGenerator, SdfRegistrator};
-    use crate::sdf::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::sdf_base::Sdf;
-    use crate::sdf::sdf_box::SdfBox;
-    use crate::sdf::sdf_box_frame::SdfBoxFrame;
-    use crate::sdf::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
-    use crate::sdf::sdf_capped_torus_xy::SdfCappedTorusXy;
-    use crate::sdf::sdf_capsule::SdfCapsule;
-    use crate::sdf::sdf_cone::SdfCone;
-    use crate::sdf::sdf_cut_hollow_sphere::SdfCutHollowSphere;
-    use crate::sdf::sdf_hex_prism::SdfHexPrism;
-    use crate::sdf::sdf_link::SdfLink;
-    use crate::sdf::sdf_octahedron::SdfOctahedron;
-    use crate::sdf::sdf_pyramid::SdfPyramid;
-    use crate::sdf::sdf_round_box::SdfRoundBox;
-    use crate::sdf::sdf_round_cone::SdfRoundCone;
-    use crate::sdf::sdf_solid_angle::SdfSolidAngle;
-    use crate::sdf::sdf_sphere::SdfSphere;
-    use crate::sdf::sdf_torus_xz::SdfTorusXz;
-    use crate::sdf::sdf_triangular_prism::SdfTriangularPrism;
-    use crate::sdf::sdf_union::SdfUnion;
-    use crate::sdf::sdf_vesica_segment::SdfVesicaSegment;
-    use crate::sdf::shader_function_name::FunctionName;
+    use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
+    use crate::sdf::composition::sdf_union::SdfUnion;
+    use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_base::Sdf;
+    use crate::sdf::framework::shader_function_name::FunctionName;
+    use crate::sdf::object::sdf_box::SdfBox;
+    use crate::sdf::object::sdf_box_frame::SdfBoxFrame;
+    use crate::sdf::object::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
+    use crate::sdf::object::sdf_capped_torus_xy::SdfCappedTorusXy;
+    use crate::sdf::object::sdf_capsule::SdfCapsule;
+    use crate::sdf::object::sdf_cone::SdfCone;
+    use crate::sdf::object::sdf_cut_hollow_sphere::SdfCutHollowSphere;
+    use crate::sdf::object::sdf_hex_prism::SdfHexPrism;
+    use crate::sdf::object::sdf_link::SdfLink;
+    use crate::sdf::object::sdf_octahedron::SdfOctahedron;
+    use crate::sdf::object::sdf_pyramid::SdfPyramid;
+    use crate::sdf::object::sdf_round_box::SdfRoundBox;
+    use crate::sdf::object::sdf_round_cone::SdfRoundCone;
+    use crate::sdf::object::sdf_solid_angle::SdfSolidAngle;
+    use crate::sdf::object::sdf_sphere::SdfSphere;
+    use crate::sdf::object::sdf_torus_xz::SdfTorusXz;
+    use crate::sdf::object::sdf_triangular_prism::SdfTriangularPrism;
+    use crate::sdf::object::sdf_vesica_segment::SdfVesicaSegment;
+    use crate::sdf::transformation::sdf_translation::SdfTranslation;
     use crate::serialization::pod_vector::PodVector;
-    use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::sdf_sample_cases::tests::SdfSampleCases;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
-    use cgmath::{Deg, EuclideanSpace, InnerSpace};
+    use crate::utils::tests::assert_utils::tests::assert_eq;
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use cgmath::{Deg, InnerSpace};
     use more_asserts::{assert_ge, assert_gt};
     use std::fmt::Write;
     use std::rc::Rc;
-    use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
-    use crate::sdf::sdf_translation::SdfTranslation;
-    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use rstest::rstest;
+    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
+    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
 
     #[test]
     fn test_sdf_union_spheres() {
@@ -60,7 +62,39 @@ mod tests {
 
         test_sdf_evaluation(system_under_test, "spheres_union", &test_cases);
     }
-    
+
+    #[rstest]
+    #[case(Axis::X)]
+    #[case(Axis::Y)]
+    #[case(Axis::Z)]
+    fn test_identity_bending(#[case] axis: Axis) {
+        let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
+        let system_under_test = SdfBenderAlongAxis::new(subject, axis, Axis::X, 1.0, 1.0);
+
+        let mut test_cases = SdfSampleCases::<f32>::new();
+        test_cases.add_case(1.0,  3.0 , 6.0 ,-2.0_f32);
+        test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
+        test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
+
+        test_sdf_evaluation(system_under_test, "bend_sphere", &test_cases);
+    }
+
+    #[rstest]
+    #[case(Axis::X)]
+    #[case(Axis::Y)]
+    #[case(Axis::Z)]
+    fn test_identity_twister(#[case] axis: Axis) {
+        let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
+        let system_under_test = SdfTwisterAlongAxis::new(subject, axis, 1.0, 1.0);
+
+        let mut test_cases = SdfSampleCases::<f32>::new();
+        test_cases.add_case(1.0,  3.0 , 6.0 ,-2.0_f32);
+        test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
+        test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
+
+        test_sdf_evaluation(system_under_test, "twist_sphere", &test_cases);
+    }
+
     #[test]
     fn test_sdf_sphere() {
         let system_under_test = SdfSphere::new(17.0);
@@ -398,20 +432,13 @@ mod tests {
         BorderOrOutside,
         Outside,
     }
-
-    impl Aabb {
-        #[must_use]
-        pub(crate) fn center(&self) -> Point {
-            Point::from_vec((self.max().to_vec() + self.min().to_vec()) * 0.5)
-        }
-    }
-
+    
     #[must_use]
     fn execute_function(input: &[PodVector], function_name: &FunctionName, function_code: &String) -> Vec<f32> {
         let template = ShaderFunction::new("vec4f", "f32", function_name.0.as_str())
             .with_additional_shader_code(function_code.as_str());
         
-        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz"));
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz, 0.0"));
 
         execute_code(input, function_execution, ExecutionConfig::default())
     }

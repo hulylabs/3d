@@ -3,7 +3,7 @@ mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
     use crate::gpu::resources::Resources;
-    use crate::sdf::shader_code::{format_sdf_selection_function_opening};
+    use crate::sdf::framework::shader_code::format_sdf_selection_function_opening;
 
     #[test]
     fn test_compilation() {

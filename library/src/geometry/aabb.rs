@@ -3,7 +3,7 @@ use crate::geometry::axis::Axis;
 use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use alias::Point;
 use alias::Vector;
-use cgmath::{AbsDiffEq, Transform};
+use cgmath::{AbsDiffEq, EuclideanSpace, Transform};
 use strum::EnumCount;
 use crate::geometry::transform::Affine;
 
@@ -70,6 +70,11 @@ impl Aabb {
         }
     }
 
+    #[must_use]
+    pub(crate) fn center(&self) -> Point {
+        Point::from_vec((self.max().to_vec() + self.min().to_vec()) * 0.5)
+    }
+    
     #[must_use]
     pub fn translate(&self, translation: Vector) -> Aabb {
         Self { min: self.min + translation, max: self.max + translation }
@@ -331,5 +336,15 @@ mod tests {
         let expected_inflated = from_segment(Point::new(-4.0, -8.0, -16.0), Point::new(4.0, 8.0, 16.0));
 
         assert_eq!(actual_inflated, expected_inflated);
+    }
+
+    #[test]
+    fn test_center() {
+        let system_under_test = from_segment(Point::new(-2.0, -4.0, -8.0), Point::new(1.0, 3.0, 7.0));
+        let expected_center = Point::new(-0.5, -0.5, -0.5);
+        
+        let actual_center = system_under_test.center();
+        
+        assert_eq!(actual_center, expected_center);
     }
 }

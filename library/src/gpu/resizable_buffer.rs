@@ -1,10 +1,10 @@
 ﻿use crate::gpu::resources::Resources;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use std::rc::Rc;
+use bytemuck::Pod;
 
 pub(super) struct ResizableBuffer {
     backend: Rc<wgpu::Buffer>,
-    elements_count: usize,
     label: &'static str,
 }
 
@@ -16,36 +16,50 @@ pub(super) enum ResizeStatus {
 
 impl ResizableBuffer {
     #[must_use]
-    pub(super) fn new<Generator>(resources: &Resources, label: &'static str, generate_data: Generator) -> Self
+    fn new(resources: &Resources, label: &'static str, data: &[u8]) -> Self
+    {
+        Self {
+            backend: resources.create_storage_buffer_write_only(label, data),
+            label,
+        }
+    }
+    
+    #[must_use]
+    pub(super) fn from_generator<Generator>(resources: &Resources, label: &'static str, generate_data: Generator) -> Self
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
         let content = generate_data();
-        let buffer = resources.create_storage_buffer_write_only(label, content.backend());
-        let elements_count = content.total_slots_count();
-
-        Self {
-            backend: buffer,
-            elements_count,
-            label,
-        }
+        Self::new(resources, label, content.backend())
     }
 
     #[must_use]
-    pub(super) fn update<Generator>(&mut self, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> ResizeStatus
+    pub(super) fn from_slice<T: Pod>(resources: &Resources, label: &'static str, content: &[T]) -> Self {
+        Self::new(resources, label, bytemuck::cast_slice(content))
+    }
+
+    fn update(&mut self, resources: &Resources, queue: &wgpu::Queue, data: &[u8]) -> ResizeStatus {
+        if self.backend.size() >= data.len() as u64 {
+            queue.write_buffer(self.backend.as_ref(), 0, data);
+            ResizeStatus::SizeKept
+        } else {
+            self.backend = resources.create_storage_buffer_write_only(self.label, data);
+            ResizeStatus::Resized   
+        }
+    }
+    
+    #[must_use]
+    pub(super) fn update_with_generator<Generator>(&mut self, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> ResizeStatus
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
         let new_content = generate_data();
-        self.elements_count = new_content.total_slots_count();
+        self.update(resources, queue, new_content.backend())
+    }
 
-        if self.backend.size() >= new_content.backend().len() as u64 {
-            queue.write_buffer(self.backend.as_ref(), 0, new_content.backend());
-            return ResizeStatus::SizeKept;
-        }
-
-        self.backend = resources.create_storage_buffer_write_only(self.label, new_content.backend());
-        ResizeStatus::Resized
+    #[must_use]
+    pub(super) fn update_with_slice<T: Pod>(&mut self, resources: &Resources, queue: &wgpu::Queue, content: &[T]) -> ResizeStatus {
+        self.update(resources, queue, bytemuck::cast_slice(content))
     }
 
     #[must_use]
@@ -74,7 +88,7 @@ mod tests {
         let resources = Resources::new(context.clone());
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
-        let system_under_test = ResizableBuffer::new(&resources, "test-buffer", generate_data);
+        let system_under_test = ResizableBuffer::from_generator(&resources, "test-buffer", generate_data);
 
         (system_under_test, resources, context)
     }
@@ -87,7 +101,7 @@ mod tests {
         let new_slot_count = (SYSTEM_UNDER_TEST_INITIAL_SLOTS as i32 + slots_addition) as usize;
         let make_new_data = || make_test_content(new_slot_count);
         
-        let actual_status = system_under_test.update(&resources, context.queue(), make_new_data);
+        let actual_status = system_under_test.update_with_generator(&resources, context.queue(), make_new_data);
         
         assert_eq!(actual_status, expected_status);
     }
