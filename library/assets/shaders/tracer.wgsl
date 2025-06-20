@@ -213,12 +213,20 @@ fn transform_point(transformation: mat3x4f, point: vec3f) -> vec3f {
 
 @must_use
 fn to_mat3x3(source: mat3x4f) -> mat3x3f {
-    return mat3x3<f32>(source[0].xyz,source[1].xyz,source[2].xyz);
+    return mat3x3f(source[0].xyz, source[1].xyz, source[2].xyz);
 }
 
 @must_use
 fn transform_vector(transformation: mat3x3f, vector: vec3f) -> vec3f {
     return vector * transformation;
+}
+
+@must_use
+fn transform_transposed_vector(transformation: mat3x3f, vector: vec3f) -> vec3f {
+    /*Sdf matrices come from CPU in row-major format, so
+    we need to multiply like v * M. Swaping operands like
+    M * v equals to v * transpose(M).*/
+    return transformation * vector;
 }
 
 @must_use
@@ -229,6 +237,7 @@ fn transform_ray_parameter(transformation: mat3x4f, ray: Ray, parameter: f32, tr
 
 @must_use
 fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
+    let sdf_location_inverse = to_mat3x3(sdf.inverse_location);
     let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
     let local_ray_direction = transform_vector(to_mat3x3(sdf.inverse_location), ray.direction);
     let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
@@ -250,7 +259,7 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
         if(abs(signed_distance) < t_scaled) {
             hitRec.p = transform_point(sdf.location, candidate);
             hitRec.t = length(hitRec.p - ray.origin);
-            hitRec.normal = normalize(transform_vector(transpose(to_mat3x3(sdf.inverse_location)), signed_distance_normal(sdf, candidate, time)));
+            hitRec.normal = normalize(transform_transposed_vector(sdf_location_inverse, signed_distance_normal(sdf, candidate, time)));
             hitRec.front_face = sample_sdf(sdf, local_ray.origin, time) >= 0;
             if(hitRec.front_face == false){
                 hitRec.normal = -hitRec.normal;

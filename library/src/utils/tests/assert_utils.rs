@@ -1,7 +1,6 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
     use std::fmt::{Display, Write};
-    use float_eq::assert_float_eq;
     use crate::geometry::alias::Point;
 
     pub(crate) fn assert_all_unique<T: Ord>(victim: &mut Vec<T>) {
@@ -48,10 +47,41 @@ pub(crate) mod tests {
             }
         }
     }
+
+    #[macro_export]
+    macro_rules! assert_approx_eq {
+        ($typ:ty, $left:expr, $right:expr, ulps = $ulps:expr $(, $($arg:tt)+)?) => {{
+            let left_val = $left;
+            let right_val = $right;
+            if !float_cmp::approx_eq!($typ, left_val, right_val, ulps = $ulps) {
+                panic!(
+                    "assertion failed: `(left approx_eq right)`\n  left: `{:?}`,\n right: `{:?}`,\n{}",
+                    left_val,
+                    right_val,
+                    format_args!($($($arg)+)?)
+                );
+            }
+        }};
+    }
     
-    pub(crate) fn assert_float_point_equals(left: Point, right: Point, ulps: u64, message_prefix: &str) {
-        assert_float_eq!(left.x, right.x, ulps <= ulps, "{}: x component mismatch", message_prefix);
-        assert_float_eq!(left.y, right.y, ulps <= ulps, "{}: y component mismatch", message_prefix);
-        assert_float_eq!(left.z, right.z, ulps <= ulps, "{}: z component mismatch", message_prefix);
+    pub(crate) fn assert_float_point_equals(left: Point, right: Point, ulps: i64, message_prefix: &str) {
+        assert_approx_eq!(f64, left.x, right.x, ulps = ulps, "{}: x component mismatch", message_prefix);
+        assert_approx_eq!(f64, left.y, right.y, ulps = ulps, "{}: y component mismatch", message_prefix);
+        assert_approx_eq!(f64, left.z, right.z, ulps = ulps, "{}: z component mismatch", message_prefix);
+    }
+
+    #[test]
+    fn test_assert_approx_eq() {
+        let a: f32 = 0.15 + 0.15 + 0.15;
+        let b: f32 = 0.1 + 0.1 + 0.25;
+        assert_approx_eq!(f32, a, b, ulps = 1, "test message");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_assert_approx_eq_panic() {
+        let a: f32 = 0.00000000005;
+        let b: f32 = 0.00000000001;
+        assert_approx_eq!(f32, a, b, ulps = 1, "test message");
     }
 }

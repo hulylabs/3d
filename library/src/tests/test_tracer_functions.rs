@@ -11,7 +11,7 @@ mod tests {
     use crate::gpu::uniforms::Uniforms;
     use crate::objects::common_properties::Linkage;
     use crate::objects::material_index::MaterialIndex;
-    use crate::objects::sdf::SdfInstance;
+    use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::scene::camera::Camera;
     use crate::sdf::framework::code_generator::SdfRegistrator;

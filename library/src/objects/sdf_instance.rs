@@ -1,4 +1,5 @@
 ﻿use crate::geometry::transform::Affine;
+use crate::geometry::utils::is_affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::material_index::MaterialIndex;
 use crate::objects::ray_traceable::RayTraceable;
@@ -22,6 +23,7 @@ impl SdfInstance {
     pub(crate) fn new(location: Affine, ray_marching_step_scale: f64, class: SdfClassIndex, links: Linkage) -> Self {
         assert_gt!(abs(location.determinant()), 0.0, "location should not change basis orientation, or ray marching will break");
         assert_gt!(ray_marching_step_scale, 0.0);
+        assert!(is_affine(&location), "projection matrices are not supported");
         Self { location, ray_marching_step_scale, class, links }
     }
 }

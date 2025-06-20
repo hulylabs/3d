@@ -18,7 +18,7 @@ use crate::gpu::uniforms::Uniforms;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
 use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf::SdfInstance;
+use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::scene::camera::Camera;
 use crate::scene::hub::Hub;

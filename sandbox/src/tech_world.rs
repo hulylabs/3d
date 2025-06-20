@@ -486,22 +486,22 @@ impl TechWorld {
         self.make_common_scene_walls(scene);
 
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.0, 0.0, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            &(Affine::from_translation(Vector::new(0.0, 0.0, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.union_smooth.name(),
             self.materials.blue_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.9, 0.0, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            &(Affine::from_translation(Vector::new(0.9, 0.0, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.subtraction_smooth.name(),
             self.materials.red_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.0, -0.5, -0.8))*Affine::from_nonuniform_scale(0.2, 0.2, 0.2)),
+            &(Affine::from_translation(Vector::new(0.0, -0.5, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.intersection_smooth.name(),
             self.materials.green_mirror);
 
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.0, 0.4, -0.3))*Affine::from_nonuniform_scale(0.3, 0.3, 0.3)),
+            &(Affine::from_translation(Vector::new(0.0, 0.4, -0.3))*Affine::from_scale(0.3)),
             self.sdf_classes.csg_example.name(),
             self.materials.blue_material);
     }
@@ -522,7 +522,7 @@ impl TechWorld {
             self.materials.blue_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(-0.2, 0.75, -0.9))*Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            &(Affine::from_translation(Vector::new(-0.2, 0.75, -0.9))*Affine::from_scale(0.1)),
             self.sdf_classes.identity_box_frame.name(),
             self.materials.red_material);
         
@@ -537,7 +537,7 @@ impl TechWorld {
             self.materials.blue_glass);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.95, 0.75, -0.85))*Affine::from_nonuniform_scale(0.05, 0.05, 0.05)),
+            &(Affine::from_translation(Vector::new(0.95, 0.75, -0.85))*Affine::from_scale(0.05)),
             self.sdf_classes.capped_xy_torus.name(),
             self.materials.coral_material);
         
@@ -567,12 +567,12 @@ impl TechWorld {
             self.materials.green_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.1, 0.35, -0.8))*Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            &(Affine::from_translation(Vector::new(0.1, 0.35, -0.8))*Affine::from_scale(0.1)),
             self.sdf_classes.cylinder_cross.name(),
             self.materials.blue_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(0.4, 0.35, -0.9))*Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            &(Affine::from_translation(Vector::new(0.4, 0.35, -0.9))*Affine::from_scale(0.1)),
             self.sdf_classes.solid_angle.name(),
             self.materials.red_material);
         
@@ -581,22 +581,22 @@ impl TechWorld {
                 Affine::from_translation(Vector::new(0.7, 0.35, -0.9))*
                 Affine::from_angle_x(Deg(45.0))*
                 Affine::from_angle_z(Deg(15.0))*
-                Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+                Affine::from_scale(0.1)),
             self.sdf_classes.cut_hollow_sphere.name(),
             self.materials.bright_red_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(1.0, 0.35, -0.9))*Affine::from_nonuniform_scale(0.15, 0.15, 0.15)),
+            &(Affine::from_translation(Vector::new(1.0, 0.35, -0.9))*Affine::from_scale(0.15)),
             self.sdf_classes.round_cone.name(),
             self.materials.black_material);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(1.3, 0.35, -0.9))*Affine::from_nonuniform_scale(0.15, 0.15, 0.15)),
+            &(Affine::from_translation(Vector::new(1.3, 0.35, -0.9))*Affine::from_scale(0.15)),
             self.sdf_classes.vesica_segment.name(),
             self.materials.gold_metal);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(1.7, 0.35, -0.85))*Affine::from_nonuniform_scale(0.15, 0.15, 0.15)),
+            &(Affine::from_translation(Vector::new(1.7, 0.35, -0.85))*Affine::from_scale(0.15)),
             self.sdf_classes.octahedron.name(),
             self.materials.purple_glass);
         
@@ -606,7 +606,7 @@ impl TechWorld {
             self.materials.red_glass);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(-0.5, 0.0, -0.9))*Affine::from_nonuniform_scale(0.15, 0.15, 0.15)),
+            &(Affine::from_translation(Vector::new(-0.5, 0.0, -0.9))*Affine::from_scale(0.15)),
             self.sdf_classes.pyramid.name(),
             self.materials.blue_material);
     }
@@ -632,7 +632,7 @@ impl TechWorld {
                 let location 
                     = Transformation::new(
                     Affine::from_translation(Vector::new(0.5, 0.0, 0.0)) *
-                        Affine::from_nonuniform_scale(0.6, 0.6, 0.6)
+                        Affine::from_scale(0.6)
                     );
                 scene.add_mesh(&meshes, mesh, &location, self.materials.black_material);
             },
@@ -731,7 +731,7 @@ impl TechWorld {
             self.materials.blue_glass);
         
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0))*Affine::from_scale(0.25) ),
+            &(Affine::from_translation(Vector::new(1.5, 0.0, -1.0))*Affine::from_nonuniform_scale(0.25, 0.1, 0.25) ),
             self.sdf_classes.sphere.name(),
             self.materials.green_mirror);
         
