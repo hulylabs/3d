@@ -69,7 +69,7 @@ struct Uniforms {
 	frame_buffer_aspect: f32, // width / height
 	inverted_frame_buffer_size: vec2f,
 	frame_number: f32,
-	if_reset_frame_buffer: f32,
+	empty_slot: f32,
 	view_matrix: mat4x4f,
 	/* Consider a view ray defined by an origin (e.g., the eye position for a perspective camera)
     and a direction that intersects the view plane at a world-space pixel position.
@@ -454,11 +454,7 @@ fn make_common_color_evaluation_setup(pixel_index: u32) {
 	randState = pixel_index + u32(uniforms.frame_number) * 719393;
 	let traced_color = path_trace_monte_carlo();
 
-	if(uniforms.if_reset_frame_buffer == 0) {
-		pixel_color_buffer[pixel_index] = vec4f(pixel_color_buffer[pixel_index].xyz + traced_color, 1.0);
-	} else {
-	    pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
-	}
+    pixel_color_buffer[pixel_index] = vec4f(pixel_color_buffer[pixel_index].xyz + traced_color, 1.0);
 }
 
 /*

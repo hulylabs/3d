@@ -36,6 +36,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use more_asserts::assert_lt;
 use thiserror::Error;
 use wgpu::Trace;
 use winit::window::Window;
@@ -65,11 +66,10 @@ pub struct Engine {
     ignore_render_requests: bool,
 
     context: Rc<Context>,
-
+    renderer: Renderer,
+    
     window_output_surface: wgpu::Surface<'static>, // TODO: actually this object is not quite 'static; in fact here we do not know anything about that, how static it is
     window_surface_format: wgpu::TextureFormat,
-
-    renderer: Renderer,
     
     fps_measurer: SlidingTimeFrame,
     denoising_measurer: MinMaxTimeMeasurer,
@@ -262,8 +262,7 @@ impl Engine {
             self.renderer.accumulate_more_rays();
         } 
 
-        #[cfg(feature = "denoiser")]
-        {
+        #[cfg(feature = "denoiser")] {
             if self.renderer.is_monte_carlo() {
                 self.renderer.denoise_accumulated_image(&mut self.denoising_measurer);
             }
@@ -301,8 +300,8 @@ impl Engine {
 
     #[must_use]
     pub fn object_in_pixel(&self, x: u32, y: u32) -> Option<ObjectUid> {
-        assert!(x < self.window_pixels_size.width);
-        assert!(y < self.window_pixels_size.height);
+        assert_lt!(x, self.window_pixels_size.width);
+        assert_lt!(y, self.window_pixels_size.height);
         self.renderer.object_in_pixel(x, y)
     }
 

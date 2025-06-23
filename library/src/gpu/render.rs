@@ -31,7 +31,7 @@ use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
-use wgpu::{StoreOp, SubmissionIndex};
+use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
 
 #[cfg(feature = "denoiser")]
@@ -502,7 +502,6 @@ impl Renderer {
             // TODO: rewrite with 'write_buffer_with'? May be we need kind of ping-pong or circular buffer here?
             let uniform_values = self.uniforms.serialize();
             self.gpu.context.queue().write_buffer(&self.gpu.buffers.uniforms, 0, uniform_values.backend());
-            self.uniforms.drop_reset_flag();
         }
 
         let rebuild_albedo_buffer = rebuild_geometry_buffers
@@ -512,8 +511,9 @@ impl Renderer {
         let mut surface_properties_pass_or_none: Option<SubmissionIndex> = None;
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
             let label = "nearest surface properties compute pass";
+            let encoder = self.begin_compute_pass();
             surface_properties_pass_or_none = Some(
-                self.compute_pass(label, &self.pipeline_surface_attributes, |pass| {
+                self.compute_pass(encoder, label, &self.pipeline_surface_attributes, |pass| {
                     if rebuild_geometry_buffers {
                         if cfg!(feature = "denoiser") {
                             self.gpu.buffers.ray_tracing_frame_buffer.prepare_all_aux_buffers_copy_from_gpu(pass);
@@ -528,7 +528,11 @@ impl Renderer {
         }
 
         let label = "ray tracing compute pass";
-        self.compute_pass(label, self.color_buffer_evaluation.pipeline().deref(), |pass|{
+        let mut encoder = self.begin_compute_pass();
+        if (rebuild_geometry_buffers || scene_status.any_updated()) && self.color_buffer_evaluation.frame_counter_increment() > 0 {
+            encoder.clear_buffer(self.gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color().as_ref(), BufferAddress::default(), None);
+        }
+        self.compute_pass(encoder, label, self.color_buffer_evaluation.pipeline().deref(), |pass|{
             if cfg!(feature = "denoiser") {
                 self.prepare_pixel_color_copy_from_gpu(pass);   
             }
@@ -653,10 +657,15 @@ impl Renderer {
         self.final_image_rasterization_pass(&mut render_pass_descriptor, &self.pipeline_final_image_rasterization,);
     }
 
-    fn compute_pass<CustomizationDelegate>(&self, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate) -> SubmissionIndex
-    where CustomizationDelegate : FnOnce(&mut wgpu::CommandEncoder){
+    #[must_use]
+    fn begin_compute_pass(&self) -> CommandEncoder {
+        self.create_command_encoder("compute pass encoder")
+    }
+
+    fn compute_pass<CustomizationDelegate>(&self, encoder: CommandEncoder, label: &str, compute_pipeline: &ComputePipeline, customize: CustomizationDelegate) -> SubmissionIndex
+    where CustomizationDelegate : FnOnce(&mut CommandEncoder){
         
-        let mut encoder = self.create_command_encoder("compute pass encoder"); {
+        let mut encoder = encoder; {
 
             {let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some(label),

@@ -19,7 +19,7 @@ fn image_f32_size(width: usize, height: usize) -> usize {
     width * height * CHANNELS_PER_PIXEL
 }
 
-struct Storage { // TODO: is it faster to use single huge buffer with offsets?
+struct Storage {
     beauty_io_image: Rc<Buffer>,
     aux_input_albedo: Rc<Buffer>,
     aux_input_normals: Rc<Buffer>,

@@ -6,7 +6,6 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 pub(crate) struct Uniforms {
     frame_buffer_size: FrameBufferSize,
     frame_number: u32,
-    if_reset_framebuffer: bool,
     camera: Camera,
     
     parallelograms_count: u32,
@@ -20,7 +19,6 @@ impl Uniforms {
         Self {
             frame_buffer_size,
             frame_number: 0,
-            if_reset_framebuffer: false,
             camera,
             parallelograms_count: 0,
             bvh_length: 0,
@@ -29,12 +27,7 @@ impl Uniforms {
     }
     
     pub(super) fn reset_frame_accumulation(&mut self, value: u32) {
-        self.if_reset_framebuffer = true;
         self.frame_number = value;
-    }
-
-    pub(super) fn drop_reset_flag(&mut self) {
-        self.if_reset_framebuffer = false;
     }
 
     pub(super) fn set_frame_size(&mut self, new_size: PhysicalSize<u32>) {
@@ -96,7 +89,7 @@ impl Uniforms {
            1.0 / self.frame_buffer_size.width() as f32,
            1.0 / self.frame_buffer_size.height() as f32,
            self.frame_number as f32,
-           if self.if_reset_framebuffer { 1.0 } else { 0.0 },
+           0.0,
         );
         
         self.camera.serialize_into(&mut result);
@@ -129,7 +122,6 @@ mod tests {
     const SLOT_FRAME_INVERTED_WIDTH: usize = 4;
     const SLOT_FRAME_INVERTED_HEIGHT: usize = 5;
     const SLOT_FRAME_NUMBER: usize = 6;
-    const SLOT_RESET_FRAME_BUFFER: usize = 7;
 
     const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
     const SLOT_BVH_LENGTH: usize = 41;
@@ -143,7 +135,6 @@ mod tests {
         Uniforms {
             frame_buffer_size,
             frame_number: 0,
-            if_reset_framebuffer: false,
             camera,
 
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
@@ -163,20 +154,6 @@ mod tests {
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 1.0);
-    }
-
-    #[test]
-    fn test_uniforms_drop_reset_flag() {
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.reset_frame_accumulation(0);
-        system_under_test.drop_reset_flag();
-
-        let actual_state = system_under_test.serialize();
-        let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
-
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
     }
 
     #[test]
@@ -236,7 +213,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_WIDTH], 1.0 / DEFAULT_FRAME_WIDTH as f32);
         assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / DEFAULT_FRAME_HEIGHT as f32);
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
-        assert_eq!(actual_state_floats[SLOT_RESET_FRAME_BUFFER], 0.0);
 
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
