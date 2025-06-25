@@ -1,5 +1,5 @@
 ﻿use crate::geometry::transform::Affine;
-use crate::objects::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 use crate::objects::triangle::Triangle;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 

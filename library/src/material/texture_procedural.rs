@@ -1,0 +1,3 @@
+﻿pub(crate) struct TextureProcedural {
+    
+}

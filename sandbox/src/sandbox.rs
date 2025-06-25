@@ -2,7 +2,6 @@
 use crate::tech_world::{Materials, SdfClasses, TechWorld};
 use cgmath::Deg;
 use library::geometry::alias::Point;
-use library::objects::material_index::MaterialIndex;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
 use library::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use library::utils::object_uid::ObjectUid;
@@ -17,6 +16,7 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::Window;
 use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, Periodization, TimeDirection, WrapKind};
 use library::container::visual_objects::VisualObjects;
+use library::material::material_index::MaterialIndex;
 use library::sdf::framework::code_generator::SdfRegistrator;
 
 #[must_use]

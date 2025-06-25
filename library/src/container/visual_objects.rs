@@ -12,7 +12,6 @@ use crate::container::triangulated::Triangulated;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::Linkage;
-use crate::objects::material_index::MaterialIndex;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::sdf_class_index::SdfClassIndex;
@@ -33,6 +32,7 @@ use more_asserts::assert_gt;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 use crate::geometry::utils::is_affine;
+use crate::material::material_index::MaterialIndex;
 
 pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
@@ -329,8 +329,6 @@ mod tests {
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::{Affine, Transformation};
     use crate::objects::common_properties::Linkage;
-    use crate::objects::material::Material;
-    use crate::objects::material_index::MaterialIndex;
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
@@ -349,6 +347,8 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
+    use crate::material::material::MaterialProperties;
+    use crate::material::material_index::MaterialIndex;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -372,8 +372,8 @@ mod tests {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
         let system_under_test = Rc::new(RefCell::new(VisualObjects::new(sdf_classes)));
         
-        let material_one = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
-        let material_two = system_under_test.borrow_mut().materials_mutable().add(&Material::default());
+        let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
+        let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
 
         let assert_material_changed = |from: MaterialIndex, to: MaterialIndex, victim: ObjectUid| {
             assert_eq!(system_under_test.borrow().material_of(victim), from);
@@ -413,7 +413,7 @@ mod tests {
         const SDF_TO_ADD: u32 = 5;
 
         let material 
-            = Material::default()
+            = MaterialProperties::default()
                 .with_albedo(1.0, 0.0, 0.0)
                 .with_emission(3.0, 2.0, 7.0)
                 .with_specular(2.0, 4.6, 8.4)
@@ -450,7 +450,7 @@ mod tests {
 
         const PARALLELOGRAM_TO_ADD: u32 = 4;
 
-        let expected_material = system_under_test.materials_mutable().add(&Material::default().with_albedo(1.0, 0.0, 0.0));
+        let expected_material = system_under_test.materials_mutable().add(&MaterialProperties::default().with_albedo(1.0, 0.0, 0.0));
         let expected_origin = Point::new(1.0, 2.0, 3.0);
         let expected_x = Vector::new(3.0, 5.0, 7.0);
         let expected_y = Vector::new(4.0, 6.0, 8.0);
@@ -537,7 +537,7 @@ mod tests {
         let mut system_under_test = make_empty_container();
 
         let (mesh, meshes) = prepare_test_mesh();
-        let dummy_material = system_under_test.materials_mutable().add(&Material::default());
+        let dummy_material = system_under_test.materials_mutable().add(&MaterialProperties::default());
         
         let to_be_kept_one = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
         let to_be_deleted = system_under_test.add_mesh(&meshes, mesh, &Transformation::identity(), dummy_material);
@@ -639,7 +639,7 @@ mod tests {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
         let mut container = VisualObjects::new(sdf_classes);
 
-        let dummy_material = container.materials_mutable().add(&Material::default());
+        let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();
 
         let sdf = container.add_sdf(&Affine::identity(), 1.0, &sdf_name, dummy_material);

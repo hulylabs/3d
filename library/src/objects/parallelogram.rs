@@ -6,7 +6,7 @@ use crate::objects::common_properties::Linkage;
 use crate::objects::ray_traceable::RayTraceable;
 use alias::Point;
 use alias::Vector;
-use crate::objects::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 
@@ -97,7 +97,6 @@ mod tests {
     use bytemuck::cast_slice;
     use super::*;
     use crate::objects::common_properties::ObjectUid;
-    use crate::objects::material_index::MaterialIndex;
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
     #[test]

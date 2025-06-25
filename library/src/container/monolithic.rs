@@ -1,6 +1,6 @@
 ﻿use crate::container::scene_object::{SceneEnvironment, SceneObject};
 use crate::geometry::transform::Affine;
-use crate::objects::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 use crate::objects::ray_traceable::RayTraceable;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 

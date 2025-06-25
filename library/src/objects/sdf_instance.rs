@@ -1,7 +1,6 @@
 ﻿use crate::geometry::transform::Affine;
 use crate::geometry::utils::is_affine;
 use crate::objects::common_properties::Linkage;
-use crate::objects::material_index::MaterialIndex;
 use crate::objects::ray_traceable::RayTraceable;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -10,6 +9,7 @@ use crate::serialization::serialize_matrix::serialize_matrix_3x4;
 use cgmath::num_traits::abs;
 use cgmath::SquareMatrix;
 use more_asserts::assert_gt;
+use crate::material::material_index::MaterialIndex;
 
 pub(crate) struct SdfInstance {
     location: Affine,
@@ -70,7 +70,6 @@ impl RayTraceable for SdfInstance {
 mod tests {
     use super::*;
     use crate::geometry::transform::constants::MATRIX_FLOATS_COUNT;
-    use crate::objects::material_index::MaterialIndex;
     use crate::serialization::gpu_ready_serialization_buffer::ELEMENTS_IN_QUARTET;
     use crate::utils::object_uid::ObjectUid;
     use bytemuck::cast_slice;

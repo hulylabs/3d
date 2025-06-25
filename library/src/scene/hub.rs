@@ -4,12 +4,12 @@ use crate::container::visual_objects::VisualObjects;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
 use crate::objects::common_properties::ObjectUid;
-use crate::objects::material_index::MaterialIndex;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 use std::io::Error;
 use std::path::Path;
 use more_asserts::assert_gt;
 use crate::geometry::utils::is_affine;
+use crate::material::material_index::MaterialIndex;
 
 pub struct Hub {
     container: VisualObjects,

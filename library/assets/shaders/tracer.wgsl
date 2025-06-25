@@ -6,11 +6,10 @@ const MAX_FLOAT: f32 = 999999999.999;
 const SECONDARY_RAY_START_BIAS: f32 = 0.0005;
 const RAY_PARAMETER_MIN: f32 = 0.000001;
 
-const MATERIAL_LAMBERTIAN = 0.0;
-const MATERIAL_MIRROR = 1.0;
-const MATERIAL_GLASS = 2.0;
-const MATERIAL_ISOTROPIC = 3.0;
-const MATERIAL_ANISOTROPIC = 4.0;
+const MATERIAL_LAMBERTIAN: i32 = 0;
+const MATERIAL_MIRROR: i32 = 1;
+const MATERIAL_GLASS: i32 = 2;
+const MATERIAL_ISOTROPIC: i32 = 3;
 
 const PRIMITIVE_TYPE_SDF: u32 = 1;
 const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
@@ -95,7 +94,8 @@ struct Material {
 	specular_strength: f32, // chance that a ray hitting would reflect specularly
 	roughness: f32, // diffuse strength
 	refractive_index_eta: f32, // refractive index
-	material_type: f32,
+	albedo_texture_index: i32, // > 0 - texture index, < 0 - procedural texture index, = 0 - none
+	material_class: i32,
 }
 
 struct Parallelogram {
@@ -687,7 +687,7 @@ var<private> doSpecular : f32;
 fn material_scatter(ray_in : Ray) -> Ray {
 	var scattered = Ray(vec3f(0.0), vec3f(0.0));
 	doSpecular = 0;
-	if(hitMaterial.material_type == MATERIAL_LAMBERTIAN) {
+	if(MATERIAL_LAMBERTIAN == hitMaterial.material_class) {
 
 		let uvw = onb_build_from_w(hitRec.normal);
 		var diffuse_dir = cosine_sampling_wrt_Z();
@@ -709,21 +709,21 @@ fn material_scatter(ray_in : Ray) -> Ray {
 			scatterRec.skip_pdf_ray = scattered;
 		}
 	}
-	else if(hitMaterial.material_type == MATERIAL_MIRROR) {
+	else if(MATERIAL_MIRROR == hitMaterial.material_class) {
 		var reflected = reflect(ray_in.direction, hitRec.normal);
 		scattered = Ray(hitRec.p, normalize(reflected + hitMaterial.roughness * uniform_random_in_unit_sphere()));
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-	else if(hitMaterial.material_type == MATERIAL_GLASS) {
+	else if(MATERIAL_GLASS == hitMaterial.material_class) {
 		let stochastic = true;
 		scattered = glass_scatter(hitRec, hitMaterial.refractive_index_eta, ray_in.direction, stochastic);
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
 	}
-	else if(hitMaterial.material_type == MATERIAL_ISOTROPIC) {
+	else if(MATERIAL_ISOTROPIC == hitMaterial.material_class) {
 		let g = hitMaterial.specular_strength;
 		let cos_hg = (1 + g*g - pow(((1 - g*g) / (1 - g + 2*g*rand_0_1())), 2.0)) / (2 * g);
 		let sin_hg = sqrt(1 - cos_hg * cos_hg);
@@ -1016,16 +1016,16 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 
         let hit_material = hitMaterial;
 
-        if (MATERIAL_LAMBERTIAN == hit_material.material_type) {
+        if (MATERIAL_LAMBERTIAN == hit_material.material_class) {
             accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec, hit_material);
             break;
         }
 
-        if (MATERIAL_MIRROR == hit_material.material_type) {
+        if (MATERIAL_MIRROR == hit_material.material_class) {
             let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hit_material.roughness);
             current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
             throughput *= hit_material.albedo;
-        } else if (MATERIAL_GLASS == hit_material.material_type) {
+        } else if (MATERIAL_GLASS == hit_material.material_class) {
             let stochastic = false;
             current_ray = glass_scatter(hitRec, hit_material.refractive_index_eta, current_ray.direction, stochastic);
             current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;

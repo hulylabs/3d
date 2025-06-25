@@ -2,12 +2,12 @@ use crate::geometry::aabb::Aabb;
 use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use crate::geometry::vertex::Vertex;
 use crate::objects::common_properties::Linkage;
-use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 use crate::utils::object_uid::ObjectUid;
 use cgmath::AbsDiffEq;
 use std::ops::Add;
+use crate::material::material_index::MaterialIndex;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TriangleIndex(pub(crate) usize);
@@ -116,7 +116,6 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::objects::common_properties::ObjectUid;
-    use crate::objects::material_index::MaterialIndex;
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
     use bytemuck::cast_slice;
 

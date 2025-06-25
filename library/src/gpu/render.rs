@@ -16,7 +16,6 @@ use crate::gpu::resizable_buffer::ResizableBuffer;
 use crate::gpu::resources::Resources;
 use crate::gpu::uniforms::Uniforms;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
-use crate::objects::material::Material;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
@@ -33,6 +32,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
+use crate::material::material::MaterialProperties;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -293,7 +293,7 @@ impl Renderer {
         uniforms.set_bvh_length(bvh_length);
 
         let materials = if container.materials().count() > 0
-            { container.materials().serialize() } else { Self::make_empty_buffer_marker::<Material>() };
+            { container.materials().serialize() } else { Self::make_empty_buffer_marker::<MaterialProperties>() };
         
         uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
         
@@ -787,7 +787,7 @@ mod tests {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
         let mut scene = VisualObjects::new(SdfRegistrator::default());
-        let test_material = scene.materials_mutable().add(&Material::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
+        let test_material = scene.materials_mutable().add(&MaterialProperties::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(
             Point::new(-0.5, -0.5, 0.0), 
@@ -820,7 +820,7 @@ mod tests {
         registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));
         
         let mut scene = VisualObjects::new(registrator);
-        let test_material = Material::new()
+        let test_material = MaterialProperties::new()
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);
         let test_material_uid = scene.materials_mutable().add(&test_material);

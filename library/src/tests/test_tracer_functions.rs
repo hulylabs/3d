@@ -10,7 +10,6 @@ mod tests {
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
     use crate::gpu::uniforms::Uniforms;
     use crate::objects::common_properties::Linkage;
-    use crate::objects::material_index::MaterialIndex;
     use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::scene::camera::Camera;
@@ -30,6 +29,7 @@ mod tests {
     use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
     use std::f32::consts::SQRT_2;
     use std::fmt::Write;
+    use crate::material::material_index::MaterialIndex;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     

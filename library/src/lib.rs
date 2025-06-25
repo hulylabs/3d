@@ -1,4 +1,4 @@
-#![deny(warnings)]
+//#![deny(warnings)]
 
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
@@ -17,7 +17,7 @@ mod serialization;
 mod gpu;
 mod tests;
 pub mod animation;
-
+pub mod material;
 
 use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;

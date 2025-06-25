@@ -1,7 +1,7 @@
 ﻿use crate::container::scene_object::{SceneEnvironment, SceneObject};
 use crate::geometry::transform::Affine;
+use crate::material::material_index::MaterialIndex;
 use crate::objects::common_properties::Linkage;
-use crate::objects::material_index::MaterialIndex;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(super) struct Triangulated {

@@ -4,13 +4,13 @@ use library::container::mesh_warehouse::MeshWarehouse;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
-use library::objects::material::{Material, MaterialClass};
-use library::objects::material_index::MaterialIndex;
 use library::scene::hub::Hub;
 use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
+use library::material::material::{MaterialClass, MaterialProperties};
+use library::material::material_index::MaterialIndex;
 use library::sdf::composition::sdf_intersection::SdfIntersection;
 use library::sdf::composition::sdf_intersection_smooth::SdfIntersectionSmooth;
 use library::sdf::composition::sdf_subtraction::SdfSubtraction;
@@ -276,7 +276,7 @@ impl Materials {
         let materials = scene.materials_mutable();
         
         let gold_metal = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(1.0, 0.5, 0.0)
                 .with_specular_strength(0.00001)
@@ -284,33 +284,33 @@ impl Materials {
                 .with_refractive_index_eta(0.0),
         );
 
-        let large_box_material = materials.add(&Material::new()
+        let large_box_material = materials.add(&MaterialProperties::new()
             .with_albedo(0.95, 0.95, 0.95)
             .with_refractive_index_eta(2.5));
 
         let blue_glass = materials
-            .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(0.0, 0.5, 0.9).with_refractive_index_eta(1.4));
+            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(0.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
         let purple_glass = materials
-            .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.4));
+            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
         let red_glass = materials
-            .add(&Material::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.2, 0.0).with_refractive_index_eta(1.4));
+            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.2, 0.0).with_refractive_index_eta(1.4));
 
         let green_mirror = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.64, 0.77, 0.22)
                 .with_refractive_index_eta(1.4),
         );
 
         let light_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_emission(2.0, 2.0, 2.0)
         );
 
         let black_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(0.2, 0.2, 0.2)
                 .with_specular(0.2, 0.2, 0.2)
                 .with_specular_strength(0.05)
@@ -318,7 +318,7 @@ impl Materials {
         );
 
         let coral_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(1.0, 0.5, 0.3)
                 .with_specular(0.2, 0.2, 0.2)
                 .with_specular_strength(0.01)
@@ -326,7 +326,7 @@ impl Materials {
         );
 
         let red_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(0.75, 0.1, 0.1)
                 .with_specular(0.75, 0.1, 0.1)
                 .with_specular_strength(0.05)
@@ -334,7 +334,7 @@ impl Materials {
         );
 
         let blue_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(0.1, 0.1, 0.75)
                 .with_specular(0.1, 0.1, 0.75)
                 .with_specular_strength(0.05)
@@ -342,7 +342,7 @@ impl Materials {
         );
 
         let bright_red_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(1.0, 0.0, 0.0)
                 .with_specular(1.0, 1.0, 1.0)
                 .with_specular_strength(0.05)
@@ -350,7 +350,7 @@ impl Materials {
         );
 
         let silver_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.75, 0.75, 0.75)
                 .with_specular(0.75, 0.75, 0.75)
@@ -359,7 +359,7 @@ impl Materials {
         );
 
         let green_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(0.05, 0.55, 0.05)
                 .with_specular(0.05, 0.55, 0.05)
                 .with_specular_strength(0.05)
@@ -367,7 +367,7 @@ impl Materials {
         );
 
         let selected_object_material = materials.add(
-            &Material::new()
+            &MaterialProperties::new()
                 .with_albedo(0.05, 0.05, 2.05)
                 .with_specular(0.05, 0.05, 0.55)
                 .with_specular_strength(0.15)

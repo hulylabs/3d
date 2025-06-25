@@ -1,14 +1,15 @@
 ﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 use palette::Srgb;
 use strum_macros::{EnumCount, EnumIter};
-use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+use crate::material::texture_reference::TextureReference;
 
 #[derive(Copy, Clone, Debug, PartialEq, EnumCount, EnumIter)]
+#[repr(i32)]
 pub enum MaterialClass {
     Lambert,
     Mirror,
     Glass,
-    Isotropic,
 }
 
 impl Default for MaterialClass {
@@ -20,23 +21,24 @@ impl Default for MaterialClass {
 
 impl MaterialClass {
     #[must_use]
-    pub const fn as_f64(self) -> f64 {
-        (self as u32) as f64
+    pub const fn as_i32(self) -> i32 {
+        self as i32
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct Material {
+pub struct MaterialProperties {
     albedo: Srgb,
     specular: Srgb,
     emission: Srgb,
     specular_strength: f64,
     roughness: f64,
     refractive_index_eta: f64,
+    albedo_texture: TextureReference,
     class: MaterialClass,
 }
 
-impl Material {
+impl MaterialProperties {
     const ZERO_COLOR: Srgb = Srgb::new(0.0, 0.0, 0.0);
 
     #[must_use]
@@ -87,13 +89,18 @@ impl Material {
         self.class = class;
         self
     }    
+    
+    pub fn with_albedo_texture(mut self, reference: TextureReference) -> Self {
+        self.albedo_texture = reference;
+        self
+    }
 }
 
-impl GpuSerializationSize for Material {
+impl GpuSerializationSize for MaterialProperties {
     const SERIALIZED_QUARTET_COUNT: usize = 4;
 }
 
-impl GpuSerializable for Material {
+impl GpuSerializable for MaterialProperties {
     fn serialize_into(&self, container: &mut GpuReadySerializationBuffer) {
         debug_assert!(container.has_free_slot(), "buffer overflow");
 
@@ -113,17 +120,18 @@ impl GpuSerializable for Material {
             self.emission.blue,
             self.specular_strength as f32,
         );
-        container.write_padded_quartet_f64(
-            self.roughness,
-            self.refractive_index_eta,
-            self.class.as_f64(),
-        );
+        container.write_quartet(|writer| {
+            writer.write_float_64(self.roughness);
+            writer.write_float_64(self.refractive_index_eta);
+            writer.write_signed(self.albedo_texture.as_gpu_readable_index());
+            writer.write_signed(self.class.as_i32());
+        });
 
         debug_assert!(container.object_fully_written());
     }
 }
 
-impl Default for Material {
+impl Default for MaterialProperties {
     #[must_use]
     fn default() -> Self {
         Self {
@@ -133,6 +141,7 @@ impl Default for Material {
             specular_strength: 0.0,
             roughness: 0.0,
             refractive_index_eta: 0.0,
+            albedo_texture: TextureReference::None,
             class: MaterialClass::Lambert,
         }
     }
@@ -141,9 +150,9 @@ impl Default for Material {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
     use bytemuck::cast_slice;
     use strum::IntoEnumIterator;
-    use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
 
     #[test]
     fn test_serialize_into() {
@@ -155,7 +164,7 @@ mod tests {
         let expected_refractive_index = 1.5;
         let expected_class = MaterialClass::Glass;
 
-        let system_under_test = Material::new()
+        let system_under_test = MaterialProperties::new()
             .with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue)
             .with_specular(expected_specular.red, expected_specular.green, expected_specular.blue)
             .with_emission(expected_emission.red, expected_emission.green, expected_emission.blue)
@@ -164,7 +173,7 @@ mod tests {
             .with_refractive_index_eta(expected_refractive_index)
             .with_class(expected_class);
 
-        let mut container = GpuReadySerializationBuffer::new(1, Material::SERIALIZED_QUARTET_COUNT);
+        let mut container = GpuReadySerializationBuffer::new(1, MaterialProperties::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
         let serialized: &[f32] = cast_slice(&container.backend());
@@ -186,24 +195,24 @@ mod tests {
 
         assert_eq!(serialized[12], expected_roughness as f32);
         assert_eq!(serialized[13], expected_refractive_index as f32);
-        assert_eq!(serialized[14], expected_class.as_f64() as f32);
+        assert_eq!(serialized[14], expected_class.as_i32() as f32);
         assert_eq!(serialized[15], DEFAULT_PAD_VALUE);
     }
 
     #[test]
-    fn test_material_class_as_f64() {
+    fn test_material_class_as_i32() {
         for system_under_test in MaterialClass::iter()  {
-            let value = system_under_test.as_f64();
-            assert_eq!(value, value as usize as f64);
+            let value = system_under_test.as_i32();
+            assert_eq!(value, system_under_test as i32);
         }
     }
 
     #[test]
     fn test_material_default() {
-        let system_under_test = Material::default();
-        assert_eq!(system_under_test.albedo, Material::ZERO_COLOR);
-        assert_eq!(system_under_test.specular, Material::ZERO_COLOR);
-        assert_eq!(system_under_test.emission, Material::ZERO_COLOR);
+        let system_under_test = MaterialProperties::default();
+        assert_eq!(system_under_test.albedo, MaterialProperties::ZERO_COLOR);
+        assert_eq!(system_under_test.specular, MaterialProperties::ZERO_COLOR);
+        assert_eq!(system_under_test.emission, MaterialProperties::ZERO_COLOR);
         assert_eq!(system_under_test.specular_strength, 0.0);
         assert_eq!(system_under_test.roughness, 0.0);
         assert_eq!(system_under_test.refractive_index_eta, 0.0);
@@ -213,49 +222,49 @@ mod tests {
     #[test]
     fn test_material_with_albedo() {
         let expected_albedo = Srgb::new(0.5, 0.6, 0.7);
-        let system_under_test = Material::default().with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue);
-        assert_eq!(system_under_test, Material { albedo: expected_albedo, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue);
+        assert_eq!(system_under_test, MaterialProperties { albedo: expected_albedo, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_specular() {
         let expected_specular = Srgb::new(0.8, 0.9, 1.0);
-        let system_under_test = Material::default().with_specular(expected_specular.red, expected_specular.green, expected_specular.blue);
-        assert_eq!(system_under_test, Material { specular: expected_specular, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_specular(expected_specular.red, expected_specular.green, expected_specular.blue);
+        assert_eq!(system_under_test, MaterialProperties { specular: expected_specular, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_emission() {
         let expected_emission = Srgb::new(1.1, 2.2, 3.3);
-        let system_under_test = Material::default().with_emission(expected_emission.red, expected_emission.green, expected_emission.blue);
-        assert_eq!(system_under_test, Material { emission: expected_emission, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_emission(expected_emission.red, expected_emission.green, expected_emission.blue);
+        assert_eq!(system_under_test, MaterialProperties { emission: expected_emission, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_specular_strength() {
         let expected_specular_strength = 0.5;
-        let system_under_test = Material::default().with_specular_strength(expected_specular_strength);
-        assert_eq!(system_under_test, Material { specular_strength: expected_specular_strength, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_specular_strength(expected_specular_strength);
+        assert_eq!(system_under_test, MaterialProperties { specular_strength: expected_specular_strength, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_roughness() {
         let expected_roughness = 0.7;
-        let system_under_test = Material::default().with_roughness(expected_roughness);
-        assert_eq!(system_under_test, Material { roughness: expected_roughness, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_roughness(expected_roughness);
+        assert_eq!(system_under_test, MaterialProperties { roughness: expected_roughness, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_refractive_index_eta() {
         let expected_refractive_index = 1.5;
-        let system_under_test = Material::default().with_refractive_index_eta(expected_refractive_index);
-        assert_eq!(system_under_test, Material { refractive_index_eta: expected_refractive_index, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_refractive_index_eta(expected_refractive_index);
+        assert_eq!(system_under_test, MaterialProperties { refractive_index_eta: expected_refractive_index, ..Default::default() });
     }
 
     #[test]
     fn test_material_with_class() {
         let expected_class = MaterialClass::Glass;
-        let system_under_test = Material::default().with_class(expected_class);
-        assert_eq!(system_under_test, Material { class: expected_class, ..Default::default() });
+        let system_under_test = MaterialProperties::default().with_class(expected_class);
+        assert_eq!(system_under_test, MaterialProperties { class: expected_class, ..Default::default() });
     }
 }

@@ -43,8 +43,8 @@ mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
     use crate::objects::common_properties::{Linkage, ObjectUid};
-    use crate::objects::material_index::MaterialIndex;
     use cgmath::{EuclideanSpace, Zero};
+    use crate::material::material_index::MaterialIndex;
 
     const DUMMY_LINKS: Linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
 
