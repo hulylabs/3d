@@ -2,10 +2,10 @@
 use crate::sdf::composition::intersection::intersection_aabb;
 use crate::sdf::framework::n_ary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_formatting_utils::format_scalar;
+use crate::shader::formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
 use std::rc::Rc;
+use crate::shader::code::{FunctionBody, ShaderCode};
 
 pub struct SdfIntersectionSmooth {
     left: Rc<dyn Sdf>,
@@ -52,7 +52,6 @@ mod tests {
     use crate::sdf::framework::dummy_sdf::tests::DummySdf;
     use crate::sdf::framework::n_ary_operations_utils::tests::test_binary_operator_descendants;
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
     use crate::sdf::framework::stack::Stack;
 
     #[test]

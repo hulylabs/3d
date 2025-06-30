@@ -1,21 +1,12 @@
 ﻿use derive_more::Display;
-use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Display, Ord, PartialOrd)]
 #[display("{}", _0)]
-pub(crate) struct FunctionName(pub String);
-
-impl From<&UniqueSdfClassName> for FunctionName {
-    #[must_use]
-    fn from(value: &UniqueSdfClassName) -> Self {
-        FunctionName(format!("sdf_{}", value))
-    }
-}
+pub struct FunctionName(pub String);
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use crate::sdf::framework::named_sdf::UniqueSdfClassName;
     use super::*;
 
     #[test]
@@ -26,13 +17,6 @@ mod tests {
         let actual_display = format!("{}", system_under_test);
         
         assert_eq!(actual_display, expected_display);
-    }
-
-    #[test]
-    fn test_from_unique_name() {
-        let name = "my_shape";
-        let system_under_test = FunctionName::from(&UniqueSdfClassName::new(name.to_string()));
-        assert_eq!(system_under_test.0, "sdf_my_shape");
     }
 
     #[test]

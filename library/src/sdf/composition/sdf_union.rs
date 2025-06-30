@@ -1,9 +1,9 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::sdf::framework::n_ary_operations_utils::produce_binary_operation_body;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
 use crate::sdf::framework::stack::Stack;
 use std::rc::Rc;
+use crate::shader::code::{FunctionBody, ShaderCode};
 
 pub struct SdfUnion {
     left: Rc<dyn Sdf>,

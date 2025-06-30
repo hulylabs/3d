@@ -12,6 +12,7 @@ mod tests {
     use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use std::fmt::Write;
+    use crate::sdf::framework::sdf_shader_code::sdf_conventions;
 
     #[test]
     fn test_sdf_selection_evaluation() {
@@ -27,18 +28,18 @@ mod tests {
         let sphere_index = warehouse.properties_for_name(sphere.name()).unwrap();
         let box_index = warehouse.properties_for_name(a_box.name()).unwrap();
 
-        let template = ShaderFunction::new("vec4f", "f32", "sdf_select")
+        let template = ShaderFunction::new("vec4f", "f32", sdf_conventions::FUNCTION_NAME_SELECTION)
             .with_additional_shader_code(warehouse.sdf_classes_code().to_string());
 
         let input_points = [
-            PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
-            PodVector { x:  - 3.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
-            PodVector { x:  -17.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
-            PodVector { x:  -19.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_f64() as f32, },
+            PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_i32() as f32, },
+            PodVector { x:  - 3.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_i32() as f32, },
+            PodVector { x:  -17.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_i32() as f32, },
+            PodVector { x:  -19.0 , y:  0.0 , z:  0.0 , w: sphere_index.as_i32() as f32, },
 
-            PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: box_index.as_f64() as f32, },
-            PodVector { x:    2.0 , y:  3.0 , z:  5.0 , w: box_index.as_f64() as f32, },
-            PodVector { x:    8.0 , y:  3.0 , z:  5.0 , w: box_index.as_f64() as f32, },
+            PodVector { x:    0.0 , y:  0.0 , z:  0.0 , w: box_index   .as_i32() as f32, },
+            PodVector { x:    2.0 , y:  3.0 , z:  5.0 , w: box_index   .as_i32() as f32, },
+            PodVector { x:    8.0 , y:  3.0 , z:  5.0 , w: box_index   .as_i32() as f32, },
         ];
 
         let expected_distances: Vec<f32> = vec![
@@ -52,7 +53,7 @@ mod tests {
               6.0,
         ];
 
-        let function_execution = make_executable(&template,create_argument_formatter!("{argument}.w, {argument}.xyz, 0.0"));
+        let function_execution = make_executable(&template,create_argument_formatter!("i32({argument}.w), {argument}.xyz, 0.0"));
 
         let actual_distances = execute_code(&input_points, function_execution, ExecutionConfig::default());
         

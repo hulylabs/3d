@@ -37,10 +37,10 @@ mod tests {
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::vertex::Vertex;
     use crate::objects::common_properties::Linkage;
-    use crate::objects::material_index::MaterialIndex;
     use crate::utils::object_uid::ObjectUid;
     use cgmath::EuclideanSpace;
     use rstest::rstest;
+    use crate::material::material_index::MaterialIndex;
 
     #[rstest]
     #[case(0.0)]

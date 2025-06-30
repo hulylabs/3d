@@ -93,8 +93,7 @@ pub(crate) mod tests {
     }
     
     #[derive(Serialize)]
-    pub(crate) struct ShaderFunction
-    {
+    pub(crate) struct ShaderFunction {
         input_type: String,
         output_type: String,
         function_name: String,

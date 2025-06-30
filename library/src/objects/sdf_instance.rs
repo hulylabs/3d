@@ -41,9 +41,9 @@ impl GpuSerializable for SdfInstance {
 
         container.write_quartet(|writer| {
             writer.write_float_64(self.ray_marching_step_scale);
-            writer.write_float_64(self.class.as_f64());
+            writer.write_signed(self.class.as_i32());
             writer.write_unsigned(self.links.material_index().0 as u32);
-            writer.write_unsigned(self.links.uid().0);
+            writer.write_unsigned(self.links.uid().0 as u32);
         });
 
         debug_assert!(container.object_fully_written());
@@ -104,13 +104,15 @@ mod tests {
         assert_eq!(&serialized[values_checked..values_checked + matrix_3x4_floats], &location_serialized[matrix_3x4_floats..(matrix_3x4_floats) * 2]);
         values_checked += matrix_3x4_floats;
 
-        assert_eq!(serialized[values_checked], expected_ray_marching_scale as f32);
+        let serialized: &[u32] = cast_slice(&container.backend());
+        
+        assert_eq!(serialized[values_checked], (expected_ray_marching_scale as f32).to_bits());
         values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_class.as_f64() as f32);
+        assert_eq!(serialized[values_checked], u32::from_ne_bytes(expected_class.as_i32().to_ne_bytes()));
         values_checked += 1;
-        assert_eq!(serialized[values_checked].to_bits(), expected_material_index.0 as u32);
+        assert_eq!(serialized[values_checked], expected_material_index.0 as u32);
         values_checked += 1;
-        assert_eq!(serialized[values_checked].to_bits(), expected_object_uid.0);
+        assert_eq!(serialized[values_checked], expected_object_uid.0 as u32);
         values_checked += 1;
         
         assert_eq!(values_checked, SdfInstance::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);

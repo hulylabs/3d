@@ -2,7 +2,7 @@
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
-use crate::sdf::framework::shader_code::{format_sdf_selection, format_sdf_selection_function_opening};
+use crate::sdf::framework::sdf_shader_code::{format_sdf_selection, format_sdf_selection_function_opening};
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -19,6 +19,7 @@ impl SdfWarehouse {
         let mut bounding_boxes: Vec<Aabb> = Vec::new();
         let mut overall_accumulated_code = String::new();
         let mut sdf_selection_uber_function = format_sdf_selection_function_opening();
+        writeln!(sdf_selection_uber_function, " {{").expect("failed to format brace open for sdf selection function");
         
         let code_generator = SdfCodeGenerator::new(sdf_classes);
         

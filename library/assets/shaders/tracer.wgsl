@@ -94,7 +94,7 @@ struct Material {
 	specular_strength: f32, // chance that a ray hitting would reflect specularly
 	roughness: f32, // diffuse strength
 	refractive_index_eta: f32, // refractive index
-	albedo_texture_index: i32, // > 0 - texture index, < 0 - procedural texture index, = 0 - none
+	albedo_texture_uid: i32, // > 0 - texture index (1-based), < 0 - procedural texture uid, = 0 - none
 	material_class: i32,
 }
 
@@ -124,7 +124,7 @@ struct Sdf {
     location : mat3x4f,
     inverse_location : mat3x4f,
     ray_marching_step_scale: f32,
-    class_index : f32,
+    class_index : i32,
     material_id : u32,
     object_uid : u32,
 }
@@ -139,12 +139,17 @@ struct BvhNode {
 	hit_miss_skip_link: i32,
 }
 
+struct HitPlace {
+    position: vec3f,
+    normal: vec3f,
+}
+
 struct HitRecord {
-	p: vec3f,
+	global: HitPlace,
+	local: HitPlace,
 	t: f32,
-	normal: vec3f,
-	front_face: bool,
 	material_id: u32,
+	front_face: bool,
 }
 
 struct FirstHitSurface {
@@ -169,13 +174,6 @@ fn rand_0_1() -> f32 {
 	randState = randState * 747796405u + 2891336453u;
 	var word: u32 = ((randState >> ((randState >> 28u) + 4u)) ^ randState) * 277803737u;
 	return f32((word >> 22u)^word) / 4294967295;
-}
-
-// random numbers from a normal distribution
-fn randNormalDist() -> f32 {
-	let theta = 2 * PI * rand_0_1();
-	let rho = sqrt(-2 * log(rand_0_1()));
-	return rho * cos(theta);
 }
 
 fn random_double(min : f32, max : f32) -> f32 {
@@ -253,20 +251,30 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
         if (local_t>local_t_max) {
             break;
         }
+
         let candidate = at(local_ray, local_t);
         let signed_distance = sample_sdf(sdf, candidate, time);
         let t_scaled = 0.0001 * local_t;
+
         if(abs(signed_distance) < t_scaled) {
-            hitRec.p = transform_point(sdf.location, candidate);
-            hitRec.t = length(hitRec.p - ray.origin);
-            hitRec.normal = normalize(transform_transposed_vector(sdf_location_inverse, signed_distance_normal(sdf, candidate, time)));
+            hitRec.t = length(hitRec.global.position - ray.origin);
+
+            hitRec.local.position = candidate;
+            hitRec.global.position = transform_point(sdf.location, candidate);
+
+            hitRec.local.normal = signed_distance_normal(sdf, candidate, time);
+            hitRec.global.normal = normalize(transform_transposed_vector(sdf_location_inverse, hitRec.local.normal));
+
             hitRec.front_face = sample_sdf(sdf, local_ray.origin, time) >= 0;
-            if(hitRec.front_face == false){
-                hitRec.normal = -hitRec.normal;
+            if(hitRec.front_face == false) {
+                hitRec.global.normal = -hitRec.global.normal;
+                hitRec.local.normal = -hitRec.local.normal;
             }
+
             hitRec.material_id = sdf.material_id;
             return true;
         }
+
         let step_size = max(abs(signed_distance) * sdf.ray_marching_step_scale, t_scaled);
         local_t += step_size;
         i = i + 1;
@@ -304,13 +312,15 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	}
 
 	hitRec.t = t;
-	hitRec.p = quad.Q + quad.v * beta + quad.u * alpha;
-	hitRec.normal = quad.normal;
+	hitRec.global.position = quad.Q + quad.v * beta + quad.u * alpha;
+	hitRec.local.position = hitRec.global.position;
+	hitRec.global.normal = quad.normal;
 	hitRec.front_face = denom < 0.0;
 	if(false == hitRec.front_face) {
-		hitRec.normal = -hitRec.normal;
+		hitRec.global.normal = -hitRec.global.normal;
 	}
 
+    hitRec.local.normal = hitRec.global.normal;
 	hitRec.material_id = quad.material_id;
 	return true;
 }
@@ -343,16 +353,16 @@ fn hit_triangle(triangle: Triangle, tmin: f32, tmax: f32, ray: Ray) -> bool {
 	}
 
 	hitRec.t = dst;
-	hitRec.p = triangle.A * w + triangle.B * u + triangle.C * v;
+	hitRec.global.position = triangle.A * w + triangle.B * u + triangle.C * v;
+	hitRec.local.position = hitRec.global.position;
 
-	hitRec.normal = triangle.normalA * w + triangle.normalB * u + triangle.normalC * v;
-	hitRec.normal = normalize(hitRec.normal);
-
-	hitRec.front_face = dot(ray.direction, hitRec.normal) < 0;
+	hitRec.global.normal = normalize(triangle.normalA * w + triangle.normalB * u + triangle.normalC * v);
+	hitRec.front_face = dot(ray.direction, hitRec.global.normal) < 0;
 	if(hitRec.front_face == false) {
-		hitRec.normal = -hitRec.normal;
+		hitRec.global.normal = -hitRec.global.normal;
 	}
 
+    hitRec.local.normal = hitRec.global.normal;
 	hitRec.material_id = triangle.material_id;
 
 	return true;
@@ -499,13 +509,15 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var hit_uid: u32 = 0;
     var hit_material_id: u32 = 0;
     var hit_normal: vec3f = vec3f(0.0f);
+    var hit_local: HitPlace = HitPlace(vec3f(0.0f), vec3f(0.0f));
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
         let parallelogram = quad_objs[i];
         if(hit_quad(parallelogram, RAY_PARAMETER_MIN, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
             hit_material_id = parallelogram.material_id;
-            hit_normal = hitRec.normal;
+            hit_normal = hitRec.global.normal;
+            hit_local = hitRec.local;
             closest_so_far = hitRec.t;
         }
     }
@@ -524,15 +536,17 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     if(hit_triangle(triangle, RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
                         hit_material_id = triangle.material_id;
-                        hit_normal = hitRec.normal;
+                        hit_normal = hitRec.global.normal;
+                        hit_local = hitRec.local;
                         closest_so_far = hitRec.t;
                     }
                 } else if (PRIMITIVE_TYPE_SDF == node.primitive_type) {
                     let sdf = sdf[node.primitive_index];
-                    if(hit_sdf(sdf, sdf_time[node.primitive_index], ray, aabb_hit.ray_parameter, closest_so_far)){
+                    if(hit_sdf(sdf, sdf_time[node.primitive_index], ray, aabb_hit.ray_parameter, closest_so_far)) {
                         hit_uid = sdf.object_uid;
                         hit_material_id = sdf.material_id;
-                        hit_normal = hitRec.normal;
+                        hit_normal = hitRec.global.normal;
+                        hit_local = hitRec.local;
                         closest_so_far = hitRec.t;
                     }
                 }
@@ -545,7 +559,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
 
     var hit_albedo: vec3f;
     if (0 < hit_uid) {
-        hit_albedo = materials[hit_material_id].albedo;
+        hit_albedo = fetch_albedo(hit_local, materials[hit_material_id]);
     } else {
         hit_albedo = vec3f(0.0);
     }
@@ -564,6 +578,15 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 	let direction = normalize(pixel_world_space.xyz - ray_origin_world_space);
 
 	return Ray(ray_origin_world_space, direction);
+}
+
+@must_use
+fn fetch_albedo(hit: HitPlace, material: Material) -> vec3f {
+    var result = material.albedo;
+    if (material.albedo_texture_uid < 0) {
+        result *= procedural_texture_select(-material.albedo_texture_uid, hit.position, hit.normal, 0.0);
+    }
+    return result;
 }
 
 fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
@@ -622,6 +645,7 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 			break;
 		}
 
+        let albedo_color = fetch_albedo(hitRec.local, hitMaterial);
 		var emission_color = hitMaterial.emission;
 		if(!hitRec.front_face) {
 			emission_color = vec3f(0.0);
@@ -632,7 +656,7 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 
 			if(scatterRec.skip_pdf) {
 				accumulated_radiance += emission_color * throughput;
-				throughput *= mix(hitMaterial.albedo, hitMaterial.specular, doSpecular);
+				throughput *= mix(albedo_color, hitMaterial.specular, doSpecular);
 
 				current_ray = scatterRec.skip_pdf_ray;
 				current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
@@ -644,7 +668,7 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 			if(rand_0_1() > LIGHT_SAMPLING_PROBABILITY) {
 				scattered = scatterred_surface;
 			} else {
-			    scattered = get_random_on_quad(lights, hitRec.p);
+			    scattered = get_random_on_quad(lights, hitRec.global.position);
 			}
 
 			let lambertian_pdf = onb_lambertian_scattering_pdf(scattered);
@@ -656,14 +680,14 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 			}
 
 			accumulated_radiance += emission_color * throughput;
-			throughput *= ((lambertian_pdf * mix(hitMaterial.albedo, hitMaterial.specular, doSpecular)) / pdf);
+			throughput *= ((lambertian_pdf * mix(albedo_color, hitMaterial.specular, doSpecular)) / pdf);
 			current_ray = scattered;
 			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
 		} else {
 			let scattered = material_scatter(current_ray);
 
 			accumulated_radiance += emission_color * throughput;
-			throughput *= mix(hitMaterial.albedo, hitMaterial.specular, doSpecular);
+			throughput *= mix(albedo_color, hitMaterial.specular, doSpecular);
 
 			current_ray = scattered;
 			current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
@@ -689,18 +713,18 @@ fn material_scatter(ray_in : Ray) -> Ray {
 	doSpecular = 0;
 	if(MATERIAL_LAMBERTIAN == hitMaterial.material_class) {
 
-		let uvw = onb_build_from_w(hitRec.normal);
+		let uvw = onb_build_from_w(hitRec.global.normal);
 		var diffuse_dir = cosine_sampling_wrt_Z();
 		diffuse_dir = normalize(onb_get_local(diffuse_dir));
 
-		scattered = Ray(hitRec.p, diffuse_dir);
+		scattered = Ray(hitRec.global.position, diffuse_dir);
 
 		doSpecular = select(0.0, 1.0, rand_0_1() < hitMaterial.specular_strength);
 
-		var specular_dir = reflect(ray_in.direction, hitRec.normal);
+		var specular_dir = reflect(ray_in.direction, hitRec.global.normal);
 		specular_dir = normalize(mix(specular_dir, diffuse_dir, hitMaterial.roughness));
 
-		scattered = Ray(hitRec.p, normalize(mix(diffuse_dir, specular_dir, doSpecular)));
+		scattered = Ray(hitRec.global.position, normalize(mix(diffuse_dir, specular_dir, doSpecular)));
 
 		scatterRec.skip_pdf = false;
 
@@ -710,8 +734,8 @@ fn material_scatter(ray_in : Ray) -> Ray {
 		}
 	}
 	else if(MATERIAL_MIRROR == hitMaterial.material_class) {
-		var reflected = reflect(ray_in.direction, hitRec.normal);
-		scattered = Ray(hitRec.p, normalize(reflected + hitMaterial.roughness * uniform_random_in_unit_sphere()));
+		var reflected = reflect(ray_in.direction, hitRec.global.normal);
+		scattered = Ray(hitRec.global.position, normalize(reflected + hitMaterial.roughness * uniform_random_in_unit_sphere()));
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
@@ -732,7 +756,7 @@ fn material_scatter(ray_in : Ray) -> Ray {
 		let hg_dir = vec3f(sin_hg * cos(phi), sin_hg * sin(phi), cos_hg);
 
 		let uvw = onb_build_from_w(ray_in.direction);
-		scattered = Ray(hitRec.p, normalize(onb_get_local(hg_dir)));
+		scattered = Ray(hitRec.global.position, normalize(onb_get_local(hg_dir)));
 
 		scatterRec.skip_pdf = true;
 		scatterRec.skip_pdf_ray = scattered;
@@ -749,29 +773,29 @@ fn glass_scatter(hit: HitRecord, refractive_index_eta: f32, in_ray_direction: ve
     }
 
     let unit_direction = in_ray_direction;
-    let cos_theta = min(-dot(unit_direction, hit.normal), 1.0);
+    let cos_theta = min(-dot(unit_direction, hit.global.normal), 1.0);
     let sin_theta = sqrt(1 - cos_theta*cos_theta);
 
     var direction = vec3f(0.0);
     if(ir * sin_theta > 1.0) {
-        direction = reflect(unit_direction, hit.normal);
+        direction = reflect(unit_direction, hit.global.normal);
     } else {
         if (stochastic) {
             if (reflectance(cos_theta, ir) > rand_0_1()) {
-                direction = reflect(unit_direction, hit.normal);
+                direction = reflect(unit_direction, hitRec.global.normal);
             } else {
-                direction = refract(unit_direction, hit.normal, ir);
+                direction = refract(unit_direction, hitRec.global.normal, ir);
             }
         } else {
-            direction = refract(unit_direction, hit.normal, ir);
+            direction = refract(unit_direction, hitRec.global.normal, ir);
         }
     }
 
     if(near_zero(direction)) {
-        direction = hit.normal;
+        direction = hitRec.global.normal;
     }
 
-    return Ray(hit.p, direction);
+    return Ray(hitRec.global.position, direction);
 }
 
 fn reflectance(cosine : f32, ref_idx : f32) -> f32 {
@@ -798,12 +822,12 @@ fn random_in_unit_disk() -> vec3f {
 
 fn uniform_sampling_hemisphere() -> vec3f {
     let on_unit_sphere = uniform_random_in_unit_sphere();
-	let sign_dot = select(1.0, 0.0, dot(on_unit_sphere, hitRec.normal) > 0.0);
+	let sign_dot = select(1.0, 0.0, dot(on_unit_sphere, hitRec.global.normal) > 0.0);
     return normalize(mix(on_unit_sphere, -on_unit_sphere, sign_dot));
 }
 
 fn cosine_sampling_hemisphere() -> vec3f {
-	return uniform_random_in_unit_sphere() + hitRec.normal;
+	return uniform_random_in_unit_sphere() + hitRec.global.normal;
 }
 
 // generates a random direction weighted by PDF = cos_theta / PI relative to z axis
@@ -820,7 +844,7 @@ fn cosine_sampling_wrt_Z() -> vec3f {
 }
 
 fn lambertian_scattering_pdf(scattered : Ray) -> f32 {
-	let cos_theta = max(0.0, dot(hitRec.normal, scattered.direction));
+	let cos_theta = max(0.0, dot(hitRec.global.normal, scattered.direction));
 	return cos_theta / PI;
 }
 
@@ -1015,23 +1039,24 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
         }
 
         let hit_material = hitMaterial;
+        let hit_albedo = fetch_albedo(hitRec.local, hit_material);
 
         if (MATERIAL_LAMBERTIAN == hit_material.material_class) {
-            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec, hit_material);
+            accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec, hit_material, hit_albedo);
             break;
         }
 
         if (MATERIAL_MIRROR == hit_material.material_class) {
-            let reflected = evaluate_reflection(current_ray.direction, hitRec.normal, hitRec.p, hit_material.roughness);
-            current_ray = Ray(hitRec.p + reflected * SECONDARY_RAY_START_BIAS, reflected);
-            throughput *= hit_material.albedo;
+            let reflected = evaluate_reflection(current_ray.direction, hitRec.global.normal, hitRec.global.position, hit_material.roughness);
+            current_ray = Ray(hitRec.global.position + reflected * SECONDARY_RAY_START_BIAS, reflected);
+            throughput *= hit_albedo;
         } else if (MATERIAL_GLASS == hit_material.material_class) {
             let stochastic = false;
             current_ray = glass_scatter(hitRec, hit_material.refractive_index_eta, current_ray.direction, stochastic);
             current_ray.origin += current_ray.direction * SECONDARY_RAY_START_BIAS;
-            throughput *= hit_material.albedo;
+            throughput *= hit_albedo;
         } else {
-            accumulated_radiance += hit_material.albedo;
+            accumulated_radiance += hit_albedo;
             break;
         }
     }
@@ -1040,27 +1065,27 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 }
 
 @must_use
-fn evaluate_dielectric_surface_color(hit: HitRecord, hit_material: Material) -> vec3f {
+fn evaluate_dielectric_surface_color(hit: HitRecord, hit_material: Material, hit_albedo: vec3f) -> vec3f {
     let light_center = lights.Q + (lights.u + lights.v) * 0.5;
-    let to_light = light_center - hit.p;
+    let to_light = light_center - hitRec.global.position;
     let to_light_distance = length(to_light);
     let to_light_direction = select(to_light / to_light_distance, vec3f(0.0), MIN_FLOAT > to_light_distance);
     let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
 
-    let diffuse_fall_off = max(0.0, dot(hit.normal, to_light_direction));
-    let to_camera_direction = normalize(cam_origin - hit.p);
-    let reflected_light = reflect(-to_light_direction, hit.normal);
+    let diffuse_fall_off = max(0.0, dot(hitRec.global.normal, to_light_direction));
+    let to_camera_direction = normalize(cam_origin - hitRec.global.position);
+    let reflected_light = reflect(-to_light_direction, hitRec.global.normal);
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-    //let shadow = evaluate_soft_shadow(hit.p, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
-    let shadow = evaluate_hard_shadow(hit.p, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    //let shadow = evaluate_soft_shadow(hitRec.global.position, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    let shadow = evaluate_hard_shadow(hitRec.global.position, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
     let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
-    let occlusion = approximate_ambient_occlusion(hit.p, hit.normal);
+    let occlusion = approximate_ambient_occlusion(hitRec.global.position, hitRec.global.normal);
 
-    let diffuse = diffuse_fall_off * hit_material.albedo * occlusion;
+    let diffuse = diffuse_fall_off * hit_albedo * occlusion;
     let specular = specular_fall_off * hit_material.specular;
-    let ambient = BACKGROUND_COLOR * hit_material.albedo * occlusion;
+    let ambient = BACKGROUND_COLOR * hit_albedo * occlusion;
     let emissive = hit_material.emission;
 
     let light_color = materials[lights.material_id].emission;

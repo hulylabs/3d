@@ -1,6 +1,6 @@
-﻿use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_variable_name::ShaderVariableName;
+﻿use crate::shader::variable_name::VariableName;
 use crate::sdf::framework::stack::Stack;
+use crate::shader::code::{FunctionBody, ShaderCode};
 
 #[must_use]
 pub fn produce_binary_operation_body<Operation, Preparation>(
@@ -10,15 +10,15 @@ pub fn produce_binary_operation_body<Operation, Preparation>(
     operation: Operation,
 ) -> ShaderCode<FunctionBody>
 where
-    Operation: FnOnce(&ShaderVariableName, &ShaderVariableName) -> String,
-    Preparation: FnOnce(&ShaderVariableName, &ShaderVariableName) -> String,
+    Operation: FnOnce(&VariableName, &VariableName) -> String,
+    Preparation: FnOnce(&VariableName, &VariableName) -> String,
 {
     assert!(children_bodies.size() >= 2);
 
-    let right_name = ShaderVariableName::new("right", level);
+    let right_name = VariableName::new("right", level);
     let right_sdf = children_bodies.pop().to_scalar_declaration_assignment(&right_name);
 
-    let left_name = ShaderVariableName::new("left", level);
+    let left_name = VariableName::new("left", level);
     let left_sdf = children_bodies.pop().to_scalar_declaration_assignment(&left_name);
 
     ShaderCode::<FunctionBody>::new(format!(
@@ -45,7 +45,7 @@ where
 {
     assert!(children_bodies.size() >= 1);
 
-    let child_name = ShaderVariableName::new("operand", level);
+    let child_name = VariableName::new("operand", level);
     let child_assignment = children_bodies.pop().to_scalar_assignment(&child_name);
 
     ShaderCode::<FunctionBody>::new(format!(
@@ -85,9 +85,9 @@ pub(crate) mod tests {
     use std::rc::Rc;
     use crate::sdf::framework::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
     use crate::sdf::framework::stack::Stack;
-    
+    use crate::shader::code::{FunctionBody, ShaderCode};
+
     pub(crate) fn test_unary_operator_descendants(constructor: impl FnOnce(Rc<dyn Sdf>) -> Rc<dyn Sdf>) {
         let child: Rc<dyn Sdf> = make_dummy_sdf();
         let system_under_test = constructor(child.clone());

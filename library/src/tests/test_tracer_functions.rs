@@ -33,7 +33,8 @@ mod tests {
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
-    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(value: f32, vector: vec3f, time: f32) -> f32 { return 0.0; }";
+    const DUMMY_SDF_SELECTION_CODE: &str = "fn sdf_select(index: i32, point: vec3f, time: f32) -> f32 { return 0.0; }";
+    const DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE: &str = "fn procedural_texture_select(index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f { return vec3f(0.0); }";
     
     #[repr(C)]
     #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -63,6 +64,7 @@ mod tests {
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_SDF_SELECTION_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(
                 "fn inside_aabb_t(data: AabbAndPoint) -> f32 \
                 { if (inside_aabb(data.aabb_min, data.aabb_max, data.point)) { return 1.0; } else { return 0.0; } }"
@@ -130,6 +132,7 @@ mod tests {
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_SDF_SELECTION_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(
                 r#"fn hit_aabb_t(data: AabbAndRay) -> vec4f 
                 { let result = hit_aabb(data.box_min, data.box_max, data.tmin, data.tmax, data.ray_origin, data.ray_direction_inverted);
@@ -194,6 +197,7 @@ mod tests {
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_SDF_SELECTION_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(
                 r#"fn hit_triangle_t(triangle: Triangle, ray: Ray) -> vec4f 
                 { if (hit_triangle(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.p, 1.0); } return vec4f(0.0); }"#
@@ -265,6 +269,7 @@ mod tests {
             )
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(shader_code);
 
         let function_execution = make_executable(&template,
@@ -328,6 +333,7 @@ mod tests {
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_SDF_SELECTION_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(
             r#"fn evaluate_reflection_t(incident: vec3f, normal: vec3f) -> vec4f 
                 { return vec4f(evaluate_reflection(incident, normal, vec3f(0.0), 0.0), 0.0); }"#
@@ -368,6 +374,7 @@ mod tests {
             .with_position_and_direction_type()
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(shader_code);
 
         let function_execution = make_executable(&template, 

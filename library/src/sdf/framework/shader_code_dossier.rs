@@ -1,6 +1,6 @@
 ﻿use std::rc::Rc;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_function_name::FunctionName;
+use crate::shader::function_name::FunctionName;
 
 pub(crate) struct ShaderCodeDossier {
     name: FunctionName,
@@ -48,7 +48,6 @@ impl ShaderCodeDossier {
 mod tests {
     use super::*;
     use crate::sdf::framework::dummy_sdf::tests::make_dummy_sdf;
-    use crate::sdf::framework::shader_function_name::FunctionName;
 
     #[test]
     fn test_disjoint_set() {

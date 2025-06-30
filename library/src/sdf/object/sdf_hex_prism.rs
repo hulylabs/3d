@@ -1,11 +1,12 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::alias::Point;
+use crate::sdf::framework::sdf_base::Sdf;
+use crate::shader::formatting_utils::format_scalar;
+use crate::sdf::framework::stack::Stack;
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::conventions;
 use cgmath::{Angle, Deg};
 use std::rc::Rc;
-use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_formatting_utils::format_scalar;
-use crate::sdf::framework::stack::Stack;
 
 pub struct SdfHexPrism {
     width: f64,
@@ -61,8 +62,8 @@ impl Sdf for SdfHexPrism {
 
 #[cfg(test)]
 mod tests {
-    use crate::sdf::framework::stack::Stack;
     use super::*;
+    use crate::sdf::framework::stack::Stack;
 
     #[test]
     fn test_children() {

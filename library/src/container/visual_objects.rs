@@ -2,7 +2,7 @@
 use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::container::bvh_proxies::{proxy_of_sdf, SceneObjects};
-use crate::container::materials_warehouse::MaterialsWarehouse;
+use crate::material::materials_warehouse::MaterialsWarehouse;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::container::monolithic::Monolithic;
 use crate::container::scene_object::SceneObject;
@@ -33,6 +33,7 @@ use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 use crate::geometry::utils::is_affine;
 use crate::material::material_index::MaterialIndex;
+use crate::material::procedural_textures::ProceduralTextures;
 
 pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
@@ -54,15 +55,15 @@ pub(crate) enum DataKind {
 
 impl VisualObjects {
     #[must_use]
-    pub fn new(sdf_classes: SdfRegistrator) -> Self {
+    pub fn new(sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
         let per_object_kind_statistics: Vec<Statistics> = vec![Statistics::default(); DataKind::COUNT];
 
         Self {
             per_object_kind_statistics,
             objects: HashMap::new(),
             triangles: Vec::new(),
-            materials: MaterialsWarehouse::new(),
-            sdf_prototypes: SdfWarehouse::new(sdf_classes),
+            materials: MaterialsWarehouse::new(procedural_textures.unwrap_or(ProceduralTextures::new(None))),
+            sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or(SdfRegistrator::default())),
             uid_generator: UidGenerator::new(),
         }
     }
@@ -96,8 +97,10 @@ impl VisualObjects {
     }
 
     #[must_use]
-    pub(crate) fn append_sdf_handling_code(&self, base_code: &str) -> String {
-        format!("{}\n{}", base_code, self.sdf_prototypes.sdf_classes_code())
+    pub(crate) fn compose_shader(&self, base_code: &str) -> String {
+        let sdf_classes_code = self.sdf_prototypes.sdf_classes_code();
+        let procedural_textures_code = self.materials.procedural_textures_code();
+        format!("{}\n{}\n{}", base_code, sdf_classes_code, procedural_textures_code)
     }
 
     #[must_use]
@@ -370,7 +373,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(sdf_classes)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(Some(sdf_classes), None)));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
@@ -408,7 +411,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = VisualObjects::new(sdf_classes);
+        let mut system_under_test = VisualObjects::new(Some(sdf_classes), None);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -570,7 +573,7 @@ mod tests {
         assert_eq!(fixture.container.count_of_a_kind(DataKind::Parallelogram), 1);
         assert_eq!(fixture.container.count_of_a_kind(DataKind::TriangleMesh), 1);
         
-        // check if expected objects are kept: there will be a panic, if we try to get material of an absent object 
+        // check if expected objects are kept: there will be a panic if we try to get material of an absent object 
         assert_eq!(fixture.container.material_of(fixture.parallelogram), fixture.dummy_material);
         assert_eq!(fixture.container.material_of(sdf_to_be_kept), fixture.dummy_material);
         assert_eq!(fixture.container.material_of(fixture.mesh), fixture.dummy_material);
@@ -622,7 +625,7 @@ mod tests {
 
     #[must_use]
     fn make_empty_container() -> VisualObjects {
-        VisualObjects::new(SdfRegistrator::default())
+        VisualObjects::new(None, None)
     }
 
     struct FilledContainerFixture {
@@ -637,7 +640,7 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = VisualObjects::new(sdf_classes);
+        let mut container = VisualObjects::new(Some(sdf_classes), None);
 
         let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();

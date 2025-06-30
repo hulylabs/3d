@@ -5,8 +5,8 @@ pub(crate) struct SdfClassIndex(pub usize);
 
 impl SdfClassIndex {
     #[must_use]
-    pub const fn as_f64(self) -> f64 {
-        self.0 as f64
+    pub const fn as_i32(self) -> i32 {
+        self.0 as i32
     }
 }
 

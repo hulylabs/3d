@@ -1,11 +1,12 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::alias::Vector;
-use std::rc::Rc;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_formatting_utils::format_vector;
+use crate::shader::formatting_utils::format_vector;
 use crate::sdf::framework::stack::Stack;
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::conventions;
+use std::rc::Rc;
 
 pub struct SdfTranslation {
     translation: Vector,
@@ -23,9 +24,9 @@ impl Sdf for SdfTranslation {
     #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         produce_parameter_transform_body(children_bodies, level, || 
-            format!("let {parameter} = {parameter}-{center};", 
-                parameter = conventions::PARAMETER_NAME_THE_POINT, 
-                center = format_vector(self.translation)
+            format!("let {parameter} = {parameter}-{center};",
+                    parameter = conventions::PARAMETER_NAME_THE_POINT,
+                    center = format_vector(self.translation)
             )
         )
     }
@@ -44,8 +45,8 @@ impl Sdf for SdfTranslation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Zero;
     use crate::sdf::framework::n_ary_operations_utils::tests::{test_unary_operator_body_production, test_unary_operator_descendants};
+    use cgmath::Zero;
 
     #[test]
     fn test_children() {

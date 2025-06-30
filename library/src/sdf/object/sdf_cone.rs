@@ -1,12 +1,13 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::geometry::alias::Point;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_formatting_utils::{format_scalar, ShaderReadyFloat};
+use crate::shader::formatting_utils::{format_scalar, ShaderReadyFloat};
 use crate::sdf::framework::stack::Stack;
+use crate::shader::code::{FunctionBody, ShaderCode};
 use cgmath::{Angle, Rad};
 use std::f64::consts::FRAC_PI_2;
 use std::rc::Rc;
+use crate::shader::conventions;
 
 pub struct SdfCone {
     angle_tan: f64,

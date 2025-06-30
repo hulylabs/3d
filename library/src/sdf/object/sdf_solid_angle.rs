@@ -1,12 +1,13 @@
 ﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::alias::Point;
+use crate::sdf::framework::sdf_base::Sdf;
+use crate::shader::formatting_utils::format_scalar;
+use crate::sdf::framework::stack::Stack;
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::conventions;
 use cgmath::Rad;
 use std::f64::consts::FRAC_PI_2;
 use std::rc::Rc;
-use crate::geometry::alias::Point;
-use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
-use crate::sdf::framework::shader_formatting_utils::format_scalar;
-use crate::sdf::framework::stack::Stack;
 
 pub struct SdfSolidAngle {
     angle_sin: f64,
@@ -66,8 +67,8 @@ impl Sdf for SdfSolidAngle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cgmath::Deg;
     use crate::sdf::framework::stack::Stack;
+    use cgmath::Deg;
 
     #[test]
     fn test_children() {

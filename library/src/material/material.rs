@@ -88,8 +88,8 @@ impl MaterialProperties {
     pub fn with_class(mut self, class: MaterialClass) -> Self {
         self.class = class;
         self
-    }    
-    
+    }
+
     pub fn with_albedo_texture(mut self, reference: TextureReference) -> Self {
         self.albedo_texture = reference;
         self
@@ -153,6 +153,7 @@ mod tests {
     use crate::serialization::gpu_ready_serialization_buffer::DEFAULT_PAD_VALUE;
     use bytemuck::cast_slice;
     use strum::IntoEnumIterator;
+    use crate::material::procedural_texture_index::ProceduralTextureUid;
 
     #[test]
     fn test_serialize_into() {
@@ -163,7 +164,8 @@ mod tests {
         let expected_roughness = 0.7;
         let expected_refractive_index = 1.5;
         let expected_class = MaterialClass::Glass;
-
+        let expected_texture_reference = TextureReference::Procedural(ProceduralTextureUid(13));
+        
         let system_under_test = MaterialProperties::new()
             .with_albedo(expected_albedo.red, expected_albedo.green, expected_albedo.blue)
             .with_specular(expected_specular.red, expected_specular.green, expected_specular.blue)
@@ -171,32 +173,33 @@ mod tests {
             .with_specular_strength(expected_specular_strength)
             .with_roughness(expected_roughness)
             .with_refractive_index_eta(expected_refractive_index)
+            .with_albedo_texture(expected_texture_reference)
             .with_class(expected_class);
 
         let mut container = GpuReadySerializationBuffer::new(1, MaterialProperties::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
 
-        let serialized: &[f32] = cast_slice(&container.backend());
+        let serialized: &[u32] = cast_slice(&container.backend());
 
-        assert_eq!(serialized[ 0], expected_albedo.red);
-        assert_eq!(serialized[ 1], expected_albedo.green);
-        assert_eq!(serialized[ 2], expected_albedo.blue);
-        assert_eq!(serialized[ 3], DEFAULT_PAD_VALUE);
+        assert_eq!(f32::from_bits(serialized[ 0]), expected_albedo.red);
+        assert_eq!(f32::from_bits(serialized[ 1]), expected_albedo.green);
+        assert_eq!(f32::from_bits(serialized[ 2]), expected_albedo.blue);
+        assert_eq!(f32::from_bits(serialized[ 3]), DEFAULT_PAD_VALUE);
 
-        assert_eq!(serialized[ 4], expected_specular.red);
-        assert_eq!(serialized[ 5], expected_specular.green);
-        assert_eq!(serialized[ 6], expected_specular.blue);
-        assert_eq!(serialized[ 7], DEFAULT_PAD_VALUE);
+        assert_eq!(f32::from_bits(serialized[ 4]), expected_specular.red);
+        assert_eq!(f32::from_bits(serialized[ 5]), expected_specular.green);
+        assert_eq!(f32::from_bits(serialized[ 6]), expected_specular.blue);
+        assert_eq!(f32::from_bits(serialized[ 7]), DEFAULT_PAD_VALUE);
 
-        assert_eq!(serialized[ 8],  expected_emission.red);
-        assert_eq!(serialized[ 9],  expected_emission.green);
-        assert_eq!(serialized[10], expected_emission.blue);
-        assert_eq!(serialized[11], expected_specular_strength as f32);
+        assert_eq!(f32::from_bits(serialized[ 8]),  expected_emission.red);
+        assert_eq!(f32::from_bits(serialized[ 9]),  expected_emission.green);
+        assert_eq!(f32::from_bits(serialized[10]), expected_emission.blue);
+        assert_eq!(f32::from_bits(serialized[11]), expected_specular_strength as f32);
 
-        assert_eq!(serialized[12], expected_roughness as f32);
-        assert_eq!(serialized[13], expected_refractive_index as f32);
-        assert_eq!(serialized[14], expected_class.as_i32() as f32);
-        assert_eq!(serialized[15], DEFAULT_PAD_VALUE);
+        assert_eq!(f32::from_bits(serialized[12]), expected_roughness as f32);
+        assert_eq!(f32::from_bits(serialized[13]), expected_refractive_index as f32);
+        assert_eq!(i32::from_ne_bytes(serialized[14].to_ne_bytes()), expected_texture_reference.as_gpu_readable_index());
+        assert_eq!(i32::from_ne_bytes(serialized[15].to_ne_bytes()), expected_class.as_i32());
     }
 
     #[test]

@@ -18,6 +18,8 @@ mod gpu;
 mod tests;
 pub mod animation;
 pub mod material;
+pub mod shader;
+pub mod palette;
 
 use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;

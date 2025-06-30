@@ -1,12 +1,13 @@
 ﻿use crate::sdf::framework::dfs;
 use crate::sdf::framework::function_body_dossier::FunctionBodyDossier;
 use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
-use crate::sdf::framework::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
 use crate::sdf::framework::shader_code_dossier::ShaderCodeDossier;
-use crate::sdf::framework::shader_function_name::FunctionName;
 use crate::sdf::framework::stack::Stack;
 use crate::utils::uid_generator::UidGenerator;
 use std::collections::HashMap;
+use crate::sdf::framework::sdf_shader_code::{format_sdf_declaration, format_sdf_invocation};
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::function_name::FunctionName;
 
 pub struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
@@ -134,8 +135,7 @@ mod tests {
     use crate::sdf::composition::sdf_union::SdfUnion;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_code::format_sdf_declaration;
-    use crate::sdf::framework::shader_function_name::FunctionName;
+    use crate::sdf::framework::sdf_shader_code::format_sdf_declaration;
     use crate::sdf::framework::stack::Stack;
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::sdf::object::sdf_sphere::SdfSphere;

@@ -44,7 +44,7 @@ mod tests {
     use crate::sdf::framework::dummy_sdf::tests::make_dummy_sdf;
     use crate::sdf::framework::sdf_base::Sdf;
     use crate::sdf::framework::shader_code_dossier::ShaderCodeDossier;
-    use crate::sdf::framework::shader_function_name::FunctionName;
+    use crate::shader::function_name::FunctionName;
 
     #[test]
     fn test_get_equality_root() {

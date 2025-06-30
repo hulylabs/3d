@@ -313,8 +313,8 @@ pub(crate) mod tests {
     use cgmath::{Zero, assert_abs_diff_eq};
     use strum::EnumCount;
     use crate::container::bvh_proxies::proxy_of_triangle;
+    use crate::material::material_index::MaterialIndex;
     use crate::objects::common_properties::{Linkage, ObjectUid};
-    use crate::objects::material_index::MaterialIndex;
     use crate::objects::triangle::Triangle;
 
     #[must_use]

@@ -1,5 +1,5 @@
 ﻿use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulWorld};
-use crate::tech_world::{Materials, SdfClasses, TechWorld};
+use crate::tech_world::{TechMaterials, TechSdfClasses, TechTextures, TechWorld};
 use cgmath::Deg;
 use library::geometry::alias::Point;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
@@ -17,6 +17,7 @@ use winit::window::Window;
 use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, Periodization, TimeDirection, WrapKind};
 use library::container::visual_objects::VisualObjects;
 use library::material::material_index::MaterialIndex;
+use library::material::procedural_textures::ProceduralTextures;
 use library::sdf::framework::code_generator::SdfRegistrator;
 
 #[must_use]
@@ -230,11 +231,15 @@ impl Sandbox {
         let camera = make_default_camera();
         
         let mut sdf_registrator = SdfRegistrator::default();
-        let tech_sdf_classes = SdfClasses::new(&mut sdf_registrator);
+        let mut procedural_textures_registrator = ProceduralTextures::default();
+        
+        let tech_sdf_classes = TechSdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);
         
-        let mut scene = VisualObjects::new(sdf_registrator);
-        let tech_materials = Materials::new(&mut scene);
+        let tech_textures = TechTextures::new(&mut procedural_textures_registrator);
+        
+        let mut scene = VisualObjects::new(Some(sdf_registrator), Some(procedural_textures_registrator));
+        let tech_materials = TechMaterials::new(&mut scene, tech_textures);
         let beautiful_materials = BeautifulMaterials::new(&mut scene);
         
         let mut tech_world = TechWorld::new(tech_sdf_classes, tech_materials);

@@ -105,7 +105,7 @@ impl Renderer {
         let pipelines_factory = PipelinesFactory::new(context.clone(), frame_buffer_settings.presentation_format, caches_path);
         let mut gpu = Gpu { context, resources, buffers, pipelines_factory };
 
-        let shader_source_text = scene.container().append_sdf_handling_code(WHOLE_TRACER_GPU_CODE);
+        let shader_source_text = scene.container().compose_shader(WHOLE_TRACER_GPU_CODE);
         let shader_source_hash = seahash::hash(shader_source_text.as_bytes());
 
         let shader_module = gpu.resources.create_shader_module("ray tracer shader", shader_source_text.as_str());
@@ -763,7 +763,7 @@ mod tests {
     #[case(RenderStrategyId::Deterministic)]
     fn test_empty_scene_rendering(#[case] strategy: RenderStrategyId) {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
-        let scene = VisualObjects::new(SdfRegistrator::default());
+        let scene = VisualObjects::new(None, None);
         let context = create_headless_wgpu_context();
 
         const ANTIALIASING_LEVEL: u32 = 1;
@@ -786,7 +786,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = VisualObjects::new(SdfRegistrator::default());
+        let mut scene = VisualObjects::new(None, None);
         let test_material = scene.materials_mutable().add(&MaterialProperties::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(
@@ -819,7 +819,7 @@ mod tests {
         let test_box_name = UniqueSdfClassName::new("specimen".to_string());
         registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));
         
-        let mut scene = VisualObjects::new(registrator);
+        let mut scene = VisualObjects::new(Some(registrator), None);
         let test_material = MaterialProperties::new()
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);

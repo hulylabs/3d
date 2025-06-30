@@ -1,5 +1,5 @@
 ﻿use crate::geometry::axis::Axis;
-use crate::sdf::framework::shader_code::conventions;
+use crate::shader::conventions;
 
 pub struct Swizzle {
     rotated_pair: &'static str,

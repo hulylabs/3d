@@ -7,7 +7,8 @@ mod tests {
     use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_function_name::FunctionName;
+    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
+    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::sdf::object::sdf_box_frame::SdfBoxFrame;
     use crate::sdf::object::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
@@ -28,6 +29,7 @@ mod tests {
     use crate::sdf::object::sdf_vesica_segment::SdfVesicaSegment;
     use crate::sdf::transformation::sdf_translation::SdfTranslation;
     use crate::serialization::pod_vector::PodVector;
+    use crate::shader::function_name::FunctionName;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::sdf_sample_cases::tests::SdfSampleCases;
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
@@ -35,11 +37,9 @@ mod tests {
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use cgmath::{Deg, InnerSpace};
     use more_asserts::{assert_ge, assert_gt};
+    use rstest::rstest;
     use std::fmt::Write;
     use std::rc::Rc;
-    use rstest::rstest;
-    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
-    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
 
     #[test]
     fn test_sdf_union_spheres() {

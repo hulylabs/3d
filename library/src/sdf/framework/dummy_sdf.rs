@@ -3,8 +3,8 @@ pub(crate) mod tests {
     use std::rc::Rc;
     use crate::geometry::aabb::Aabb;
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_code::{FunctionBody, ShaderCode};
     use crate::sdf::framework::stack::Stack;
+    use crate::shader::code::{FunctionBody, ShaderCode};
 
     pub(crate) struct DummySdf {
         payload: String,

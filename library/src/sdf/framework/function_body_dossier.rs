@@ -1,11 +1,12 @@
 ﻿use crate::sdf::framework::equality_sets::EqualitySets;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{format_sdf_declaration, format_sdf_invocation, FunctionBody, ShaderCode};
 use crate::sdf::framework::shader_code_dossier::ShaderCodeDossier;
-use crate::sdf::framework::shader_function_name::FunctionName;
 use crate::sdf::framework::stack::Stack;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
+use crate::sdf::framework::sdf_shader_code::{format_sdf_declaration, format_sdf_invocation};
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::function_name::FunctionName;
 
 pub(crate) struct FunctionBodyDossier {
     dossier_of_body: HashMap<ShaderCode<FunctionBody>, ShaderCodeDossier>,
@@ -74,7 +75,7 @@ impl FunctionBodyDossier {
     code). The task is: given a node from the SDF tree, we need to get the code of its children. 
     We've already generated that code (since we're going bottom-up). But the issue is that this 
     code might have been generated for a physically different object, even if it's identical to any
-    of the child. To find that other object, we use a disjoint set under the hood of the 
+    of the children. To find that other object, we use disjoint set under the hood of the 
     EqualitySets object.
     */
         
@@ -106,9 +107,8 @@ mod tests {
     use super::*;
     use crate::sdf::framework::dummy_sdf::tests::{make_dummy_sdf, DummySdf};
     use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
     use crate::sdf::framework::shader_code_dossier::ShaderCodeDossier;
-    use crate::sdf::framework::shader_function_name::FunctionName;
+    use crate::shader::conventions;
 
     #[test]
     fn test_construction() {
@@ -158,11 +158,11 @@ mod tests {
         let mut buffer: String = String::new();
         system_under_test.format_occurred_multiple_times(&mut buffer);
         
-        let expected_buffer = format!("fn {}({}: vec3f, {}: f32) -> f32 {{\n{};\n}}\n", 
-            multiple_occurrences_function, 
-            conventions::PARAMETER_NAME_THE_POINT, 
-            conventions::PARAMETER_NAME_THE_TIME, 
-            code_seven);
+        let expected_buffer = format!("fn {}({}: vec3f, {}: f32) -> f32 {{\n{};\n}}\n",
+                                      multiple_occurrences_function,
+                                      conventions::PARAMETER_NAME_THE_POINT,
+                                      conventions::PARAMETER_NAME_THE_TIME,
+                                      code_seven);
         assert_eq!(buffer, expected_buffer);
     }
 

@@ -11,6 +11,10 @@ use std::env;
 use std::path::{Path, PathBuf};
 use library::material::material::{MaterialClass, MaterialProperties};
 use library::material::material_index::MaterialIndex;
+use library::material::procedural_texture_index::ProceduralTextureUid;
+use library::material::procedural_textures::ProceduralTextures;
+use library::material::texture_reference::TextureReference;
+use library::palette::material::procedural_texture_checkerboard::make_checkerboard_texture;
 use library::sdf::composition::sdf_intersection::SdfIntersection;
 use library::sdf::composition::sdf_intersection_smooth::SdfIntersectionSmooth;
 use library::sdf::composition::sdf_subtraction::SdfSubtraction;
@@ -41,8 +45,9 @@ use library::sdf::object::sdf_torus_xz::SdfTorusXz;
 use library::sdf::object::sdf_triangular_prism::SdfTriangularPrism;
 use library::sdf::object::sdf_vesica_segment::SdfVesicaSegment;
 use library::sdf::transformation::sdf_translation::SdfTranslation;
+use library::shader::function_name::FunctionName;
 
-pub(super) struct SdfClasses {
+pub(super) struct TechSdfClasses {
     rectangular_box: NamedSdf,
     sphere: NamedSdf,
     identity_box: NamedSdf,
@@ -72,7 +77,7 @@ pub(super) struct SdfClasses {
     bent_box: NamedSdf,
 }
 
-impl SdfClasses {
+impl TechSdfClasses {
     #[must_use]
     pub(super) fn new(registrator: &mut SdfRegistrator) -> Self {
         let rectangular_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.24)), UniqueSdfClassName::new("button".to_string()));
@@ -252,7 +257,7 @@ impl SdfClasses {
     }
 }
 
-pub(super) struct Materials {
+pub(super) struct TechMaterials {
     gold_metal: MaterialIndex,
     blue_glass: MaterialIndex,
     purple_glass: MaterialIndex,
@@ -270,9 +275,9 @@ pub(super) struct Materials {
     large_box_material: MaterialIndex,
 }
 
-impl Materials {
+impl TechMaterials {
     #[must_use]
-    pub(super) fn new(scene: &mut VisualObjects) -> Self {
+    pub(super) fn new(scene: &mut VisualObjects, textures: TechTextures) -> Self {
         let materials = scene.materials_mutable();
         
         let gold_metal = materials.add(
@@ -371,7 +376,9 @@ impl Materials {
                 .with_albedo(0.05, 0.05, 2.05)
                 .with_specular(0.05, 0.05, 0.55)
                 .with_specular_strength(0.15)
-                .with_roughness(0.45),
+                .with_roughness(0.45)
+                .with_albedo_texture(TextureReference::Procedural(textures.checkerboard()))
+            ,
         );
 
         Self {
@@ -394,9 +401,26 @@ impl Materials {
     }
 }
 
+pub(super) struct TechTextures {
+    checkerboard: ProceduralTextureUid,
+}
+
+impl TechTextures {
+    #[must_use]
+    pub(super) fn new(container: &mut ProceduralTextures) -> Self {
+        let checkerboard = container.add(FunctionName("checkerboard".to_string()), make_checkerboard_texture());
+        Self { checkerboard }
+    }
+
+    #[must_use]
+    fn checkerboard(&self) -> ProceduralTextureUid {
+        self.checkerboard
+    }
+}
+
 pub(super) struct TechWorld {
-    sdf_classes: SdfClasses,
-    materials: Materials,
+    sdf_classes: TechSdfClasses,
+    materials: TechMaterials,
     
     light_panel: Option<ObjectUid>,
     light_panel_z: f64,
@@ -415,7 +439,7 @@ pub(super) struct TechWorld {
 
 impl TechWorld {
     #[must_use]
-    pub(super) fn new(sdf_classes: SdfClasses, materials: Materials) -> Self {
+    pub(super) fn new(sdf_classes: TechSdfClasses, materials: TechMaterials) -> Self {
         Self { 
             sdf_classes,
             materials,

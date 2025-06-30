@@ -1,11 +1,11 @@
 ﻿use derive_more::Display;
 
 #[derive(Display)]
-pub struct ShaderVariableName(String);
+pub struct VariableName(String);
 
-impl ShaderVariableName {
+impl VariableName {
     #[must_use]
-    pub(super) fn new(name: &str, level: Option<usize>) -> ShaderVariableName {
+    pub(crate) fn new(name: &str, level: Option<usize>) -> VariableName {
         if let Some(level) = level { 
             Self(format!("{}_{}", name, level))
         } else { 
@@ -14,19 +14,22 @@ impl ShaderVariableName {
     }
 }
 
-impl From<&ShaderVariableName> for String {
-    fn from(name: &ShaderVariableName) -> Self {
+impl From<&VariableName> for String {
+    #[must_use]
+    fn from(name: &VariableName) -> Self {
         name.0.clone()
     }
 }
 
-impl From<ShaderVariableName> for String {
-    fn from(name: ShaderVariableName) -> Self {
+impl From<VariableName> for String {
+    #[must_use]
+    fn from(name: VariableName) -> Self {
         name.0
     }
 }
 
-impl AsRef<str> for ShaderVariableName {
+impl AsRef<str> for VariableName {
+    #[must_use]
     fn as_ref(&self) -> &str {
         &self.0
     }
@@ -38,7 +41,7 @@ mod tests {
 
     #[test]
     fn test_display() {
-        let system_under_test = ShaderVariableName::new("system_under_test", Some(1));
+        let system_under_test = VariableName::new("system_under_test", Some(1));
         let display = format!("{}", system_under_test);
         assert_eq!(display, "system_under_test_1");
     }

@@ -2,13 +2,14 @@
 use crate::geometry::axis::Axis;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::sdf::framework::shader_code::{conventions, FunctionBody, ShaderCode};
+use crate::shader::formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
-use crate::sdf::morphing::utils::circumscribed_cylinder;
 use crate::sdf::morphing::morphing_swizzle::{axis_address, morphing_swizzle_from_axis, Swizzle};
+use crate::sdf::morphing::utils::circumscribed_cylinder;
+use crate::shader::code::{FunctionBody, ShaderCode};
+use crate::shader::conventions;
 use more_asserts::assert_gt;
 use std::rc::Rc;
-use crate::sdf::framework::shader_formatting_utils::format_scalar;
 
 pub struct SdfBenderAlongAxis {
     target: Rc<dyn Sdf>,
@@ -74,6 +75,7 @@ impl Sdf for SdfBenderAlongAxis {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_approx_eq;
     use crate::geometry::alias::{Point, Vector};
     use crate::sdf::framework::n_ary_operations_utils::tests::test_unary_operator_body_production;
     use crate::sdf::object::sdf_box::SdfBox;
@@ -81,7 +83,6 @@ mod tests {
     use crate::utils::tests::assert_utils::tests::assert_float_point_equals;
     use cgmath::{Array, EuclideanSpace};
     use rstest::rstest;
-    use crate::assert_approx_eq;
 
     #[rstest]
     #[case(Axis::X, Axis::Y)]

@@ -98,10 +98,10 @@ mod tests {
     use super::*;
     use crate::geometry::transform::Affine;
     use crate::objects::common_properties::ObjectUid;
-    use crate::objects::material_index::MaterialIndex;
     use crate::objects::triangle::Triangle;
     use std::io::Write;
     use tempfile::NamedTempFile;
+    use crate::material::material_index::MaterialIndex;
 
     const _: () = assert!(size_of::<VertexData>() == size_of::<obj::Vertex>());
 
