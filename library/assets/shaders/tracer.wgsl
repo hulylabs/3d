@@ -237,8 +237,8 @@ fn transform_ray_parameter(transformation: mat3x4f, ray: Ray, parameter: f32, tr
 fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
     let sdf_location_inverse = to_mat3x3(sdf.inverse_location);
     let local_ray_origin = transform_point(sdf.inverse_location, ray.origin);
-    let local_ray_direction = transform_vector(to_mat3x3(sdf.inverse_location), ray.direction);
-    let local_ray = Ray(local_ray_origin, normalize(local_ray_direction));
+    let local_ray_direction = normalize(transform_vector(sdf_location_inverse, ray.direction));
+    let local_ray = Ray(local_ray_origin, local_ray_direction);
 
     var local_t = transform_ray_parameter(sdf.inverse_location, ray, tmin, local_ray_origin);
     var local_t_max = transform_ray_parameter(sdf.inverse_location, ray, tmax, local_ray_origin);
@@ -257,11 +257,12 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
         let t_scaled = 0.0001 * local_t;
 
         if(abs(signed_distance) < t_scaled) {
-            hitRec.local.position = candidate;
-            hitRec.global.position = transform_point(sdf.location, candidate);
-
             hitRec.local.normal = signed_distance_normal(sdf, candidate, time);
             hitRec.global.normal = normalize(transform_transposed_vector(sdf_location_inverse, hitRec.local.normal));
+
+            hitRec.global.position = transform_point(sdf.location, candidate);
+            //hitRec.local.position = hitRec.global.position;
+            hitRec.local.position = candidate;
 
             hitRec.t = length(hitRec.global.position - ray.origin);
 
@@ -581,10 +582,28 @@ fn get_camera_ray(s : f32, t : f32) -> Ray {
 }
 
 @must_use
+fn snap_to_grid(victim: vec3f, grid_step: f32) -> vec3f {
+    return floor((victim - grid_step * sign(victim)) / vec3f(grid_step)) * grid_step;
+}
+
+@must_use
 fn fetch_albedo(hit: HitPlace, material: Material) -> vec3f {
     var result = material.albedo;
     if (material.albedo_texture_uid < 0) {
-        result *= procedural_texture_select(-material.albedo_texture_uid, hit.position, hit.normal, 0.0);
+        /*
+        Grid snapping reduces visual flickering caused by floating-point precision issues
+        during ray-surface intersection. The problem is especially pronounced when using
+        discontinuous procedural textures (e.g., checkerboard patterns), where tiny
+        differences in hit positions—particularly along cube edges and corners—can cause
+        abrupt texture color changes.
+
+        By snapping the hit position to a small 3D grid (via quantization), we ensure
+        that nearby intersection points consistently evaluate to the same texture value,
+        reducing instability in rendered outpu
+        */
+        const grid_step: f32 = 1e-4;
+        let snapped_position = snap_to_grid(hit.position, grid_step);
+        result *= procedural_texture_select(-material.albedo_texture_uid, snapped_position, hit.normal, 0.0);
     }
     return result;
 }
