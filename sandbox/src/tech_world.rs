@@ -408,7 +408,7 @@ pub(super) struct TechTextures {
 impl TechTextures {
     #[must_use]
     pub(super) fn new(container: &mut ProceduralTextures) -> Self {
-        let checkerboard = container.add(FunctionName("checkerboard".to_string()), make_checkerboard_texture());
+        let checkerboard = container.add(FunctionName("checkerboard".to_string()), make_checkerboard_texture(10.0));
         Self { checkerboard }
     }
 

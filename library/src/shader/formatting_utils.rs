@@ -40,7 +40,7 @@ pub(crate) fn format_point(target: Point) -> String {
 }
 
 #[must_use]
-pub(crate) fn format_scalar(target: f64) -> String {
+pub fn format_scalar(target: f64) -> String {
     ShaderReadyFloat::new(target).format()
 }
 

@@ -13,7 +13,7 @@ mod tests {
     #[test]
     fn test_make_checkerboard_texture() {
         let mut registrator = ProceduralTextures::new(None);
-        let texture_under_test_uid = registrator.add(FunctionName("texture_checkerboard".to_string()), make_checkerboard_texture());
+        let texture_under_test_uid = registrator.add(FunctionName("texture_checkerboard".to_string()), make_checkerboard_texture(1.0));
         let shader_code = registrator.generate_gpu_code().to_string();
 
         let template = ShaderFunction::new("vec4f", "vec3f", procedural_texture_conventions::FUNCTION_NAME_SELECTION)

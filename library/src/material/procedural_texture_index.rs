@@ -32,7 +32,7 @@ mod tests {
     fn test_procedural_texture_index_debug() {
         let system_under_test = ProceduralTextureUid(100);
         let debug_view = format!("{:?}", system_under_test);
-        assert_eq!(debug_view, "ProceduralTextureIndex(100)");
+        assert_eq!(debug_view, "ProceduralTextureUid(100)");
     }
 
     #[test]

@@ -200,7 +200,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_PROCEDURAL_TEXUTRE_SELECTION_SELECTION_CODE)
             .with_additional_shader_code(
                 r#"fn hit_triangle_t(triangle: Triangle, ray: Ray) -> vec4f 
-                { if (hit_triangle(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.p, 1.0); } return vec4f(0.0); }"#
+                { if (hit_triangle(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.global.position, 1.0); } return vec4f(0.0); }"#
             );
 
         let function_execution = make_executable(&template,

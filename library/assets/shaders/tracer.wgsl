@@ -257,13 +257,13 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
         let t_scaled = 0.0001 * local_t;
 
         if(abs(signed_distance) < t_scaled) {
-            hitRec.t = length(hitRec.global.position - ray.origin);
-
             hitRec.local.position = candidate;
             hitRec.global.position = transform_point(sdf.location, candidate);
 
             hitRec.local.normal = signed_distance_normal(sdf, candidate, time);
             hitRec.global.normal = normalize(transform_transposed_vector(sdf_location_inverse, hitRec.local.normal));
+
+            hitRec.t = length(hitRec.global.position - ray.origin);
 
             hitRec.front_face = sample_sdf(sdf, local_ray.origin, time) >= 0;
             if(hitRec.front_face == false) {
@@ -508,7 +508,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
     var closest_so_far = MAX_FLOAT;
     var hit_uid: u32 = 0;
     var hit_material_id: u32 = 0;
-    var hit_normal: vec3f = vec3f(0.0f);
+    var hit_global_normal: vec3f = vec3f(0.0f);
     var hit_local: HitPlace = HitPlace(vec3f(0.0f), vec3f(0.0f));
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
@@ -516,7 +516,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         if(hit_quad(parallelogram, RAY_PARAMETER_MIN, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
             hit_material_id = parallelogram.material_id;
-            hit_normal = hitRec.global.normal;
+            hit_global_normal = hitRec.global.normal;
             hit_local = hitRec.local;
             closest_so_far = hitRec.t;
         }
@@ -536,7 +536,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     if(hit_triangle(triangle, RAY_PARAMETER_MIN, closest_so_far, ray)) {
                         hit_uid = triangle.object_uid;
                         hit_material_id = triangle.material_id;
-                        hit_normal = hitRec.global.normal;
+                        hit_global_normal = hitRec.global.normal;
                         hit_local = hitRec.local;
                         closest_so_far = hitRec.t;
                     }
@@ -545,7 +545,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
                     if(hit_sdf(sdf, sdf_time[node.primitive_index], ray, aabb_hit.ray_parameter, closest_so_far)) {
                         hit_uid = sdf.object_uid;
                         hit_material_id = sdf.material_id;
-                        hit_normal = hitRec.global.normal;
+                        hit_global_normal = hitRec.global.normal;
                         hit_local = hitRec.local;
                         closest_so_far = hitRec.t;
                     }
@@ -564,7 +564,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
         hit_albedo = vec3f(0.0);
     }
 
-    return FirstHitSurface(hit_uid, hit_albedo, hit_normal);
+    return FirstHitSurface(hit_uid, hit_albedo, hit_global_normal);
 }
 
 var<private> fovFactor : f32;
@@ -1067,21 +1067,21 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
 @must_use
 fn evaluate_dielectric_surface_color(hit: HitRecord, hit_material: Material, hit_albedo: vec3f) -> vec3f {
     let light_center = lights.Q + (lights.u + lights.v) * 0.5;
-    let to_light = light_center - hitRec.global.position;
+    let to_light = light_center - hit.global.position;
     let to_light_distance = length(to_light);
     let to_light_direction = select(to_light / to_light_distance, vec3f(0.0), MIN_FLOAT > to_light_distance);
     let light_size = length(cross(lights.u, lights.v)) * DETERMINISTIC_SHADOW_LIGHT_SIZE_SCALE;
 
-    let diffuse_fall_off = max(0.0, dot(hitRec.global.normal, to_light_direction));
-    let to_camera_direction = normalize(cam_origin - hitRec.global.position);
-    let reflected_light = reflect(-to_light_direction, hitRec.global.normal);
+    let diffuse_fall_off = max(0.0, dot(hit.global.normal, to_light_direction));
+    let to_camera_direction = normalize(cam_origin - hit.global.position);
+    let reflected_light = reflect(-to_light_direction, hit.global.normal);
     let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
 
-    //let shadow = evaluate_soft_shadow(hitRec.global.position, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
-    let shadow = evaluate_hard_shadow(hitRec.global.position, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    //let shadow = evaluate_soft_shadow(hit.global.position, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
+    let shadow = evaluate_hard_shadow(hit.global.position, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     // shadow is in [0..1]: 0 is too dark -> lineary transform [0..1] into [K..1]
     let shadow_lightened = shadow * (1.0 - DETERMINISTIC_SHADOW_FLOOR) + DETERMINISTIC_SHADOW_FLOOR;
-    let occlusion = approximate_ambient_occlusion(hitRec.global.position, hitRec.global.normal);
+    let occlusion = approximate_ambient_occlusion(hit.global.position, hit.global.normal);
 
     let diffuse = diffuse_fall_off * hit_albedo * occlusion;
     let specular = specular_fall_off * hit_material.specular;

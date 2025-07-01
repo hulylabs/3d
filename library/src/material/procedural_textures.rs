@@ -166,7 +166,7 @@ mod tests {
         let _ = system_under_test.add(second_name, second_texture);
     
         let actual_code = system_under_test.generate_gpu_code();
-        let expected_code = "fn green_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(0.0, 1.0, 0.0);\n}\nfn red_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(1.0, 0.0, 0.0);\n}\nfn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f {\nif (texture_index == 1) { return green_texture(point,normal,time); }\nif (texture_index == 0) { return red_texture(point,normal,time); }\nreturn vec3f(0.0);\n}\n";
+        let expected_code = "fn green_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(0.0, 1.0, 0.0);\n}\nfn red_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(1.0, 0.0, 0.0);\n}\nfn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f {\nif (texture_index == 2) { return green_texture(point,normal,time); }\nif (texture_index == 1) { return red_texture(point,normal,time); }\nreturn vec3f(0.0);\n}\n";
         
         assert_eq!(actual_code.to_string(), expected_code);
     }

@@ -49,9 +49,9 @@ mod tests {
     use super::*;
     use crate::sdf::framework::dummy_sdf::tests::make_dummy_sdf;
 
-    #[test]
-    fn test_disjoint_set() {
-        // TODO: implement me
+    #[must_use]
+    fn contains_pointer(vec: &Vec<Rc<dyn Sdf>>, target: &Rc<dyn Sdf>) -> bool {
+        vec.iter().any(|item| Rc::ptr_eq(item, target))
     }
 
     #[test]
@@ -63,6 +63,7 @@ mod tests {
         assert_eq!(system_under_test.occurrences(), 1);
         assert_eq!(system_under_test.name(), &expected_name);
         assert_eq!(system_under_test.children_levels_below(), expected_levels_below);
+        assert!(contains_pointer(system_under_test.sources(), &system_under_test.any_source()));
     }
     
     #[test]
