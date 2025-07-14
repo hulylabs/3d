@@ -1,4 +1,4 @@
-﻿use crate::material::material::MaterialProperties;
+﻿use crate::material::material_properties::MaterialProperties;
 use crate::material::material_index::MaterialIndex;
 use crate::material::procedural_textures::ProceduralTextures;
 use crate::utils::version::Version;

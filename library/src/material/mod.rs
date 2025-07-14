@@ -1,6 +1,6 @@
 ﻿pub(crate) mod texture_procedural;
 pub mod texture_reference;
-pub mod material;
+pub mod material_properties;
 pub mod material_index;
 pub mod procedural_texture_index;
 mod bitmap_texture_index;

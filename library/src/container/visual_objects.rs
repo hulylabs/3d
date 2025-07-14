@@ -63,7 +63,7 @@ impl VisualObjects {
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials: MaterialsWarehouse::new(procedural_textures.unwrap_or(ProceduralTextures::new(None))),
-            sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or(SdfRegistrator::default())),
+            sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
     }
@@ -350,7 +350,7 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
-    use crate::material::material::MaterialProperties;
+    use crate::material::material_properties::MaterialProperties;
     use crate::material::material_index::MaterialIndex;
 
     #[must_use]

@@ -9,7 +9,7 @@ use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
 use std::path::{Path, PathBuf};
-use library::material::material::{MaterialClass, MaterialProperties};
+use library::material::material_properties::{MaterialClass, MaterialProperties};
 use library::material::material_index::MaterialIndex;
 use library::material::procedural_texture_index::ProceduralTextureUid;
 use library::material::procedural_textures::ProceduralTextures;
@@ -663,7 +663,7 @@ impl TechWorld {
                 let location 
                     = Transformation::new(
                     Affine::from_translation(Vector::new(0.5, 0.0, 0.0)) *
-                        Affine::from_scale(0.6)
+                        Affine::from_scale(1.0)
                     );
                 scene.add_mesh(&meshes, mesh, &location, self.materials.black_material);
             },

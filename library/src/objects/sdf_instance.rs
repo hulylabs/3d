@@ -43,7 +43,7 @@ impl GpuSerializable for SdfInstance {
             writer.write_float_64(self.ray_marching_step_scale);
             writer.write_signed(self.class.as_i32());
             writer.write_unsigned(self.links.material_index().0 as u32);
-            writer.write_unsigned(self.links.uid().0 as u32);
+            writer.write_unsigned(self.links.uid().0);
         });
 
         debug_assert!(container.object_fully_written());

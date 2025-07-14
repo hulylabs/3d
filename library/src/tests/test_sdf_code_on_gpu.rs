@@ -38,7 +38,6 @@ mod tests {
     use cgmath::{Deg, InnerSpace};
     use more_asserts::{assert_ge, assert_gt};
     use rstest::rstest;
-    use std::fmt::Write;
     use std::rc::Rc;
 
     #[test]

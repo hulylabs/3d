@@ -6,8 +6,13 @@ use std::fmt::Write;
 
 pub(crate) mod sdf_conventions {
     pub(crate) const FUNCTION_NAME_SELECTION: &str = "sdf_select";
+    pub(super) const SDF_SELECTION_RETURN_TYPE: &str = "f32";
+    
+    pub(crate) const FUNCTION_NAME_ANIMATION_APPLY: &str = "sdf_apply_animation";
+    pub(super) const ANIMATION_UNDO_RETURN_TYPE: &str = "vec3f";
+    
     pub(super) const PARAMETER_NAME_INDEX: &str = "sdf_index";
-    pub(super) const RETURN_TYPE: &str = "f32";
+    
 }
 
 #[must_use]
@@ -35,11 +40,11 @@ pub(crate) fn format_sdf_selection(function_to_select: &FunctionName, class_inde
 #[must_use]
 pub(crate) fn format_sdf_selection_function_opening() -> String {
     format!(
-        "fn {selection_function_name}({parameter_sdf_index}: i32, {common_parameters}) -> {return_type}",
+        "fn {selection_function_name}({parameter_sdf_index}: i32, {common_parameters}) -> {return_type} {{\n",
         selection_function_name = sdf_conventions::FUNCTION_NAME_SELECTION,
         parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
         common_parameters = format_common_parameters(),
-        return_type = sdf_conventions::RETURN_TYPE,
+        return_type = sdf_conventions::SDF_SELECTION_RETURN_TYPE,
     )
 }
 
@@ -60,10 +65,32 @@ pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_n
         "fn {name}({common_parameters}) -> {return_type} {{\n{body}\n}}\n",
         name = function_name,
         common_parameters = format_common_parameters(),
-        return_type = sdf_conventions::RETURN_TYPE,
+        return_type = sdf_conventions::SDF_SELECTION_RETURN_TYPE,
         body = body,
     )
     .expect("failed to format sdf declaration");
+}
+
+#[must_use]
+pub(crate) fn format_sdf_animation_undo_function_opening() -> String {
+    format!(
+        "fn {selection_function_name}({parameter_sdf_index}: i32, {common_parameters}) -> {return_type} {{\n",
+        selection_function_name = sdf_conventions::FUNCTION_NAME_ANIMATION_APPLY,
+        parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
+        common_parameters = format_common_parameters(),
+        return_type = sdf_conventions::ANIMATION_UNDO_RETURN_TYPE,
+    )
+}
+
+pub(crate) fn format_sdf_animation_undo(class_index: SdfClassIndex, animation_undo_routine: ShaderCode<FunctionBody>, buffer: &mut String) {
+    writeln!(
+        buffer,
+        "if ({parameter_sdf_index} == {sdf_index}) {{\n{drop_code}}}",
+        parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
+        sdf_index = class_index,
+        drop_code = animation_undo_routine,
+    )
+    .expect("failed to format sdf selection");
 }
 
 #[cfg(test)]
@@ -72,7 +99,7 @@ mod tests {
     use crate::shader::code::{FunctionBody, ShaderCode};
 
     #[test]
-    fn test_format_sdf() {
+    fn test_format_sdf_declaration() {
         let function_body = ShaderCode::<FunctionBody>::new("return -7.0;".to_string());
         let function_name = FunctionName("evaluate_some_sdf".to_string());
 
@@ -85,5 +112,11 @@ mod tests {
             parameter = conventions::PARAMETER_NAME_THE_POINT
         );
         assert_eq!(formatted, expected);
+    }
+
+    #[test]
+    fn test_format_sdf_animation_undo_function_opening() {
+        let format = format_sdf_animation_undo_function_opening();
+        assert_eq!(format, "fn sdf_apply_animation(sdf_index: i32, point: vec3f, time: f32) -> vec3f {\n");
     }
 }

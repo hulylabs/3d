@@ -12,7 +12,6 @@ impl From<usize> for ObjectUid {
 }
 
 impl Display for ObjectUid {
-    #[must_use]
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "{}", self.0)
     }

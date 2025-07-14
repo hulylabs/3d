@@ -11,7 +11,6 @@ mod tests {
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
     use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
-    use std::fmt::Write;
     use crate::sdf::framework::sdf_shader_code::sdf_conventions;
 
     #[test]

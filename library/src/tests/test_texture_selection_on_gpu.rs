@@ -10,7 +10,6 @@ mod tests {
     use crate::shader::function_name::FunctionName;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
-    use std::fmt::Write;
 
     #[must_use]
     fn make_spy_texture(marker_value: f64) -> TextureProcedural {

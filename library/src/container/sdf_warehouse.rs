@@ -1,10 +1,10 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::sdf::framework::animation_undo_generator::AnimationUndoGenerator;
 use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
-use crate::sdf::framework::sdf_shader_code::{format_sdf_selection, format_sdf_selection_function_opening};
+use crate::sdf::framework::selection_generator::SelectionGenerator;
 use std::collections::HashMap;
-use std::fmt::Write;
 
 pub(crate) struct SdfWarehouse {
     properties_from_name: HashMap<UniqueSdfClassName, SdfClassIndex>,
@@ -18,8 +18,8 @@ impl SdfWarehouse {
         let mut properties_from_name: HashMap<UniqueSdfClassName, SdfClassIndex> = HashMap::new();
         let mut bounding_boxes: Vec<Aabb> = Vec::new();
         let mut overall_accumulated_code = String::new();
-        let mut sdf_selection_uber_function = format_sdf_selection_function_opening();
-        writeln!(sdf_selection_uber_function, " {{").expect("failed to format brace open for sdf selection function");
+        let mut sdf_selection_uber_function = SelectionGenerator::new();
+        let mut sdf_animation_undo_uber_function = AnimationUndoGenerator::new();
         
         let code_generator = SdfCodeGenerator::new(sdf_classes);
         
@@ -38,13 +38,13 @@ impl SdfWarehouse {
             bounding_boxes.push(sdf_class.sdf().aabb());
             
             let function_to_call = code_generator.generate_unique_code_for(sdf_class, &mut overall_accumulated_code);
-            format_sdf_selection(&function_to_call, index, &mut sdf_selection_uber_function);
+            sdf_selection_uber_function.add_selection(&function_to_call, index);
+            sdf_animation_undo_uber_function.add_handler(sdf_class.sdf(), index);
         }
         code_generator.generate_shared_code(&mut overall_accumulated_code);
-
-        write!(sdf_selection_uber_function, "return 0.0;\n}}\n").expect("failed to format sdf selection finalization");
         
-        overall_accumulated_code.write_str(sdf_selection_uber_function.as_str()).expect("failed to combine sdfs code and selection function");
+        overall_accumulated_code.push_str(sdf_selection_uber_function.make().as_str());
+        overall_accumulated_code.push_str(sdf_animation_undo_uber_function.make().as_str());
 
         Self { properties_from_name, bounding_boxes, sdf_classes_code: overall_accumulated_code }
     }
@@ -63,7 +63,6 @@ impl SdfWarehouse {
         }
         None
     }
-    
 
     #[must_use]
     pub(crate) fn aabb_from_index(&self, index: SdfClassIndex) -> &Aabb {

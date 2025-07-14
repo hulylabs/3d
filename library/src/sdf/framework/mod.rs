@@ -10,3 +10,5 @@ pub mod code_generator;
 pub mod named_sdf;
 pub mod sdf_base;
 pub mod stack;
+pub(crate) mod selection_generator;
+pub(crate) mod animation_undo_generator;

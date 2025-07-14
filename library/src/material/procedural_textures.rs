@@ -35,7 +35,7 @@ impl ProceduralTextures {
 
     #[must_use]
     pub fn add(&mut self, name: FunctionName, target: TextureProcedural) -> ProceduralTextureUid {
-        assert!(self.textures.get(&name).is_none());
+        assert_eq!(self.textures.contains_key(&name), false);
         let uid = ProceduralTextureUid(self.textures.len() + 1);
         self.textures.insert(name, IdentifiedTextureProcedural { texture: target, uid, });
         uid
@@ -45,7 +45,7 @@ impl ProceduralTextures {
     pub(crate) fn generate_gpu_code(&self) -> ShaderCode {
         let mut buffer: String = self.shared_procedure_textures_code.to_string();
 
-        if buffer.len() > 0 {
+        if false == buffer.is_empty() {
             buffer.push('\n');
         }
         self.write_gpu_code(&mut buffer).expect("shader code formatting failed");
@@ -53,22 +53,21 @@ impl ProceduralTextures {
         ShaderCode::<Generic>::new(buffer)
     }
 
-    fn write_gpu_code(&self, mut buffer: &mut String) -> anyhow::Result<()> {
+    fn write_gpu_code(&self, buffer: &mut String) -> anyhow::Result<()> {
         let mut sorted_by_index: Vec<(&FunctionName, &IdentifiedTextureProcedural)> = self.textures.iter().collect();
         sorted_by_index.sort_by_key(|(name, _)| &name.0);
 
         for (name, item) in sorted_by_index.iter() {
             let body = item.texture.function_body();
-            write_texture_code(body, name, &mut buffer)?;
+            write_texture_code(body, name, buffer)?;
         }
-        Self::write_selection_function(&mut sorted_by_index, &mut buffer)?;
+        Self::write_selection_function(&mut sorted_by_index, buffer)?;
 
         Ok(())
     }
 
     fn write_selection_function(variants: &mut Vec<(&FunctionName, &IdentifiedTextureProcedural)>, buffer: &mut String) -> anyhow::Result<()> {
         write_texture_selection_function_opening(buffer)?;
-        writeln!(buffer, " {{")?;
 
         for variant in variants {
             write_texture_selection(variant.0, variant.1.uid, buffer)?;

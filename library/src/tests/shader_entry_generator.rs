@@ -3,7 +3,6 @@ pub(crate) mod tests {
     use serde::Serialize;
     use serde_json::Value;
     use std::cell::RefCell;
-    use std::fmt::Write;
     use tinytemplate::{format_unescaped, TinyTemplate};
 
     const ENTRY_TEMPLATE_TEXT: &str = include_str!("_function_execution_template.wgsl");
@@ -24,6 +23,7 @@ pub(crate) mod tests {
     macro_rules! create_argument_formatter {
         ($argument_expression:expr) => {
             |data: &serde_json::Value, buffer: &mut String| -> tinytemplate::error::Result<()> {
+                use std::fmt::Write;
                 if let Some(s) = data.as_str() {
                     write!(buffer, $argument_expression, argument = s)?;
                 } else {

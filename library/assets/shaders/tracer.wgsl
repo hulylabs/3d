@@ -196,6 +196,11 @@ fn sample_sdf(sdf: Sdf, point: vec3f, time: f32) -> f32 {
 }
 
 @must_use
+fn apply_animation(sdf: Sdf, point: vec3f, time: f32) -> vec3f {
+    return sdf_apply_animation(sdf.class_index, point, time);
+}
+
+@must_use
 fn signed_distance_normal(sdf: Sdf, point: vec3f, time: f32) -> vec3f {
     let e = vec2f(1.0,-1.0)*0.5773*0.0005;
     return normalize( e.xyy * sample_sdf( sdf, point + e.xyy, time ) +
@@ -261,8 +266,7 @@ fn hit_sdf(sdf: Sdf, time: f32, ray: Ray, tmin: f32, tmax: f32) -> bool {
             hitRec.global.normal = normalize(transform_transposed_vector(sdf_location_inverse, hitRec.local.normal));
 
             hitRec.global.position = transform_point(sdf.location, candidate);
-            //hitRec.local.position = hitRec.global.position;
-            hitRec.local.position = candidate;
+            hitRec.local.position = apply_animation(sdf, candidate, time);
 
             hitRec.t = length(hitRec.global.position - ray.origin);
 

@@ -35,9 +35,9 @@ pub(super) fn write_texture_selection(function_to_select: &FunctionName, texture
 }
 
 pub(crate) fn write_texture_selection_function_opening(buffer: &mut String) -> anyhow::Result<()> {
-    write!(
+    writeln!(
         buffer,
-        "fn {selection_function_name}({parameter_texture_index}: i32, {common_parameters}) -> {return_type}",
+        "fn {selection_function_name}({parameter_texture_index}: i32, {common_parameters}) -> {return_type} {{",
         selection_function_name = procedural_texture_conventions::FUNCTION_NAME_SELECTION,
         parameter_texture_index = procedural_texture_conventions::PARAMETER_NAME_INDEX,
         common_parameters = format_common_texture_parameters(),
@@ -87,7 +87,7 @@ mod tests {
 
         assert_eq!(
             buffer,
-            "prefix: fn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f"
+            "prefix: fn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f {\n"
         );
     }
 

@@ -2,12 +2,12 @@
 use crate::geometry::axis::Axis;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;
-use crate::shader::formatting_utils::format_scalar;
 use crate::sdf::framework::stack::Stack;
 use crate::sdf::morphing::morphing_swizzle::{axis_address, morphing_swizzle_from_axis, Swizzle};
 use crate::sdf::morphing::utils::circumscribed_cylinder;
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::conventions;
+use crate::shader::formatting_utils::format_scalar;
 use more_asserts::assert_gt;
 use std::rc::Rc;
 
@@ -32,32 +32,43 @@ impl SdfBenderAlongAxis {
             bend_amplitude_scale,
         })
     }
+
+    #[must_use]
+    fn format_evaluation(&self) -> String {
+        let swizzle = morphing_swizzle_from_axis(self.stable_axis);
+        format!("\
+            let whole_object_angle: f32 = {time};\n\
+            let bend_angle: f32 = {position}.{bend_source} * {bend_amplitude_scale} * sin(whole_object_angle*{bend_time_scale});\n\
+            let bend_cos = cos(bend_angle);\n\
+            let bend_sin = sin(bend_angle);\n\
+            let bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\n\
+            let {rotated}: vec2f = bender * {position}.{rotated_pair};\n\
+            let {position} = {composition};",
+            time = conventions::PARAMETER_NAME_THE_TIME,
+            position = conventions::PARAMETER_NAME_THE_POINT,
+            bend_amplitude_scale = format_scalar(self.bend_amplitude_scale),
+            bend_time_scale = format_scalar(self.bend_time_scale),
+            bend_source = axis_address(self.bend_source_axis),
+            rotated_pair = swizzle.rotated_pair(),
+            composition = swizzle.final_composition(),
+            rotated = Swizzle::ROTATED_PAIR_VARIABLE_NAME,
+        )
+    }
 }
 
 impl Sdf for SdfBenderAlongAxis {
     #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
-        let swizzle = morphing_swizzle_from_axis(self.stable_axis);
         produce_parameter_transform_body(children_bodies, level, || {
-            format!(
-                "\
-                let whole_object_angle: f32 = {time};\n\
-                let bend_angle: f32 = {position}.{bend_source} * {bend_amplitude_scale} * sin({time}*{bend_time_scale});\n\
-                let bend_cos = cos(bend_angle);\n\
-                let bend_sin = sin(bend_angle);\n\
-                let bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\n\
-                let {rotated}: vec2f = bender * {position}.{rotated_pair};\n\
-                let {position} = {composition};",
-                time = conventions::PARAMETER_NAME_THE_TIME,
-                position = conventions::PARAMETER_NAME_THE_POINT,
-                bend_amplitude_scale = format_scalar(self.bend_amplitude_scale),
-                bend_time_scale = format_scalar(self.bend_time_scale),
-                bend_source = axis_address(self.bend_source_axis),
-                rotated_pair = swizzle.rotated_pair(),
-                composition = swizzle.final_composition(),
-                rotated = Swizzle::ROTATED_PAIR_VARIABLE_NAME,
-            )
+            self.format_evaluation()
         })
+    }
+
+    #[must_use]
+    fn animation_only(&self) -> Option<ShaderCode<FunctionBody>> {
+        let mut undo_code = self.format_evaluation();
+        undo_code.push_str(format!("\nreturn {};\n", conventions::PARAMETER_NAME_THE_POINT).as_str());
+        Some(ShaderCode::<FunctionBody>::new(undo_code))
     }
 
     #[must_use]
@@ -113,7 +124,7 @@ mod tests {
 
         test_unary_operator_body_production(
             |child| SdfBenderAlongAxis::new(child, Axis::Z, Axis::X, bend_time_scale, bend_amplitude_scale),
-            "var operand_0: f32;\n{\nlet whole_object_angle: f32 = time;\nlet bend_angle: f32 = point.x * 1.0 * sin(time*1.0);\nlet bend_cos = cos(bend_angle);\nlet bend_sin = sin(bend_angle);\nlet bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\nlet rotated: vec2f = bender * point.xy;\nlet point = vec3f(rotated, point.z);\n{\noperand_0 = ?_left;\n}\n}\nreturn operand_0;",
+            "var operand_0: f32;\n{\nlet whole_object_angle: f32 = time;\nlet bend_angle: f32 = point.x * 1.0 * sin(whole_object_angle*1.0);\nlet bend_cos = cos(bend_angle);\nlet bend_sin = sin(bend_angle);\nlet bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\nlet rotated: vec2f = bender * point.xy;\nlet point = vec3f(rotated, point.z);\n{\noperand_0 = ?_left;\n}\n}\nreturn operand_0;",
         );
     }
 }

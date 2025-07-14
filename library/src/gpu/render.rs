@@ -32,7 +32,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
-use crate::material::material::MaterialProperties;
+use crate::material::material_properties::MaterialProperties;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {

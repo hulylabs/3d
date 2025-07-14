@@ -2,7 +2,7 @@ use cgmath::Deg;
 use library::container::visual_objects::VisualObjects;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::transform::Affine;
-use library::material::material::{MaterialClass, MaterialProperties};
+use library::material::material_properties::{MaterialClass, MaterialProperties};
 use library::material::material_index::MaterialIndex;
 use library::scene::hub::Hub;
 use library::sdf::composition::sdf_intersection_smooth::SdfIntersectionSmooth;
