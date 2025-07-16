@@ -1,25 +1,23 @@
 ﻿use crate::material::procedural_texture_index::ProceduralTextureUid;
-use crate::material::texture_procedural::TextureProcedural;
-use crate::material::texture_shader_code::{write_texture_code, write_texture_selection, write_texture_selection_function_opening};
+use crate::material::texture_procedural_3d::TextureProcedural3D;
+use crate::material::texture_shader_code::{write_texture_3d_code, write_texture_3d_selection, write_texture_3d_selection_function_opening};
 use crate::shader::code::{Generic, ShaderCode};
 use crate::shader::function_name::FunctionName;
+use crate::shader::function_name_generator::FunctionNameGenerator;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
+use std::rc::Rc;
+use crate::material::triplanar_mapper::TriplanarMapper;
 
 pub struct ProceduralTextures {
     shared_procedure_textures_code: ShaderCode,
     textures: HashMap<FunctionName, IdentifiedTextureProcedural>,
-}
-
-impl Default for ProceduralTextures {
-    #[must_use]
-    fn default() -> Self {
-        ProceduralTextures::new(None)
-    }
+    names_generator: Rc<RefCell<FunctionNameGenerator>>,
 }
 
 struct IdentifiedTextureProcedural {
-    texture: TextureProcedural,
+    texture: TextureProcedural3D,
     uid: ProceduralTextureUid,
 }
 
@@ -30,12 +28,18 @@ impl ProceduralTextures {
         Self {
             shared_procedure_textures_code: shared_code,
             textures: HashMap::new(),
+            names_generator: FunctionNameGenerator::new_shared(),
         }
+    }
+    
+    #[must_use]
+    pub fn make_triplanar_mapper(&mut self)-> TriplanarMapper {
+        TriplanarMapper::new(self.names_generator.clone())
     }
 
     #[must_use]
-    pub fn add(&mut self, name: FunctionName, target: TextureProcedural) -> ProceduralTextureUid {
-        assert_eq!(self.textures.contains_key(&name), false);
+    pub fn add(&mut self, target: TextureProcedural3D, name: Option<&str>) -> ProceduralTextureUid {
+        let name = self.names_generator.borrow_mut().next_name(name);
         let uid = ProceduralTextureUid(self.textures.len() + 1);
         self.textures.insert(name, IdentifiedTextureProcedural { texture: target, uid, });
         uid
@@ -57,39 +61,53 @@ impl ProceduralTextures {
         let mut sorted_by_index: Vec<(&FunctionName, &IdentifiedTextureProcedural)> = self.textures.iter().collect();
         sorted_by_index.sort_by_key(|(name, _)| &name.0);
 
-        for (name, item) in sorted_by_index.iter() {
-            let body = item.texture.function_body();
-            write_texture_code(body, name, buffer)?;
+        for (name, candidate) in sorted_by_index.iter() {
+            let utilities = candidate.texture.utilities();
+            write!(buffer, "{utilities}")?;
+            
+            let body = candidate.texture.function_body();
+            write_texture_3d_code(body, name, buffer)?;
         }
-        Self::write_selection_function(&mut sorted_by_index, buffer)?;
+        Self::write_selection_function(&sorted_by_index, buffer)?;
 
         Ok(())
     }
 
-    fn write_selection_function(variants: &mut Vec<(&FunctionName, &IdentifiedTextureProcedural)>, buffer: &mut String) -> anyhow::Result<()> {
-        write_texture_selection_function_opening(buffer)?;
+    fn write_selection_function(variants: &Vec<(&FunctionName, &IdentifiedTextureProcedural)>, buffer: &mut String) -> anyhow::Result<()> {
+        write_texture_3d_selection_function_opening(buffer)?;
 
         for variant in variants {
-            write_texture_selection(variant.0, variant.1.uid, buffer)?;
+            write_texture_3d_selection(variant.0, variant.1.uid, buffer)?;
         }
 
         write!(buffer, "return vec3f(0.0);\n}}\n")?;
         Ok(())
     }
+
+    #[must_use]
+    pub(crate) fn make_dummy_selection_function() -> ShaderCode {
+        let mut result = String::new();
+        Self::write_selection_function(&Vec::new(), &mut result).expect("shader code formatting failed");
+        ShaderCode::<Generic>::new(result)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use more_asserts::assert_gt;
     use super::*;
     use crate::shader::code::{FunctionBody, Generic, ShaderCode};
-    use crate::shader::function_name::FunctionName;
+    use more_asserts::assert_gt;
 
     #[must_use]
-    fn procedural_texture(body: &str) -> TextureProcedural {
-        TextureProcedural::new(ShaderCode::<FunctionBody>::new(body.to_string()))
+    fn procedural_texture(body: &str) -> TextureProcedural3D {
+        TextureProcedural3D::from_simple_body(ShaderCode::<FunctionBody>::new(body.to_string()))
     }
-    
+
+    #[must_use]
+    fn make_system_under_test() -> ProceduralTextures {
+        ProceduralTextures::new(None)
+    }
+
     #[test]
     fn test_new_with_shared_code() {
         let expected_generated_code = "shared texture code".to_string();
@@ -108,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_new_without_shared_code() {
-        let system_under_test = ProceduralTextures::new(None);
+        let system_under_test = make_system_under_test();
 
         let generated_code = system_under_test.generate_gpu_code();
 
@@ -120,11 +138,10 @@ mod tests {
 
     #[test]
     fn test_add_single_texture() {
-        let mut system_under_test = ProceduralTextures::new(None);
+        let mut system_under_test = make_system_under_test();
         let texture = procedural_texture("return vec3f(1.0, 0.0, 0.0);");
-        let function_name = FunctionName("test_texture".to_string());
 
-        let uid = system_under_test.add(function_name, texture);
+        let uid = system_under_test.add(texture, Some("test_texture"));
         assert_gt!(uid.0, 0);
         let generated_code = system_under_test.generate_gpu_code();
 
@@ -133,19 +150,19 @@ mod tests {
 
     #[test]
     fn test_add_multiple_textures() {
-        let mut system_under_test = ProceduralTextures::new(None);
+        let mut system_under_test = make_system_under_test();
 
         let first_uid = system_under_test.add(
-            FunctionName("red_texture".to_string()),
             procedural_texture("return vec3f(1.0, 0.0, 0.0);"),
+            Some("red_texture"),
         );
         let second_uid = system_under_test.add(
-            FunctionName("green_texture".to_string()),
             procedural_texture("return vec3f(0.0, 1.0, 0.0);"),
+            Some("green_texture"),
         );
         let third_uid = system_under_test.add(
-            FunctionName("blue_texture".to_string()),
             procedural_texture("return vec3f(0.0, 0.0, 1.0);"),
+            Some("blue_texture"),
         );
 
         assert_ne!(first_uid, second_uid);
@@ -154,15 +171,12 @@ mod tests {
 
     #[test]
     fn test_generate_gpu_code_multiple_textures() {
-        let mut system_under_test = ProceduralTextures::new(None);
+        let mut system_under_test = make_system_under_test();
         let first_texture = procedural_texture("return vec3f(1.0, 0.0, 0.0);");
         let second_texture = procedural_texture("return vec3f(0.0, 1.0, 0.0);");
     
-        let first_name = FunctionName("red_texture".to_string());
-        let second_name = FunctionName("green_texture".to_string());
-    
-        let _ = system_under_test.add(first_name, first_texture);
-        let _ = system_under_test.add(second_name, second_texture);
+        let _ = system_under_test.add(first_texture, Some("red_texture"));
+        let _ = system_under_test.add(second_texture, Some("green_texture"));
     
         let actual_code = system_under_test.generate_gpu_code();
         let expected_code = "fn green_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(0.0, 1.0, 0.0);\n}\nfn red_texture(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn vec3f(1.0, 0.0, 0.0);\n}\nfn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f {\nif (texture_index == 2) { return green_texture(point,normal,time); }\nif (texture_index == 1) { return red_texture(point,normal,time); }\nreturn vec3f(0.0);\n}\n";
@@ -171,24 +185,22 @@ mod tests {
     }
     
     #[test]
-    #[should_panic]
     fn test_add_with_same_function() {
-        let mut system_under_test = ProceduralTextures::new(None);
+        let mut system_under_test = make_system_under_test();
         let texture = procedural_texture("return vec3f(3.0, 0.0, 0.0);");
-    
-        let function_name = FunctionName("test_texture".to_string());
-    
-        let _ = system_under_test.add(function_name.clone(), texture.clone());
-        let _ = system_under_test.add(function_name, texture);
+
+        let first = system_under_test.add(texture.clone(), Some("test_texture"));
+        let second = system_under_test.add(texture, Some("test_texture"));
+
+        assert_ne!(first, second);
     }
     
     #[test]
     fn test_generate_gpu_code_multiple_calls_same_result() {
-        let mut system_under_test = ProceduralTextures::new(None);
+        let mut system_under_test = make_system_under_test();
         let texture = procedural_texture("return vec3f(0.8, 0.2, 0.1);");
-        let function_name = FunctionName("orange_texture".to_string());
-    
-        let _ = system_under_test.add(function_name, texture);
+
+        let _ = system_under_test.add(texture, Some("orange_texture"));
     
         let first = system_under_test.generate_gpu_code();
         let second = system_under_test.generate_gpu_code();

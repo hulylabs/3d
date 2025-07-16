@@ -28,7 +28,6 @@ impl<Kind> Hash for ShaderCode<Kind> {
 }
 
 impl<Kind> PartialEq for ShaderCode<Kind> {
-    #[must_use]
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
@@ -37,7 +36,6 @@ impl<Kind> PartialEq for ShaderCode<Kind> {
 impl<Kind> Eq for ShaderCode<Kind> {}
 
 impl<Kind> From<ShaderCode<Kind>> for String {
-    #[must_use]
     fn from(code: ShaderCode<Kind>) -> Self {
         code.value
     }
@@ -66,7 +64,7 @@ impl ShaderCode<FunctionBody> {
     #[must_use]
     pub(crate) fn to_scalar_declaration_assignment(&self, variable_name: &VariableName) -> ShaderCode<VariableAssignment> {
         let assignment = self.make_scalar_assignment(variable_name);
-        let assignment = format!("var {name}: f32;\n{assignment}", name=variable_name, assignment=assignment);
+        let assignment = format!("var {variable_name}: f32;\n{assignment}");
         ShaderCode::<VariableAssignment>::new(assignment.to_string())
     }
 
@@ -78,7 +76,7 @@ impl ShaderCode<FunctionBody> {
 
     #[must_use]
     fn make_scalar_assignment(&self, variable_name: &VariableName) -> String {
-        let evaluation = self.value.replace("return", format!("{} =", variable_name).as_str());
+        let evaluation = self.value.replace("return", format!("{variable_name} =").as_str());
         let assignment = format!("{{\n{assignment}\n}}", assignment = evaluation.trim());
         assignment
     }

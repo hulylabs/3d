@@ -66,7 +66,6 @@ impl Drop for Device {
 }
 
 impl Default for Device {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }

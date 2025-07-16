@@ -43,16 +43,16 @@ fn create_node_label(node: &BvhNode, description: String) -> String {
     let mut label = String::new();
 
     if let Some(idx) = node.serial_index() {
-        label.push_str(&format!("#{}", idx));
+        label.push_str(&format!("#{idx}"));
     }
 
     if let Some(content_type) = node.content_type()  {
-        label.push_str(format!("\n{:?}: {}", content_type, description).as_str());
+        label.push_str(format!("\n{content_type:?}: {description}").as_str());
     }
 
     let human_readable_min = debug_format_human_readable_point(node.aabb().min());
     let human_readable_max = debug_format_human_readable_point(node.aabb().max());
-    label.push_str(format!("\n[min({})\nmax({})]", human_readable_min, human_readable_max).as_str());
+    label.push_str(format!("\n[min({human_readable_min})\nmax({human_readable_max})]").as_str());
     
     label.push_str(format!("\nmiss->{:?}", node.miss_node_index_or_null()).as_str());
     
@@ -84,7 +84,7 @@ fn build_dot_content<DescriptionDelegate: Fn(Option<usize>)->String>(
             ));
             
             if let Some(parent) = parent_node_id {
-                content.push_str(&format!("    n{} -> n{};\n", parent, current_id));
+                content.push_str(&format!("    n{parent} -> n{current_id};\n"));
             }
         } else {
             let current_id = counter;

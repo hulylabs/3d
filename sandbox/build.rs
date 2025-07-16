@@ -10,7 +10,7 @@ fn main() {
     let copy_source = Path::new(ASSETS_FOLDER_NAME);
 
     let out_directory = env::var("OUT_DIR")
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .map_err(|e| std::io::Error::other(e))
         .expect("failed to retrieve output directory of the build procedure");
 
     let copy_target = PathBuf::from(out_directory)
@@ -22,5 +22,5 @@ fn main() {
     let mut options = CopyOptions::new();
     options.overwrite = true;
     copy(copy_source, copy_target.clone(), &options)
-        .unwrap_or_else(|_| panic!("failed to copy folder {:?} into {:?}", copy_source, copy_target));
+        .unwrap_or_else(|_| panic!("failed to copy folder {copy_source:?} into {copy_target:?}"));
 }

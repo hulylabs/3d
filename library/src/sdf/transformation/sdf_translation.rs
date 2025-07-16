@@ -21,7 +21,6 @@ impl SdfTranslation {
 }
 
 impl Sdf for SdfTranslation {
-    #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         produce_parameter_transform_body(children_bodies, level, || 
             format!("let {parameter} = {parameter}-{center};",
@@ -31,12 +30,10 @@ impl Sdf for SdfTranslation {
         )
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.target.clone()]
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         self.target.aabb().translate(self.translation)
     }

@@ -33,12 +33,10 @@ impl Sdf for SdfRoundBox {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         Aabb::from_points(Point::from_vec(-self.half_size), Point::from_vec(self.half_size))
     }

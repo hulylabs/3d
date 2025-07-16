@@ -18,7 +18,6 @@ impl SdfSubtraction {
 }
 
 impl Sdf for SdfSubtraction {
-    #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         assert!(children_bodies.size() >= 2);
 
@@ -27,12 +26,10 @@ impl Sdf for SdfSubtraction {
           , |left_name, right_name| format!("max({left_name},-{right_name})"))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.left.clone(), self.right.clone()]
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         self.left.aabb()
     }

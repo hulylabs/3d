@@ -37,7 +37,7 @@ impl PipelinesFactory {
     fn new_with_custom_io(context: Rc<Context>, presentation_format: wgpu::TextureFormat, caches_path: Option<PathBuf>, io: Rc<dyn Io>,) -> Self {
         if let Some(path) = caches_path.clone() {
             if let Err(e) = fs::create_dir_all(&path) {
-                info!("failed to create directories in path {:?}: {}", path, e);
+                info!("failed to create directories in path {path:?}: {e}");
             }
         }
         Self { context, presentation_format, caches_path, caches: HashMap::new(), io, }
@@ -172,10 +172,9 @@ struct FileSystemIo;
 impl Io for FileSystemIo {
     fn save(&self, path: &Path, memento: &PipelineCacheMemento) {
         memento.save_to_file(path).unwrap_or_else(|| {
-            info!("failed to write pipeline cache file {:?}", path);
+            info!("failed to write pipeline cache file {path:?}");
         });
     }
-    #[must_use]
     fn load(&self, path: &Path) -> Option<PipelineCacheMemento> {
         PipelineCacheMemento::load_from_file(path)
     }
@@ -398,7 +397,6 @@ mod tests {
             self.saved_paths.borrow_mut().push((path.to_path_buf(), memento.clone()));
             self.backend.save(path, memento);
         }
-        #[must_use]
         fn load(&self, path: &Path) -> Option<PipelineCacheMemento> {
             let memento = self.backend.load(path);
             let memento_copy_or_none = memento.clone();

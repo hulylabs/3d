@@ -21,7 +21,6 @@ impl SdfSphere {
 }
 
 impl Sdf for SdfSphere {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "return length({parameter})-{radius};",
@@ -30,12 +29,10 @@ impl Sdf for SdfSphere {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let offset = Point::new(self.radius, self.radius, self.radius);
         Aabb::from_points(Point::from_vec(-offset.to_vec()), offset)

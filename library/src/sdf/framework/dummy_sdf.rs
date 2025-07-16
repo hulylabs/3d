@@ -20,24 +20,20 @@ pub(crate) mod tests {
     }
 
     impl Default for DummySdf {
-        #[must_use]
         fn default() -> Self {
             Self::new("value")
         }
     }
     
     impl Sdf for DummySdf {
-        #[must_use]
         fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
             ShaderCode::<FunctionBody>::new(self.payload.clone())
         }
 
-        #[must_use]
         fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
             vec![]
         }
 
-        #[must_use]
         fn aabb(&self) -> Aabb {
             Aabb::make_null()
         }

@@ -20,7 +20,6 @@ pub(crate) fn is_affine(matrix: &Affine) -> bool {
 }
 
 impl Max for Vector {
-    #[must_use]
     fn max_axis(self) -> Axis {
         let mut axis = Axis::X;
         if self[Axis::Y as usize] > self[axis as usize] {
@@ -33,7 +32,6 @@ impl Max for Vector {
     }
 
     #[cfg(test)]
-    #[must_use]
     fn max(self) -> f64 {
         if self.x > self.y {
             if self.x > self.z {
@@ -55,7 +53,7 @@ impl Max for Vector {
 pub(crate) fn debug_format_human_readable_point(point: Point) -> String {
     const MAX_CHARS_TO_OUTPUT: usize = 5;
     let format_coord = |coord: f64| -> String {
-        let s = format!("{:.3}", coord);
+        let s = format!("{coord:.3}");
         if s.len() <= MAX_CHARS_TO_OUTPUT {
             s
         } else {

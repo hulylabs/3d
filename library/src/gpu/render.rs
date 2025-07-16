@@ -599,7 +599,7 @@ impl Renderer {
     pub(crate) fn denoise_and_save(&mut self) {
         let divider = self.uniforms.frame_number() as f32;
         fn save(name: &str, width: usize, height: usize, data: &[PodVector], divider: f32,) {
-            denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{}.exr", name).as_str()), width, height,
+            denoiser::write_rgba_file(denoiser::Path::new(format!("_exr_{name}.exr").as_str()), width, height,
             |x,y| {
                 let element = data[y * width + x];
                 (
@@ -626,7 +626,7 @@ impl Renderer {
                 .data(data_cast)
                 .build()
                 .unwrap();
-            let mut file = denoiser::File::create(format!("_pfm_{}.pfm", name).as_str()).unwrap();
+            let mut file = denoiser::File::create(format!("_pfm_{name}.pfm").as_str()).unwrap();
             pfm.write_into(&mut file).unwrap();
         }
 
@@ -643,6 +643,7 @@ impl Renderer {
             label: Some("rasterization pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0, }),

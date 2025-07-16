@@ -27,7 +27,6 @@ impl SdfSolidAngle {
 }
 
 impl Sdf for SdfSolidAngle {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let sin_cos = vec2f({sin}, {cos});\n\
@@ -42,12 +41,10 @@ impl Sdf for SdfSolidAngle {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let cap_radius = self.radius * self.angle_sin;
         

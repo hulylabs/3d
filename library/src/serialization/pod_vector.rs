@@ -32,12 +32,10 @@ impl Display for PodVector {
 impl AbsDiffEq for PodVector {
     type Epsilon = f32;
 
-    #[must_use]
     fn default_epsilon() -> Self::Epsilon {
         DEFAULT_EPSILON_F32
     }
 
-    #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         self.x.abs_diff_eq(&other.x, epsilon) && 
         self.y.abs_diff_eq(&other.y, epsilon) && 

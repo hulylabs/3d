@@ -11,7 +11,7 @@ pub(crate) struct PipelineCode {
 impl PipelineCode {
     #[must_use]
     pub(crate) fn new(module: Rc<wgpu::ShaderModule>, content_hash: ShaderHash, human_readable_uid: String) -> Self {
-        assert!(Self::contains_only_letters_and_underscores(human_readable_uid.as_str()), "'{}' — uid can only contain letters and underscores", human_readable_uid);
+        assert!(Self::contains_only_letters_and_underscores(human_readable_uid.as_str()), "'{human_readable_uid}' — uid can only contain letters and underscores");
         Self { module, source_hash: content_hash, human_readable_uid, }
     }
     

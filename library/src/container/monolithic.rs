@@ -24,7 +24,6 @@ impl Monolithic {
 }
 
 impl SceneObject for Monolithic {
-    #[must_use]
     fn material(&self) -> MaterialIndex {
         self.geometry.material()
     }
@@ -32,20 +31,16 @@ impl SceneObject for Monolithic {
         self.geometry.set_material(new_material)
     }
 
-    #[must_use]
     fn data_kind_uid(&self) -> usize {
         self.geometry_kind
     }
-    #[must_use]
     fn payload(&self) -> usize {
         self.payload
     }
-    #[must_use]
     fn transformation(&self) -> &Affine {
         &self.transformation
     }
 
-    #[must_use]
     fn serialized_quartet_count(&self) -> usize {
         self.geometry.serialized_quartet_count()
     }
@@ -67,14 +62,12 @@ mod tests {
     }
 
     impl RayTraceable for DummyRayTraceable {
-        #[must_use]
         fn material(&self) -> MaterialIndex {
             MaterialIndex(0)
         }
 
         fn set_material(&mut self, _material_index: MaterialIndex) {}
 
-        #[must_use]
         fn serialized_quartet_count(&self) -> usize {
             0
         }

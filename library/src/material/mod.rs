@@ -1,4 +1,4 @@
-﻿pub(crate) mod texture_procedural;
+﻿pub(crate) mod texture_procedural_3d;
 pub mod texture_reference;
 pub mod material_properties;
 pub mod material_index;
@@ -7,3 +7,5 @@ mod bitmap_texture_index;
 pub mod procedural_textures;
 pub(crate) mod texture_shader_code;
 pub mod materials_warehouse;
+pub mod texture_procedural_2d;
+mod triplanar_mapper;

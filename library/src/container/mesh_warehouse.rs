@@ -87,7 +87,6 @@ impl MeshWarehouse {
 }
 
 impl Default for MeshWarehouse {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }

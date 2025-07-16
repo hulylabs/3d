@@ -77,7 +77,6 @@ impl GpuSerializable for Parallelogram {
 }
 
 impl RayTraceable for Parallelogram {
-    #[must_use]
     fn material(&self) -> MaterialIndex {
         self.links.material_index()
     }
@@ -86,7 +85,6 @@ impl RayTraceable for Parallelogram {
         self.links.set_material_index(new_material_index)
     }
 
-    #[must_use]
     fn serialized_quartet_count(&self) -> usize {
         Parallelogram::SERIALIZED_QUARTET_COUNT
     }

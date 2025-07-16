@@ -11,12 +11,10 @@ pub(crate) struct Vertex {
 impl AbsDiffEq for Vertex {
     type Epsilon = f64;
 
-    #[must_use]
     fn default_epsilon() -> Self::Epsilon {
         DEFAULT_EPSILON_F64
     }
 
-    #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         Point::abs_diff_eq(&self.position, &other.position, epsilon) && Vector::abs_diff_eq(&self.normal, &other.normal, epsilon)
     }

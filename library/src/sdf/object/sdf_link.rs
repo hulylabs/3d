@@ -24,7 +24,6 @@ impl SdfLink {
 }
 
 impl Sdf for SdfLink {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let q = vec3f({parameter}.x, max(abs({parameter}.y)-{length},0.0), {parameter}.z);\n\
@@ -36,12 +35,10 @@ impl Sdf for SdfLink {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let enlargement = self.outer_radius + self.inner_radius;
         

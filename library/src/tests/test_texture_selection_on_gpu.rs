@@ -1,18 +1,17 @@
 ﻿#[cfg(test)]
 mod tests {
     use crate::material::procedural_textures::ProceduralTextures;
-    use crate::material::texture_procedural::TextureProcedural;
+    use crate::material::texture_procedural_3d::TextureProcedural3D;
     use crate::material::texture_shader_code::procedural_texture_conventions;
     use crate::serialization::pod_vector::PodVector;
     use crate::shader::code::{FunctionBody, ShaderCode};
     use crate::shader::conventions;
     use crate::shader::formatting_utils::format_scalar;
-    use crate::shader::function_name::FunctionName;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[must_use]
-    fn make_spy_texture(marker_value: f64) -> TextureProcedural {
+    fn make_spy_texture(marker_value: f64) -> TextureProcedural3D {
         let code = format!("\
             return vec3f({point_parameter_name}.x, {normal_parameter_name}.y, {marker});",
             point_parameter_name = conventions::PARAMETER_NAME_THE_POINT,
@@ -20,7 +19,7 @@ mod tests {
             marker = format_scalar(marker_value),
         );
 
-        TextureProcedural::new(ShaderCode::<FunctionBody>::new(code.to_string()))
+        TextureProcedural3D::from_simple_body(ShaderCode::<FunctionBody>::new(code.to_string()))
     }
     
     #[test]
@@ -29,8 +28,8 @@ mod tests {
         let second_marker: f64 = 0.23;
         
         let mut registrator = ProceduralTextures::new(None);
-        let texture_first = registrator.add(FunctionName("texture_a".to_string()), make_spy_texture(first_marker));
-        let texture_second = registrator.add(FunctionName("texture_b".to_string()), make_spy_texture(second_marker));
+        let texture_first = registrator.add(make_spy_texture(first_marker), Some("texture_a"));
+        let texture_second = registrator.add(make_spy_texture(second_marker), Some("texture_b"));
         
         let template = ShaderFunction::new("vec4f", "vec3f", procedural_texture_conventions::FUNCTION_NAME_SELECTION)
             .with_additional_shader_code(registrator.generate_gpu_code().to_string());

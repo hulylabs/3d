@@ -47,24 +47,20 @@ pub(crate) trait TransformableCoordinate {
 }
 
 impl TransformableCoordinate for Point {
-    #[must_use]
     fn new(x: f64, y: f64, z: f64) -> Self {
         Point::new(x, y, z)
     }
 
-    #[must_use]
     fn transform(self, transformation: &Transformation) -> Self {
         transformation.of_point(self)
     }
 }
 
 impl TransformableCoordinate for Vector {
-    #[must_use]
     fn new(x: f64, y: f64, z: f64) -> Self {
         Vector::new(x, y, z)
     }
 
-    #[must_use]
     fn transform(self, transformation: &Transformation) -> Self {
         transformation.of_surface_vector(self)
     }

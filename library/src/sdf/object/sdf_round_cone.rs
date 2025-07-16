@@ -24,7 +24,6 @@ impl SdfRoundCone {
 }
 
 impl Sdf for SdfRoundCone {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let b = ({radius_major}-{radius_minor})/{height};\n\
@@ -49,12 +48,10 @@ impl Sdf for SdfRoundCone {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let x_min = -self.radius_major;
         let x_max = self.radius_major;

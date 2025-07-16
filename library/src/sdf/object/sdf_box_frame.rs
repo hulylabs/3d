@@ -23,7 +23,6 @@ impl SdfBoxFrame {
 }
 
 impl Sdf for SdfBoxFrame {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let p = abs({center})-{half_size};\n\
@@ -38,12 +37,10 @@ length(max(vec3f(q.x,q.y,p.z),vec3f(0.0)))+min(max(q.x,max(q.y,p.z)),0.0));",
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         Aabb::from_points(Point::from_vec(-self.half_size), Point::from_vec(self.half_size))
     }

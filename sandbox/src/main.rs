@@ -26,17 +26,17 @@ fn main() -> Result<(), String> {
 
     match env::current_dir() {
         Ok(path) => println!("current directory: {}", path.display()),
-        Err(e) => eprintln!("error getting current directory: {}", e),
+        Err(e) => eprintln!("error getting current directory: {e}"),
     }
 
     let event_loop = EventLoop::new()
-        .map_err(|e| format!(" event loop creation failed: {}", e))?;
+        .map_err(|e| format!(" event loop creation failed: {e}"))?;
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut application = Application::default();
 
     event_loop.run_app(&mut application)
-        .map_err(|e| format!("event loop has failed: {}", e))?;
+        .map_err(|e| format!("event loop has failed: {e}"))?;
 
     Ok(())
 }
@@ -73,13 +73,13 @@ impl ApplicationHandler for Application {
                         self.demo = Some(x);
                     },
                     Err(error) => {
-                        error!("failed to create an engine: {}", error);
+                        error!("failed to create an engine: {error}");
                         event_loop.exit();
                     }
                 }
             }
             Err(error) => {
-                error!("could not create the window: {}", error);
+                error!("could not create the window: {error}");
                 event_loop.exit();
             }
         }
@@ -92,13 +92,13 @@ impl ApplicationHandler for Application {
                 event_loop.exit();
             }
             WindowEvent::Resized(new_size) => {
-                info!("window resized to {:?}", new_size);
+                info!("window resized to {new_size:?}");
                 self.demo.as_mut().map(|demo| {
                     demo.on_window_resized(new_size);
                 });
             }
             WindowEvent::ScaleFactorChanged { scale_factor: new_scale_factor, .. } => {
-                info!("window scale factor changed to {:?}", new_scale_factor);
+                info!("window scale factor changed to {new_scale_factor:?}");
             }
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().map(|window| {

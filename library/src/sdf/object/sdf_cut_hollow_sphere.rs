@@ -24,7 +24,6 @@ impl SdfCutHollowSphere {
 }
 
 impl Sdf for SdfCutHollowSphere {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let w = sqrt({radius}*{radius}-{cut_height}*{cut_height});\n\
@@ -40,12 +39,10 @@ impl Sdf for SdfCutHollowSphere {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let xz_extent = f64::max(
             self.radius, 

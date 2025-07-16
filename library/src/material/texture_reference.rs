@@ -1,10 +1,11 @@
 ﻿use crate::material::bitmap_texture_index::BitmapTextureIndex;
 use crate::material::procedural_texture_index::ProceduralTextureUid;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub enum TextureReference {
     Procedural(ProceduralTextureUid),
     Bitmap(BitmapTextureIndex),
+    #[default]
     None,
 }
 
@@ -30,12 +31,7 @@ impl TextureReference {
     }
 }
 
-impl Default for TextureReference {
-    #[must_use]
-    fn default() -> Self {
-        TextureReference::None
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -116,7 +112,7 @@ mod tests {
         let procedural = TextureReference::Procedural(ProceduralTextureUid(10));
         let none = TextureReference::None;
 
-        // Just ensure Debug formatting doesn't panic and produces some output
+        // ensure Debug formatting doesn't panic and produces some output
         assert!(!format!("{:?}", bitmap).is_empty());
         assert!(!format!("{:?}", procedural).is_empty());
         assert!(!format!("{:?}", none).is_empty());

@@ -12,7 +12,7 @@ fn main() {
             ("windows", _) => link_with_oidn_windows_dll(),
             ("macos", "aarch64") => link_with_oidn_macos_arm_dylib(),
             _ => {
-                panic!("unsupported target OS for denoiser: {}, {}", target_os, target_arch);
+                panic!("unsupported target OS for denoiser: {target_os}, {target_arch}");
             }
         }
     }
@@ -35,7 +35,7 @@ fn libraries_macos_arm_folder() -> PathBuf {
 }
 
 fn cargo_info(text: &str) {
-    println!("cargo:info={}", text);
+    println!("cargo:info={text}");
 }
 
 fn link_with_oidn_macos_arm_dylib() {
@@ -61,7 +61,7 @@ fn link_with_oidn_library(libraries_local_path: impl AsRef<Path>, dylib_filter: 
 
 pub fn copy_directory_content_to_output(local_path: impl AsRef<Path>, out_directory_up_level: usize, filter: &str) -> std::io::Result<()> {
     let out_directory = env::var("OUT_DIR")
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(|e| std::io::Error::other(e))?;
 
     let target_directory = PathBuf::from(out_directory)
         .ancestors()
@@ -69,10 +69,10 @@ pub fn copy_directory_content_to_output(local_path: impl AsRef<Path>, out_direct
         .unwrap()
         .to_path_buf();
 
-    cargo_info(format!("destination = {:?}", target_directory).as_str());
+    cargo_info(format!("destination = {target_directory:?}").as_str());
 
     {let absolute_path = fs::canonicalize(local_path.as_ref())?;
-        cargo_info(format!("source = {:?}", absolute_path).as_str());}
+        cargo_info(format!("source = {absolute_path:?}").as_str());}
 
     copy_directory(local_path, &target_directory, &Some(PathPattern::new(filter)))?;
 
@@ -81,7 +81,7 @@ pub fn copy_directory_content_to_output(local_path: impl AsRef<Path>, out_direct
 
 pub fn copy_directory_to_output(local_path: &str, out_directory_up_level: usize) -> std::io::Result<()> {
     let out_directory = env::var("OUT_DIR")
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(|e| std::io::Error::other(e))?;
 
     let target_directory = PathBuf::from(out_directory)
         .ancestors()
@@ -94,10 +94,10 @@ pub fn copy_directory_to_output(local_path: &str, out_directory_up_level: usize)
     if destination.exists() {
         fs::remove_dir_all(&destination)?;
     }
-    cargo_info(format!("destination {} = {:?}", local_path, destination).as_str());
+    cargo_info(format!("destination {local_path} = {destination:?}").as_str());
 
     {let absolute_path = fs::canonicalize(Path::new(local_path))?;
-        cargo_info(format!("source {} = {:?}", local_path, absolute_path).as_str());}
+        cargo_info(format!("source {local_path} = {absolute_path:?}").as_str());}
 
     copy_directory(local_path, &destination, &None)?;
 

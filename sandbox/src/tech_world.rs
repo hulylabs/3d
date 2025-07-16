@@ -13,6 +13,7 @@ use library::material::material_properties::{MaterialClass, MaterialProperties};
 use library::material::material_index::MaterialIndex;
 use library::material::procedural_texture_index::ProceduralTextureUid;
 use library::material::procedural_textures::ProceduralTextures;
+use library::material::texture_procedural_2d::TextureProcedural2D;
 use library::material::texture_reference::TextureReference;
 use library::palette::material::procedural_texture_checkerboard::make_checkerboard_texture;
 use library::sdf::composition::sdf_intersection::SdfIntersection;
@@ -45,7 +46,8 @@ use library::sdf::object::sdf_torus_xz::SdfTorusXz;
 use library::sdf::object::sdf_triangular_prism::SdfTriangularPrism;
 use library::sdf::object::sdf_vesica_segment::SdfVesicaSegment;
 use library::sdf::transformation::sdf_translation::SdfTranslation;
-use library::shader::function_name::FunctionName;
+use library::shader::code::{FunctionBody, Generic, ShaderCode};
+use library::shader::conventions;
 
 pub(super) struct TechSdfClasses {
     rectangular_box: NamedSdf,
@@ -286,7 +288,7 @@ impl TechMaterials {
                 .with_albedo(1.0, 0.5, 0.0)
                 .with_specular_strength(0.00001)
                 .with_roughness(0.25)
-                .with_refractive_index_eta(0.0),
+                .with_refractive_index_eta(0.0)
         );
 
         let large_box_material = materials.add(&MaterialProperties::new()
@@ -306,7 +308,7 @@ impl TechMaterials {
             &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.64, 0.77, 0.22)
-                .with_refractive_index_eta(1.4),
+                .with_refractive_index_eta(1.4)
         );
 
         let light_material = materials.add(
@@ -327,7 +329,8 @@ impl TechMaterials {
                 .with_albedo(1.0, 0.5, 0.3)
                 .with_specular(0.2, 0.2, 0.2)
                 .with_specular_strength(0.01)
-                .with_roughness(0.0),
+                .with_roughness(0.0)
+                .with_albedo_texture(TextureReference::Procedural(textures.lava()))
         );
 
         let red_material = materials.add(
@@ -335,7 +338,7 @@ impl TechMaterials {
                 .with_albedo(0.75, 0.1, 0.1)
                 .with_specular(0.75, 0.1, 0.1)
                 .with_specular_strength(0.05)
-                .with_roughness(0.95),
+                .with_roughness(0.95)
         );
 
         let blue_material = materials.add(
@@ -343,7 +346,8 @@ impl TechMaterials {
                 .with_albedo(0.1, 0.1, 0.75)
                 .with_specular(0.1, 0.1, 0.75)
                 .with_specular_strength(0.05)
-                .with_roughness(0.95),
+                .with_roughness(0.95)
+                .with_albedo_texture(TextureReference::Procedural(textures.water()))
         );
 
         let bright_red_material = materials.add(
@@ -351,7 +355,7 @@ impl TechMaterials {
                 .with_albedo(1.0, 0.0, 0.0)
                 .with_specular(1.0, 1.0, 1.0)
                 .with_specular_strength(0.05)
-                .with_roughness(0.95),
+                .with_roughness(0.95)
         );
 
         let silver_material = materials.add(
@@ -360,7 +364,7 @@ impl TechMaterials {
                 .with_albedo(0.75, 0.75, 0.75)
                 .with_specular(0.75, 0.75, 0.75)
                 .with_specular_strength(0.55)
-                .with_roughness(0.0),
+                .with_roughness(0.0)
         );
 
         let green_material = materials.add(
@@ -368,7 +372,7 @@ impl TechMaterials {
                 .with_albedo(0.05, 0.55, 0.05)
                 .with_specular(0.05, 0.55, 0.05)
                 .with_specular_strength(0.05)
-                .with_roughness(0.95),
+                .with_roughness(0.95)
         );
 
         let selected_object_material = materials.add(
@@ -378,7 +382,6 @@ impl TechMaterials {
                 .with_specular_strength(0.15)
                 .with_roughness(0.45)
                 .with_albedo_texture(TextureReference::Procedural(textures.checkerboard()))
-            ,
         );
 
         Self {
@@ -403,18 +406,55 @@ impl TechMaterials {
 
 pub(super) struct TechTextures {
     checkerboard: ProceduralTextureUid,
+    lava: ProceduralTextureUid,
+    water: ProceduralTextureUid,
 }
 
 impl TechTextures {
     #[must_use]
     pub(super) fn new(container: &mut ProceduralTextures) -> Self {
-        let checkerboard = container.add(FunctionName("checkerboard".to_string()), make_checkerboard_texture(10.0));
-        Self { checkerboard }
+        let checkerboard = container.add(make_checkerboard_texture(10.0), None);
+
+        let mut triplanar_mapper = container.make_triplanar_mapper();
+
+        let lava_texture_2d = Self::make_lava_like_texture();
+        let lava_texture_3d = triplanar_mapper.make_triplanar_mapping(&lava_texture_2d, 8.0, None);
+        let lava = container.add(lava_texture_3d, None);
+
+        let water_texture_2d = Self::make_water_like_texture();
+        let water_texture_3d = triplanar_mapper.make_triplanar_mapping(&water_texture_2d, 8.0, None);
+        let water = container.add(water_texture_3d, None);
+
+        Self { checkerboard, lava, water }
+    }
+
+    #[must_use]
+    fn make_lava_like_texture() -> TextureProcedural2D {
+        let utilities = include_str!("texture_2d_lava_like.wgsl");
+        let body = format!("return lava_like_texture({uv_parameter_name});", uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES);
+        TextureProcedural2D::new(ShaderCode::<Generic>::new(utilities.to_string()), ShaderCode::<FunctionBody>::new(body.to_string()))
+    }
+
+    #[must_use]
+    fn make_water_like_texture() -> TextureProcedural2D {
+        let utilities = include_str!("texture_2d_water_like.wgsl");
+        let body = format!("return water_like_surface({uv_parameter_name});", uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES);
+        TextureProcedural2D::new(ShaderCode::<Generic>::new(utilities.to_string()), ShaderCode::<FunctionBody>::new(body.to_string()))
     }
 
     #[must_use]
     fn checkerboard(&self) -> ProceduralTextureUid {
         self.checkerboard
+    }
+
+    #[must_use]
+    fn lava(&self) -> ProceduralTextureUid {
+        self.lava
+    }
+
+    #[must_use]
+    fn water(&self) -> ProceduralTextureUid {
+        self.water
     }
 }
 
@@ -668,7 +708,7 @@ impl TechWorld {
                 scene.add_mesh(&meshes, mesh, &location, self.materials.black_material);
             },
             Err(mesh_loading_error) => {
-                error!("failed to load mesh: {}", mesh_loading_error);
+                error!("failed to load mesh: {mesh_loading_error}");
             },
         }
     }
@@ -810,7 +850,7 @@ impl TechWorld {
                 }
             },
             Err(mesh_loading_error) => {
-                error!("failed to load cube mesh: {}", mesh_loading_error);
+                error!("failed to load cube mesh: {mesh_loading_error}");
             },
         }
     }

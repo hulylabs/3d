@@ -41,11 +41,9 @@ pub trait CameraKind {
 
 pub struct PerspectiveCamera;
 impl CameraKind for PerspectiveCamera {
-    #[must_use]
     fn ray_origin(&self, eye: Point, _look_at: Point) -> Affine {
         projection_into_point(eye)
     }
-    #[must_use]
     fn box_clone(&self) -> Box<dyn CameraKind> {
         Box::new(Self{})
     }
@@ -53,11 +51,9 @@ impl CameraKind for PerspectiveCamera {
 
 pub struct OrthographicCamera;
 impl CameraKind for OrthographicCamera {
-    #[must_use]
     fn ray_origin(&self, eye: Point, look_at: Point) -> Affine {
         projection_into_plane(eye, look_at - eye)
     }
-    #[must_use]
     fn box_clone(&self) -> Box<dyn CameraKind> {
         Box::new(Self{})
     }

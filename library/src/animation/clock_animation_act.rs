@@ -136,7 +136,7 @@ impl ClockAnimationAct<PhaseConstruction> {
 
     #[must_use]
     pub fn playback_speed_multiplier(mut self, multiplier: f64) -> Self {
-        assert!(multiplier > 0.0, "playback speed multiplier must be positive, got {}", multiplier);
+        assert!(multiplier > 0.0, "playback speed multiplier must be positive, got {multiplier}");
         self.local_playback_speed_multiplier = multiplier;
         self
     }
@@ -182,14 +182,12 @@ impl<Phase> ClockAnimationAct<Phase> {
 }
 
 impl Default for ClockAnimationAct<PhaseConstruction> {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Default for ClockAnimationAct<PhaseAlive> {
-    #[must_use]
     fn default() -> Self {
         ClockAnimationAct::<PhaseConstruction>::new().make()
     }

@@ -20,7 +20,6 @@ impl SdfPyramid {
 }
 
 impl Sdf for SdfPyramid {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let h = {height};\n\
@@ -43,12 +42,10 @@ impl Sdf for SdfPyramid {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         Aabb::from_points(Point::new(-self.height, 0.0, -self.height,), Point::new(self.height, self.height, self.height,))
     }

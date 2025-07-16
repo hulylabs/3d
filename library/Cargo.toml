@@ -3,15 +3,18 @@ name = "library"
 version = "0.1.0"
 edition = "2024"
 
+[lints.clippy]
+redundant_closure = "allow"
+
 [features]
 denoiser = []
 
 [dependencies]
 cgmath = "0.18.0"
 log = "0.4.27"
-wgpu = "25.0.2"
+wgpu = "26.0.1"
 winit = "0.30.11"
-bytemuck = { version = "1.23.0", features = ["derive"] }
+bytemuck = { version = "1.23.1", features = ["derive"] }
 pollster = "0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
@@ -23,7 +26,7 @@ futures-intrusive = "0.5"
 futures = "0.3.31"
 exr = "1.73.0"
 pxm = "0.1.0"
-num_enum = "0.7.3"
+num_enum = "0.7.4"
 float-pretty-print = "0.1.1"
 derive_more = { version = "2.0.1", features = ["display"] }
 disjoint = "0.8.0"

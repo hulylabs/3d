@@ -7,7 +7,7 @@ impl VariableName {
     #[must_use]
     pub(crate) fn new(name: &str, level: Option<usize>) -> VariableName {
         if let Some(level) = level { 
-            Self(format!("{}_{}", name, level))
+            Self(format!("{name}_{level}"))
         } else { 
             Self(name.to_string())
         }
@@ -15,21 +15,18 @@ impl VariableName {
 }
 
 impl From<&VariableName> for String {
-    #[must_use]
     fn from(name: &VariableName) -> Self {
         name.0.clone()
     }
 }
 
 impl From<VariableName> for String {
-    #[must_use]
     fn from(name: VariableName) -> Self {
         name.0
     }
 }
 
 impl AsRef<str> for VariableName {
-    #[must_use]
     fn as_ref(&self) -> &str {
         &self.0
     }

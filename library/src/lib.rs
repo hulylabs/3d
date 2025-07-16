@@ -153,7 +153,7 @@ impl Engine {
         let lost_device_handler = {
             let device_was_lost = Arc::clone(&device_was_lost_flag);
             move |reason, message| {
-                info!("device was lost: {:?}, {}", reason, message);
+                info!("device was lost: {reason:?}, {message}");
                 device_was_lost.store(true, Ordering::SeqCst);
             }
         };
@@ -294,7 +294,7 @@ impl Engine {
                     self.denoising_measurer.last_time().as_millis(),
                 )
             } else {
-                format!("CPU observed FPS: {}", fps)
+                format!("CPU observed FPS: {fps}")
             };
         
         self.performance_reporter.do_write(performance_report);

@@ -23,7 +23,6 @@ impl SdfTriangularPrism {
 }
 
 impl Sdf for SdfTriangularPrism {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let p = {parameter};\n\
@@ -35,12 +34,10 @@ impl Sdf for SdfTriangularPrism {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         /*
         Tke equilateral triangle, take it's mass center and connect it with vertices.

@@ -34,7 +34,7 @@ impl UniqueSdfClassName {
         if name.chars().all(|c| c.is_ascii_alphabetic() || c == '_') {
             UniqueSdfClassName(name)
         } else {
-            panic!("'{}' is invalid: names must contain only letters and underscores", name)
+            panic!("'{name}' is invalid: names must contain only letters and underscores")
         }
     }
 

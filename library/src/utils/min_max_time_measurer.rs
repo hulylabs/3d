@@ -47,7 +47,6 @@ impl MinMaxTimeMeasurer {
 }
 
 impl Default for MinMaxTimeMeasurer {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }

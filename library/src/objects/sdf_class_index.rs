@@ -11,7 +11,6 @@ impl SdfClassIndex {
 }
 
 impl From<usize> for SdfClassIndex {
-    #[must_use]
     fn from(value: usize) -> Self {
         SdfClassIndex(value)
     }

@@ -63,12 +63,10 @@ impl Triangle {
 impl AbsDiffEq for Triangle {
     type Epsilon = f64;
 
-    #[must_use]
     fn default_epsilon() -> Self::Epsilon {
         DEFAULT_EPSILON_F64
     }
 
-    #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
            Vertex::abs_diff_eq(&self.a, &other.a, epsilon)
         && Vertex::abs_diff_eq(&self.b, &other.b, epsilon)

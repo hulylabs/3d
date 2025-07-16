@@ -2,9 +2,8 @@
 use crate::shader::function_name::FunctionName;
 
 impl From<&UniqueSdfClassName> for FunctionName {
-    #[must_use]
     fn from(value: &UniqueSdfClassName) -> Self {
-        FunctionName(format!("sdf_{}", value))
+        FunctionName(format!("sdf_{value}"))
     }
 }
 

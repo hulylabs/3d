@@ -18,3 +18,4 @@ fs_extra = "1.3.0"
 
 [lints.clippy]
 option_map_unit_fn = "allow"
+redundant_closure = "allow"

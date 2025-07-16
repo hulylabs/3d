@@ -9,8 +9,8 @@ mod tests {
         let context = create_headless_wgpu_context();
         let resources = Resources::new(context);
         
-        const STUB_IMPLEMENTATIONS: &str = include_str!("../../assets/shaders/dummy_implementations.wgsl");
-        let whole_shader_code = format!("{}\n{}", WHOLE_TRACER_GPU_CODE, STUB_IMPLEMENTATIONS); 
+        const DUMMY_IMPLEMENTATIONS: &str = include_str!("../../assets/shaders/dummy_implementations.wgsl");
+        let whole_shader_code = format!("{}\n{}", WHOLE_TRACER_GPU_CODE, DUMMY_IMPLEMENTATIONS);
         
         let _ = resources.create_shader_module("whole gpu code", whole_shader_code.as_str());
     }

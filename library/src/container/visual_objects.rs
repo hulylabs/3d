@@ -2,7 +2,6 @@
 use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::container::bvh_proxies::{proxy_of_sdf, SceneObjects};
-use crate::material::materials_warehouse::MaterialsWarehouse;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::container::monolithic::Monolithic;
 use crate::container::scene_object::SceneObject;
@@ -11,10 +10,14 @@ use crate::container::statistics::Statistics;
 use crate::container::triangulated::Triangulated;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
+use crate::geometry::utils::is_affine;
+use crate::material::material_index::MaterialIndex;
+use crate::material::materials_warehouse::MaterialsWarehouse;
+use crate::material::procedural_textures::ProceduralTextures;
 use crate::objects::common_properties::Linkage;
 use crate::objects::parallelogram::Parallelogram;
-use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
 use crate::sdf::framework::code_generator::SdfRegistrator;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
@@ -25,15 +28,12 @@ use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
 use crate::utils::version::Version;
 use cgmath::SquareMatrix;
+use more_asserts::assert_gt;
 use std::collections::HashMap;
 use std::io::Error;
 use std::path::Path;
-use more_asserts::assert_gt;
 use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
-use crate::geometry::utils::is_affine;
-use crate::material::material_index::MaterialIndex;
-use crate::material::procedural_textures::ProceduralTextures;
 
 pub struct VisualObjects {
     per_object_kind_statistics: Vec<Statistics>,
@@ -62,7 +62,7 @@ impl VisualObjects {
             per_object_kind_statistics,
             objects: HashMap::new(),
             triangles: Vec::new(),
-            materials: MaterialsWarehouse::new(procedural_textures.unwrap_or(ProceduralTextures::new(None))),
+            materials: MaterialsWarehouse::new(procedural_textures),
             sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
@@ -100,7 +100,7 @@ impl VisualObjects {
     pub(crate) fn compose_shader(&self, base_code: &str) -> String {
         let sdf_classes_code = self.sdf_prototypes.sdf_classes_code();
         let procedural_textures_code = self.materials.procedural_textures_code();
-        format!("{}\n{}\n{}", base_code, sdf_classes_code, procedural_textures_code)
+        format!("{base_code}\n{sdf_classes_code}\n{procedural_textures_code}")
     }
 
     #[must_use]
@@ -121,7 +121,7 @@ impl VisualObjects {
                     self.per_object_kind_statistics[object.data_kind_uid()].register_object_mutation();   
                 }
             },
-            None => panic!("object {} not found", victim),
+            None => panic!("object {victim} not found"),
         }
     }
 
@@ -131,7 +131,7 @@ impl VisualObjects {
             Some(object) => {
                 object.material()
             },
-            None => panic!("object {} not found", victim),
+            None => panic!("object {victim} not found"),
         }
     }
 
@@ -149,7 +149,7 @@ impl VisualObjects {
     pub fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
         assert!(is_affine(location), "projection matrices are not supported");
         assert_gt!(ray_marching_step_scale, 0.0);
-        let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{}' sdf has not been found", class_uid));
+        let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{class_uid}' sdf has not been found"));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
@@ -331,10 +331,12 @@ mod tests {
     use crate::container::visual_objects::{DataKind, VisualObjects};
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::{Affine, Transformation};
+    use crate::material::material_index::MaterialIndex;
+    use crate::material::material_properties::MaterialProperties;
     use crate::objects::common_properties::Linkage;
     use crate::objects::parallelogram::Parallelogram;
-    use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
+    use crate::objects::sdf_instance::SdfInstance;
     use crate::sdf::framework::code_generator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::object::sdf_sphere::SdfSphere;
@@ -350,8 +352,6 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
-    use crate::material::material_properties::MaterialProperties;
-    use crate::material::material_index::MaterialIndex;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {

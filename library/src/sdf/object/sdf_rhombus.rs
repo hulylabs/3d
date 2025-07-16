@@ -26,7 +26,6 @@ impl SdfRhombus {
 }
 
 impl Sdf for SdfRhombus {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let p = abs({parameter});\n\
@@ -43,12 +42,10 @@ impl Sdf for SdfRhombus {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let x_min = -self.size_y-self.corners_radius;
         let x_max = -x_min;

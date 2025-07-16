@@ -159,11 +159,9 @@ pub trait MinMax {
 }
 
 impl MinMax for Point {
-    #[must_use]
     fn component_wise_min(self, other: Point) -> Self {
         Point::new(self.x.min(other.x), self.y.min(other.y), self.z.min(other.z))
     }
-    #[must_use]
     fn component_wise_max(self, other: Point) -> Self {
         Point::new(self.x.max(other.x), self.y.max(other.y), self.z.max(other.z))
     }
@@ -172,12 +170,10 @@ impl MinMax for Point {
 impl AbsDiffEq for Aabb {
     type Epsilon = f64;
 
-    #[must_use]
     fn default_epsilon() -> Self::Epsilon {
         DEFAULT_EPSILON_F64
     }
 
-    #[must_use]
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         Point::abs_diff_eq(&self.min, &other.min, epsilon) && Point::abs_diff_eq(&self.max, &other.max, epsilon)
     }

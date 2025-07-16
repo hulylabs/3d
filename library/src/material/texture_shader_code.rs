@@ -11,7 +11,7 @@ pub(crate) mod procedural_texture_conventions {
 }
 
 #[must_use]
-pub(crate) fn format_common_texture_parameters() -> String {
+pub(crate) fn format_common_texture_3d_parameters() -> String {
     format!(
         "{parameter_point}: vec3f, {parameter_normal}: vec3f, {parameter_time}: f32",
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
@@ -20,7 +20,7 @@ pub(crate) fn format_common_texture_parameters() -> String {
     )
 }
 
-pub(super) fn write_texture_selection(function_to_select: &FunctionName, texture_index: ProceduralTextureUid, buffer: &mut String) -> anyhow::Result<()> {
+pub(super) fn write_texture_3d_selection(function_to_select: &FunctionName, texture_index: ProceduralTextureUid, buffer: &mut String) -> anyhow::Result<()> {
     writeln!(
         buffer,
         "if ({parameter_index} == {index}) {{ return {function_name}({point_parameter},{normal_parameter},{time_parameter}); }}",
@@ -34,24 +34,24 @@ pub(super) fn write_texture_selection(function_to_select: &FunctionName, texture
     Ok(())
 }
 
-pub(crate) fn write_texture_selection_function_opening(buffer: &mut String) -> anyhow::Result<()> {
+pub(crate) fn write_texture_3d_selection_function_opening(buffer: &mut String) -> anyhow::Result<()> {
     writeln!(
         buffer,
         "fn {selection_function_name}({parameter_texture_index}: i32, {common_parameters}) -> {return_type} {{",
         selection_function_name = procedural_texture_conventions::FUNCTION_NAME_SELECTION,
         parameter_texture_index = procedural_texture_conventions::PARAMETER_NAME_INDEX,
-        common_parameters = format_common_texture_parameters(),
+        common_parameters = format_common_texture_3d_parameters(),
         return_type = procedural_texture_conventions::RETURN_TYPE,
     )?;
     Ok(())
 }
 
-pub(super) fn write_texture_code(body: &ShaderCode<FunctionBody>, function_name: &FunctionName, buffer: &mut String) -> anyhow::Result<()> {
+pub(super) fn write_texture_3d_code(body: &ShaderCode<FunctionBody>, function_name: &FunctionName, buffer: &mut String) -> anyhow::Result<()> {
     write!(
         buffer,
         "fn {function_name}({common_parameters})->{return_type}{{\n{body}\n}}\n",
         function_name = function_name,
-        common_parameters = format_common_texture_parameters(),
+        common_parameters = format_common_texture_3d_parameters(),
         return_type = procedural_texture_conventions::RETURN_TYPE,
         body = body,
     )?;
@@ -71,7 +71,7 @@ mod tests {
         let texture_index = ProceduralTextureUid(17);
 
         let mut buffer = "prefix: ".to_string();
-        write_texture_selection(&function_name, texture_index, &mut buffer).unwrap();
+        write_texture_3d_selection(&function_name, texture_index, &mut buffer).unwrap();
 
         assert_eq!(
             buffer,
@@ -83,7 +83,7 @@ mod tests {
     fn test_write_texture_selection_function_opening() {
         let mut buffer = "prefix: ".to_string();
 
-        write_texture_selection_function_opening(&mut buffer).unwrap();
+        write_texture_3d_selection_function_opening(&mut buffer).unwrap();
 
         assert_eq!(
             buffer,
@@ -97,7 +97,7 @@ mod tests {
         let body = ShaderCode::<FunctionBody>::new("return point;".to_string());
 
         let mut buffer = "prefix: ".to_string();
-        write_texture_code(&body, &function_name, &mut buffer).unwrap();
+        write_texture_3d_code(&body, &function_name, &mut buffer).unwrap();
 
         assert_eq!(
             buffer,
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_format_common_texture_parameters() {
-        let result = format_common_texture_parameters();
+        let result = format_common_texture_3d_parameters();
         assert_eq!(result, "point: vec3f, normal: vec3f, time: f32");
     }
 }

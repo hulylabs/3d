@@ -57,26 +57,22 @@ impl SdfTwisterAlongAxis {
 }
 
 impl Sdf for SdfTwisterAlongAxis {
-    #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         produce_parameter_transform_body(children_bodies, level, || {
             self.format_evaluation()
         })
     }
 
-    #[must_use]
     fn animation_only(&self) -> Option<ShaderCode<FunctionBody>> {
         let mut undo_code = self.format_evaluation();
         undo_code.push_str(format!("return {};\n", conventions::PARAMETER_NAME_THE_POINT).as_str());
         Some(ShaderCode::<FunctionBody>::new(undo_code))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.target.clone()]
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let circumscribed_cylinder = circumscribed_cylinder(&self.target.aabb(), self.axis);
         circumscribed_cylinder.aabb()

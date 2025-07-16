@@ -178,7 +178,7 @@ impl Sandbox {
                     self.engine.camera().set_kind(Box::new(OrthographicCamera {}));
                 } else if "d" == letter_key {
                     self.engine.scene().dump_scene_bvh("scene_bvh.dot").unwrap_or_else(|e| {
-                        println!("Failed to dump scene_bvh.dot: {}", e);
+                        println!("Failed to dump scene_bvh.dot: {e}");
                     });
                 } else if "r" == letter_key {
                     self.engine.camera().set_from(&make_default_camera());
@@ -231,7 +231,7 @@ impl Sandbox {
         let camera = make_default_camera();
         
         let mut sdf_registrator = SdfRegistrator::default();
-        let mut procedural_textures_registrator = ProceduralTextures::default();
+        let mut procedural_textures_registrator = ProceduralTextures::new(None);
         
         let tech_sdf_classes = TechSdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);

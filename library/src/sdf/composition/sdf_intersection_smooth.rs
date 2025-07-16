@@ -22,7 +22,6 @@ impl SdfIntersectionSmooth {
 }
 
 impl Sdf for SdfIntersectionSmooth {
-    #[must_use]
     fn produce_body(&self, children_bodies: &mut Stack<ShaderCode<FunctionBody>>, level: Option<usize>) -> ShaderCode<FunctionBody> {
         assert!(children_bodies.size() >= 2);
         
@@ -35,12 +34,10 @@ impl Sdf for SdfIntersectionSmooth {
         )
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         vec![self.left.clone(), self.right.clone()]
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         intersection_aabb(self.left.clone(), self.right.clone())
     }

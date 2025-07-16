@@ -4,14 +4,13 @@ mod tests {
     use crate::material::texture_shader_code::procedural_texture_conventions;
     use crate::palette::material::procedural_texture_checkerboard::make_checkerboard_texture;
     use crate::serialization::pod_vector::PodVector;
-    use crate::shader::function_name::FunctionName;
     use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[test]
     fn test_make_checkerboard_texture() {
         let mut registrator = ProceduralTextures::new(None);
-        let texture_under_test_uid = registrator.add(FunctionName("texture_checkerboard".to_string()), make_checkerboard_texture(1.0));
+        let texture_under_test_uid = registrator.add(make_checkerboard_texture(1.0), Some("texture_checkerboard"));
         let shader_code = registrator.generate_gpu_code().to_string();
 
         let template = ShaderFunction::new("vec4f", "vec3f", procedural_texture_conventions::FUNCTION_NAME_SELECTION)

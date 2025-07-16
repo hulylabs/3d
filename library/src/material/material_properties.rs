@@ -13,7 +13,6 @@ pub enum MaterialClass {
 }
 
 impl Default for MaterialClass {
-    #[must_use]
     fn default() -> Self {
         Self::Lambert
     }
@@ -132,7 +131,6 @@ impl GpuSerializable for MaterialProperties {
 }
 
 impl Default for MaterialProperties {
-    #[must_use]
     fn default() -> Self {
         Self {
             albedo: Self::ZERO_COLOR,

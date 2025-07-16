@@ -51,7 +51,6 @@ impl GpuSerializable for SdfInstance {
 }
 
 impl RayTraceable for SdfInstance {
-    #[must_use]
     fn material(&self) -> MaterialIndex {
         self.links.material_index()
     }
@@ -60,7 +59,6 @@ impl RayTraceable for SdfInstance {
         self.links.set_material_index(new_material_index)
     }
 
-    #[must_use]
     fn serialized_quartet_count(&self) -> usize {
         SdfInstance::SERIALIZED_QUARTET_COUNT
     }

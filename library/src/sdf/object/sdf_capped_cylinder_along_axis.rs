@@ -38,7 +38,6 @@ fn swizzle(axis: Axis) -> Swizzling {
 }
 
 impl Sdf for SdfCappedCylinderAlongAxis {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         let swizzling = swizzle(self.axis);
         ShaderCode::<FunctionBody>::new(format!(
@@ -52,12 +51,10 @@ impl Sdf for SdfCappedCylinderAlongAxis {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         let mut min = Point::new(0.0, 0.0, 0.0);
         let mut max = Point::new(0.0, 0.0, 0.0);

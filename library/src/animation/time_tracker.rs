@@ -87,7 +87,7 @@ impl TimeTracker {
             if let Some(animatable)  = self.tracked.get_mut(uid) {
                 animatable.set_index(index);
             } else {
-                panic!("unknown object uid {}", uid);
+                panic!("unknown object uid {uid}");
             } 
         }
     }

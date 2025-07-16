@@ -12,7 +12,6 @@ impl AddAssign<u64> for Version {
 impl Add<u64> for Version {
     type Output = Self;
 
-    #[must_use]
     fn add(self, other: u64) -> Self {
         Version(self.0 + other)
     }

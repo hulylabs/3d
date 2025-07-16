@@ -43,7 +43,6 @@ pub(crate) mod tests {
     }
 
     impl<T> Default for SdfSampleCases<T> {
-        #[must_use]
         fn default() -> Self {
             Self::new()
         }

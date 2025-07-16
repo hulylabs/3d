@@ -122,7 +122,6 @@ impl SdfRegistrator {
 }
 
 impl Default for SdfRegistrator {
-    #[must_use]
     fn default() -> Self {
         Self::new()
     }

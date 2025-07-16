@@ -22,7 +22,6 @@ impl SdfCapsule {
 }
 
 impl Sdf for SdfCapsule {
-    #[must_use]
     fn produce_body(&self, _children_bodies: &mut Stack<ShaderCode<FunctionBody>>, _level: Option<usize>) -> ShaderCode<FunctionBody> {
         ShaderCode::<FunctionBody>::new(format!(
             "let pa = {parameter} - vec3f({a_x},{a_y},{a_z});\n\
@@ -40,12 +39,10 @@ impl Sdf for SdfCapsule {
         ))
     }
 
-    #[must_use]
     fn descendants(&self) -> Vec<Rc<dyn Sdf>> {
         Vec::new()
     }
 
-    #[must_use]
     fn aabb(&self) -> Aabb {
         Aabb::from_points(self.start, self.end).offset(self.radius)
     }
