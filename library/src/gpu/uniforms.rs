@@ -1,7 +1,8 @@
-﻿use winit::dpi::PhysicalSize;
-use crate::gpu::frame_buffer_size::FrameBufferSize;
+﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::scene::camera::Camera;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use std::time::Duration;
+use winit::dpi::PhysicalSize;
 
 pub(crate) struct Uniforms {
     frame_buffer_size: FrameBufferSize,
@@ -11,11 +12,13 @@ pub(crate) struct Uniforms {
     parallelograms_count: u32,
     bvh_length: u32,
     pixel_side_subdivision: u32,
+
+    global_time_seconds: f32,
 }
 
 impl Uniforms {
     #[must_use]
-    pub(crate) fn new(frame_buffer_size: FrameBufferSize, camera: Camera, pixel_side_subdivision: u32) -> Self {
+    pub(crate) fn new(frame_buffer_size: FrameBufferSize, camera: Camera, pixel_side_subdivision: u32, current_time: Duration) -> Self {
         Self {
             frame_buffer_size,
             frame_number: 0,
@@ -23,6 +26,7 @@ impl Uniforms {
             parallelograms_count: 0,
             bvh_length: 0,
             pixel_side_subdivision,
+            global_time_seconds: current_time.as_secs_f32(),
         }
     }
     
@@ -36,6 +40,10 @@ impl Uniforms {
 
     pub(super) fn next_frame(&mut self, increment: u32) {
         self.frame_number += increment;
+    }
+
+    pub(super) fn update_time(&mut self, current_time: Duration) {
+        self.global_time_seconds = current_time.as_secs_f32();
     }
 
     #[must_use]
@@ -94,7 +102,12 @@ impl Uniforms {
         
         self.camera.serialize_into(&mut result);
 
-        result.write_quartet_u32(self.parallelograms_count, self.bvh_length, self.pixel_side_subdivision, 0);
+        result.write_quartet(|writer| {
+            writer.write_unsigned(self.parallelograms_count);
+            writer.write_unsigned(self.bvh_length);
+            writer.write_unsigned(self.pixel_side_subdivision);
+            writer.write_float_32(self.global_time_seconds);
+        });
         
         debug_assert!(result.object_fully_written());
         result
@@ -103,9 +116,10 @@ impl Uniforms {
 
 #[cfg(test)]
 mod tests {
-    use cgmath::EuclideanSpace;
-    use crate::geometry::alias::Point;
+    use std::time::Instant;
     use super::*;
+    use crate::geometry::alias::Point;
+    use cgmath::EuclideanSpace;
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
@@ -113,6 +127,7 @@ mod tests {
     const DEFAULT_PARALLELOGRAMS_COUNT: u32 = 5;
     const DEFAULT_BVH_LENGTH: u32 = 8;
     const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
+    const DEFAULT_GLOBAL_TIME_SECONDS: f32 = 5.0;
 
     const SLOT_FRAME_WIDTH: usize = 0;
     const SLOT_FRAME_HEIGHT: usize = 1;
@@ -126,7 +141,8 @@ mod tests {
     const SLOT_PARALLELOGRAMS_COUNT: usize = 40;
     const SLOT_BVH_LENGTH: usize = 41;
     const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 42;
-    
+    const SLOT_GLOBAL_TIME: usize = 43;
+
     #[must_use]
     pub(crate) fn make_test_uniforms_instance() -> Uniforms {
         let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
@@ -140,6 +156,7 @@ mod tests {
             parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
             bvh_length: DEFAULT_BVH_LENGTH,
             pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
+            global_time_seconds: DEFAULT_GLOBAL_TIME_SECONDS,
         }
     }
 
@@ -201,7 +218,10 @@ mod tests {
 
     #[test]
     fn test_uniforms_serialize() {
-        let system_under_test = make_test_uniforms_instance();
+        let mut system_under_test = make_test_uniforms_instance();
+
+        let expected_time = Instant::now().elapsed();
+        system_under_test.update_time(expected_time);
 
         let actual_state = system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
@@ -217,5 +237,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_PARALLELOGRAMS_COUNT].to_bits(), DEFAULT_PARALLELOGRAMS_COUNT);
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
         assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
+        assert_eq!(actual_state_floats[SLOT_GLOBAL_TIME], expected_time.as_secs_f32());
     }
 }

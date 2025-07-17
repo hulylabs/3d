@@ -28,6 +28,7 @@ mod tests {
     use cgmath::num_traits::float::FloatCore;
     use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
     use std::f32::consts::SQRT_2;
+    use std::time::Instant;
     use crate::material::material_index::MaterialIndex;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
@@ -463,7 +464,7 @@ mod tests {
     fn make_test_uniforms() -> Uniforms {
         let dummy_camera = Camera::new_orthographic_camera(1.0, Point::origin());
         let dummy_frame_buffer_size = FrameBufferSize::new(1, 1);
-        Uniforms::new(dummy_frame_buffer_size, dummy_camera, 1)
+        Uniforms::new(dummy_frame_buffer_size, dummy_camera, 1, Instant::now().elapsed())
     }
 
     #[must_use]

@@ -430,15 +430,21 @@ impl TechTextures {
 
     #[must_use]
     fn make_lava_like_texture() -> TextureProcedural2D {
-        let utilities = include_str!("texture_2d_lava_like.wgsl");
-        let body = format!("return lava_like_texture({uv_parameter_name});", uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES);
-        TextureProcedural2D::new(ShaderCode::<Generic>::new(utilities.to_string()), ShaderCode::<FunctionBody>::new(body.to_string()))
+        Self::make_texture_2d(include_str!("texture_2d_lava_like.wgsl"), "lava_like_texture")
     }
 
     #[must_use]
     fn make_water_like_texture() -> TextureProcedural2D {
-        let utilities = include_str!("texture_2d_water_like.wgsl");
-        let body = format!("return water_like_surface({uv_parameter_name});", uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES);
+        Self::make_texture_2d(include_str!("texture_2d_water_like.wgsl"), "water_like_surface")
+    }
+
+    #[must_use]
+    fn make_texture_2d(utilities: &str, main_function: &str) -> TextureProcedural2D {
+        let body = format!(
+            "return {main_function}({uv_parameter_name}, {time_parameter});",
+            uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES,
+            time_parameter=conventions::PARAMETER_NAME_THE_TIME,
+        );
         TextureProcedural2D::new(ShaderCode::<Generic>::new(utilities.to_string()), ShaderCode::<FunctionBody>::new(body.to_string()))
     }
 

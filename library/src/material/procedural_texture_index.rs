@@ -1,6 +1,6 @@
 ﻿use derive_more::Display;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Display)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Display, Hash)]
 pub struct ProceduralTextureUid(pub usize);
 
 #[cfg(test)]

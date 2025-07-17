@@ -82,17 +82,21 @@ impl ShaderCode<FunctionBody> {
     }
 }
 
+impl<Kind> ShaderCode<Kind> {
+    #[must_use]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.value.is_empty()
+    }
+    #[must_use]
+    pub(crate) fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    impl<Kind> ShaderCode<Kind> {
-        #[must_use]
-        pub(crate) fn as_str(&self) -> &str {
-            self.value.as_str()
-        }
-    }
-    
     #[test]
     fn test_function_body_conversion_to_block_expression() {
         assert_eq!(

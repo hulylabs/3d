@@ -45,6 +45,11 @@ impl MaterialProperties {
         Self { ..Self::default() }
     }
 
+    #[must_use]
+    pub fn albedo_texture(&self) -> TextureReference {
+        self.albedo_texture
+    }
+
     pub fn with_albedo(mut self, r: f32, g: f32, b: f32) -> Self {
         assert!(r >= 0.0);
         assert!(g >= 0.0);

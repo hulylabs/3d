@@ -31,6 +31,11 @@ impl Hub {
     }
 
     #[must_use]
+    pub(crate) fn any_objects_have_animated_texture(&self) -> bool {
+        self.container.any_object_has_animated_texture()
+    }
+
+    #[must_use]
     pub fn animator(&self) -> &TimeTracker {
         &self.time_tracker
     }

@@ -113,6 +113,13 @@ impl VisualObjects {
         &self.materials
     }
 
+    #[must_use]
+    pub(crate) fn any_object_has_animated_texture(&self) -> bool {
+        self.objects.iter().any(|(_, object)|{
+            self.materials.animated(object.material())
+        })
+    }
+
     pub(crate) fn set_material(&mut self, victim: ObjectUid, material: MaterialIndex) {
         match self.objects.get_mut(&victim) {
             Some(object) => {
@@ -333,6 +340,10 @@ mod tests {
     use crate::geometry::transform::{Affine, Transformation};
     use crate::material::material_index::MaterialIndex;
     use crate::material::material_properties::MaterialProperties;
+    use crate::material::procedural_texture_index::ProceduralTextureUid;
+    use crate::material::procedural_textures::ProceduralTextures;
+    use crate::material::texture_procedural_3d::TextureProcedural3D;
+    use crate::material::texture_reference::TextureReference;
     use crate::objects::common_properties::Linkage;
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf_class_index::SdfClassIndex;
@@ -342,6 +353,8 @@ mod tests {
     use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
+    use crate::shader::code::{FunctionBody, ShaderCode};
+    use crate::shader::conventions;
     use crate::utils::object_uid::ObjectUid;
     use crate::utils::tests::assert_utils::tests::assert_all_not_equal;
     use crate::utils::version::Version;
@@ -368,6 +381,62 @@ mod tests {
         sdf_classes.add(&NamedSdf::new(SdfSphere::new(1.0), sphere_sdf_name.clone()));
 
         (sphere_sdf_name, sdf_classes)
+    }
+
+    #[must_use]
+    fn make_empty_container() -> VisualObjects {
+        VisualObjects::new(None, None)
+    }
+
+    #[must_use]
+    fn make_container_with_animated_texture_and_sdf() -> (VisualObjects, ProceduralTextureUid, UniqueSdfClassName) {
+        let mut textures = ProceduralTextures::new(None);
+        let texture_code = format!("return vec3f({point_parameter_name}, 0.0, 0.0);\n", point_parameter_name = conventions::PARAMETER_NAME_THE_TIME);
+        let texture = TextureProcedural3D::from_simple_body(ShaderCode::<FunctionBody>::new(texture_code));
+        let texture_uid = textures.add(texture, None);
+
+        let mut sdf_registrator = SdfRegistrator::new();
+        let sdf_class_name = UniqueSdfClassName::new("i".to_string());
+        sdf_registrator.add(&NamedSdf::new(SdfSphere::new(1.0), sdf_class_name.clone()));
+
+        (VisualObjects::new(Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
+    }
+
+    #[must_use]
+    fn prepare_animated_material_fixture() -> (VisualObjects, MaterialIndex, UniqueSdfClassName) {
+        let (mut system_under_test, animated_texture, sdf_class) = make_container_with_animated_texture_and_sdf();
+        assert_eq!(system_under_test.any_object_has_animated_texture(), false);
+
+        let texture_reference = TextureReference::Procedural(animated_texture);
+        let material_properties = MaterialProperties::default().with_albedo_texture(texture_reference);
+        let animated_material = system_under_test.materials_mutable().add(&material_properties);
+        assert_eq!(system_under_test.any_object_has_animated_texture(), false);
+
+        (system_under_test, animated_material, sdf_class)
+    }
+
+    #[test]
+    fn test_any_object_has_animated_texture_sdf_case() {
+        let (mut system_under_test, animated_material, sdf_class) = prepare_animated_material_fixture();
+
+        let static_material = system_under_test.materials.add(&MaterialProperties::default());
+        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, static_material);
+        assert_eq!(system_under_test.any_object_has_animated_texture(), false);
+
+        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, animated_material);
+        assert!(system_under_test.any_object_has_animated_texture());
+    }
+
+    #[test]
+    fn test_any_object_has_animated_texture_parallelogram_case() {
+        let (mut system_under_test, animated_material, _) = prepare_animated_material_fixture();
+
+        let static_material = system_under_test.materials.add(&MaterialProperties::default());
+        system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), static_material);
+        assert_eq!(system_under_test.any_object_has_animated_texture(), false);
+
+        system_under_test.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), animated_material);
+        assert!(system_under_test.any_object_has_animated_texture());
     }
     
     #[test]
@@ -621,11 +690,8 @@ mod tests {
         
         assert_eq!(false, system_under_test.bvh_inhabited(), "empty container expected to have bvh without primitives");
         assert_is_empty(&system_under_test);
-    }
 
-    #[must_use]
-    fn make_empty_container() -> VisualObjects {
-        VisualObjects::new(None, None)
+        assert!(!system_under_test.any_object_has_animated_texture());
     }
 
     struct FilledContainerFixture {

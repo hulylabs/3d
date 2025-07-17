@@ -60,9 +60,9 @@ fn lava_fbm(x_input: vec2<f32>) -> f32 {
 
 // https://www.shadertoy.com/view/ltdcD7
 
-fn lava_like_texture(uv: vec2<f32>) -> vec3<f32> {
-    let time = 0.0 / 100.0;
-    let f = lava_fbm(vec2<f32>(time) + uv + lava_fbm(vec2<f32>(time) - uv));
+fn lava_like_texture(uv: vec2<f32>, time: f32) -> vec3<f32> {
+    let scaled_time = time / 10.0;
+    let f = lava_fbm(vec2<f32>(scaled_time) + uv + lava_fbm(vec2<f32>(scaled_time) - uv));
 
     var r = smoothstep(0.0, 0.4, f);
     var g = smoothstep(0.3, 0.7, f);

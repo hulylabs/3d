@@ -112,12 +112,6 @@ impl GpuReadySerializationBuffer {
         });
     }
 
-    pub(crate) fn write_quartet_u32(&mut self, x: u32, y: u32, z: u32, w: u32) {
-        self.write_quartet(|writer| {
-            writer.write_unsigned(x).write_unsigned(y).write_unsigned(z).write_unsigned(w);
-        });
-    }
-
     pub(crate) fn write_padded_quartet_f32(&mut self, x: f32, y: f32, z: f32) {
         self.write_quartet_f32(x, y, z, DEFAULT_PAD_VALUE);
     }

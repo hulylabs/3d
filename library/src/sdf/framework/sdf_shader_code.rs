@@ -82,7 +82,7 @@ pub(crate) fn format_sdf_animation_undo_function_opening() -> String {
     )
 }
 
-pub(crate) fn format_sdf_animation_undo(class_index: SdfClassIndex, animation_undo_routine: ShaderCode<FunctionBody>, buffer: &mut String) {
+pub(crate) fn format_sdf_animation_application(class_index: SdfClassIndex, animation_undo_routine: ShaderCode<FunctionBody>, buffer: &mut String) {
     writeln!(
         buffer,
         "if ({parameter_sdf_index} == {sdf_index}) {{\n{drop_code}}}",

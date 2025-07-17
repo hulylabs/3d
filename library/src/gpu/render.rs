@@ -30,6 +30,7 @@ use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Instant;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
 use crate::material::material_properties::MaterialProperties;
@@ -53,7 +54,9 @@ pub(crate) struct Renderer {
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
     scene: Hub,
-    
+
+    start_time: Instant,
+
     #[cfg(feature = "denoiser")]
     denoiser: denoiser::Denoiser,
 }
@@ -95,8 +98,9 @@ impl Renderer {
     )
         -> anyhow::Result<Self>
     {
+        let start_time = Instant::now();
         let pixel_side_subdivision: u32 = 1;
-        let mut uniforms = Uniforms::new(frame_buffer_settings.frame_buffer_size, camera, pixel_side_subdivision);
+        let mut uniforms = Uniforms::new(frame_buffer_settings.frame_buffer_size, camera, pixel_side_subdivision, start_time.elapsed());
 
         let scene = Hub::new(objects_container);
 
@@ -134,6 +138,8 @@ impl Renderer {
             pipeline_surface_attributes: surface_attributes,
             pipeline_final_image_rasterization: final_image_rasterization,
             scene,
+
+            start_time,
 
             #[cfg(feature = "denoiser")]
             denoiser: denoiser::Denoiser::new(),
@@ -482,13 +488,14 @@ impl Renderer {
     
     pub(crate) fn accumulate_more_rays(&mut self)  {
         let mut rebuild_geometry_buffers = self.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu().is_empty();
-        let scene_status = self.update_buffers_if_scene_changed();
+        let buffers_status = self.update_buffers_if_scene_changed();
+        let animated_texture = self.scene.any_objects_have_animated_texture();
 
         {
             let camera_changed = self.uniforms.mutable_camera().check_and_clear_updated_status();
-            let geometry_changed = scene_status.geometry_updated();
+            let geometry_changed = buffers_status.geometry_updated();
             
-            if scene_status.any_updated() {
+            if buffers_status.any_updated() || animated_texture {
                 self.uniforms.reset_frame_accumulation(self.color_buffer_evaluation.frame_counter_default());
             }
             
@@ -498,15 +505,18 @@ impl Renderer {
             }
             
             self.uniforms.next_frame(self.color_buffer_evaluation.frame_counter_increment());
+            self.uniforms.update_time(self.start_time.elapsed());
             
             // TODO: rewrite with 'write_buffer_with'? May be we need kind of ping-pong or circular buffer here?
             let uniform_values = self.uniforms.serialize();
             self.gpu.context.queue().write_buffer(&self.gpu.buffers.uniforms, 0, uniform_values.backend());
         }
 
-        let rebuild_albedo_buffer = rebuild_geometry_buffers
-            || self.gpu.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
-            || scene_status.any_updated();
+        let rebuild_albedo_buffer =
+               self.gpu.buffers.ray_tracing_frame_buffer.albedo_at_cpu_is_absent()
+            || rebuild_geometry_buffers
+            || buffers_status.any_updated()
+            || animated_texture;
 
         let mut surface_properties_pass_or_none: Option<SubmissionIndex> = None;
         if rebuild_geometry_buffers || rebuild_albedo_buffer {
@@ -529,7 +539,7 @@ impl Renderer {
 
         let label = "ray tracing compute pass";
         let mut encoder = self.begin_compute_pass();
-        if (rebuild_geometry_buffers || scene_status.any_updated()) && self.color_buffer_evaluation.frame_counter_increment() > 0 {
+        if (rebuild_geometry_buffers || buffers_status.any_updated() || animated_texture) && self.color_buffer_evaluation.frame_counter_increment() > 0 {
             encoder.clear_buffer(self.gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color().as_ref(), BufferAddress::default(), None);
         }
         self.compute_pass(encoder, label, self.color_buffer_evaluation.pipeline().deref(), |pass|{

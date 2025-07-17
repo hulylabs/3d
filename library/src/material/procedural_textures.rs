@@ -12,13 +12,13 @@ use crate::material::triplanar_mapper::TriplanarMapper;
 
 pub struct ProceduralTextures {
     shared_procedure_textures_code: ShaderCode,
-    textures: HashMap<FunctionName, IdentifiedTextureProcedural>,
+    textures: HashMap<ProceduralTextureUid, NamedTextureProcedural>,
     names_generator: Rc<RefCell<FunctionNameGenerator>>,
 }
 
-struct IdentifiedTextureProcedural {
+struct NamedTextureProcedural {
     texture: TextureProcedural3D,
-    uid: ProceduralTextureUid,
+    name: FunctionName,
 }
 
 impl ProceduralTextures {
@@ -38,10 +38,18 @@ impl ProceduralTextures {
     }
 
     #[must_use]
+    pub fn animated(&self, uid: ProceduralTextureUid) -> bool {
+        if let Some(identified) = self.textures.get(&uid) {
+            return identified.texture.animated()
+        }
+        false
+    }
+
+    #[must_use]
     pub fn add(&mut self, target: TextureProcedural3D, name: Option<&str>) -> ProceduralTextureUid {
         let name = self.names_generator.borrow_mut().next_name(name);
         let uid = ProceduralTextureUid(self.textures.len() + 1);
-        self.textures.insert(name, IdentifiedTextureProcedural { texture: target, uid, });
+        self.textures.insert(uid, NamedTextureProcedural { texture: target, name });
         uid
     }
 
@@ -58,26 +66,28 @@ impl ProceduralTextures {
     }
 
     fn write_gpu_code(&self, buffer: &mut String) -> anyhow::Result<()> {
-        let mut sorted_by_index: Vec<(&FunctionName, &IdentifiedTextureProcedural)> = self.textures.iter().collect();
-        sorted_by_index.sort_by_key(|(name, _)| &name.0);
+        let mut sorted: Vec<(&ProceduralTextureUid, &NamedTextureProcedural)> = self.textures.iter().collect();
+        sorted.sort_by_key(|(_, value)| &value.name.0);
 
-        for (name, candidate) in sorted_by_index.iter() {
+        for (_, candidate) in sorted.iter() {
             let utilities = candidate.texture.utilities();
-            write!(buffer, "{utilities}")?;
+            if false == utilities.is_empty() {
+                write!(buffer, "{utilities}")?;
+            }
             
             let body = candidate.texture.function_body();
-            write_texture_3d_code(body, name, buffer)?;
+            write_texture_3d_code(body, &candidate.name, buffer)?;
         }
-        Self::write_selection_function(&sorted_by_index, buffer)?;
+        Self::write_selection_function(&sorted, buffer)?;
 
         Ok(())
     }
 
-    fn write_selection_function(variants: &Vec<(&FunctionName, &IdentifiedTextureProcedural)>, buffer: &mut String) -> anyhow::Result<()> {
+    fn write_selection_function(variants: &Vec<(&ProceduralTextureUid, &NamedTextureProcedural)>, buffer: &mut String) -> anyhow::Result<()> {
         write_texture_3d_selection_function_opening(buffer)?;
 
         for variant in variants {
-            write_texture_3d_selection(variant.0, variant.1.uid, buffer)?;
+            write_texture_3d_selection(&variant.1.name, *variant.0, buffer)?;
         }
 
         write!(buffer, "return vec3f(0.0);\n}}\n")?;
@@ -97,6 +107,7 @@ mod tests {
     use super::*;
     use crate::shader::code::{FunctionBody, Generic, ShaderCode};
     use more_asserts::assert_gt;
+    use crate::shader::conventions;
 
     #[must_use]
     fn procedural_texture(body: &str) -> TextureProcedural3D {
@@ -206,5 +217,24 @@ mod tests {
         let second = system_under_test.generate_gpu_code();
     
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_animated_false() {
+        let mut system_under_test = make_system_under_test();
+        let texture = procedural_texture("return vec3f(0.8, 0.2, 0.1);");
+        let uid = system_under_test.add(texture, Some("b"));
+
+        assert_eq!(system_under_test.animated(uid), false);
+    }
+
+    #[test]
+    fn test_animated_true() {
+        let mut system_under_test = make_system_under_test();
+        let texture_body = format!("return vec3f({}, 0.2, 0.1);", conventions::PARAMETER_NAME_THE_TIME);
+        let texture = procedural_texture(texture_body.as_str());
+        let uid = system_under_test.add(texture, Some("a"));
+
+        assert!(system_under_test.animated(uid));
     }
 }

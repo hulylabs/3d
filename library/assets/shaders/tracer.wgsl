@@ -80,6 +80,7 @@ struct Uniforms {
 	parallelograms_count: u32,
 	bvh_length: u32,
 	pixel_side_subdivision: u32, // anti-aliasing level: bigger value -> slower render -> less jagged edges
+	global_time_seconds: f32,
 }
 
 struct Ray {
@@ -607,7 +608,7 @@ fn fetch_albedo(hit: HitPlace, material: Material) -> vec3f {
         */
         const grid_step: f32 = 1e-4;
         let snapped_position = snap_to_grid(hit.position, grid_step);
-        result *= procedural_texture_select(-material.albedo_texture_uid, snapped_position, hit.normal, 0.0);
+        result *= procedural_texture_select(-material.albedo_texture_uid, snapped_position, hit.normal, uniforms.global_time_seconds);
     }
     return result;
 }
