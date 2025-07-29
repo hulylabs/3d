@@ -24,7 +24,6 @@ mod tests {
             
             PodVector { x: 1.0, y: 0.0, z: 0.0, w: texture_under_test_uid.0 as f32, },
             PodVector { x: 1.1, y: 1.1, z: 1.1, w: texture_under_test_uid.0 as f32, },
-            
         ];
 
         let expected_colors: Vec<PodVector> = vec![
@@ -38,7 +37,7 @@ mod tests {
         ];
 
         let function_execution = make_executable(&template,
-            create_argument_formatter!("i32({argument}.w), vec3f({argument}.xyz), vec3f(0.0, 0.0, 0.0), 0.0"));
+            create_argument_formatter!("i32({argument}.w), vec3f({argument}.xyz), vec3f(0.0), 0.0, vec3f(0.0), vec3f(0.0)"));
 
         let actual_colors = execute_code::<PodVector, PodVector>(&input_points, function_execution, ExecutionConfig::default());
 

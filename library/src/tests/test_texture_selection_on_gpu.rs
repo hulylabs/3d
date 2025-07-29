@@ -45,7 +45,7 @@ mod tests {
         ];
 
         let function_execution = make_executable(&template,
-    create_argument_formatter!("i32({argument}.w), vec3f({argument}.x, -3.0, -3.0), vec3f(-5.0, {argument}.y, -5.0), -7.0"));
+    create_argument_formatter!("i32({argument}.w), vec3f({argument}.x, -3.0, -3.0), vec3f(-5.0, {argument}.y, -5.0), -7.0, vec3f(0.0), vec3f(0.0)"));
 
         let actual_colors = execute_code::<PodVector, PodVector>(&input_points, function_execution, ExecutionConfig::default());
         

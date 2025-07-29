@@ -275,6 +275,7 @@ pub(super) struct TechMaterials {
     green_material: MaterialIndex,
     selected_object_material: MaterialIndex,
     large_box_material: MaterialIndex,
+    deformed_circles_material: MaterialIndex,
 }
 
 impl TechMaterials {
@@ -331,6 +332,15 @@ impl TechMaterials {
                 .with_specular_strength(0.01)
                 .with_roughness(0.0)
                 .with_albedo_texture(TextureReference::Procedural(textures.lava()))
+        );
+
+        let deformed_circles_material = materials.add(
+            &MaterialProperties::new()
+                .with_albedo(1.0, 1.0, 1.0)
+                .with_specular(0.2, 0.2, 0.2)
+                .with_specular_strength(0.01)
+                .with_roughness(0.0)
+                .with_albedo_texture(TextureReference::Procedural(textures.deformed_circles()))
         );
 
         let red_material = materials.add(
@@ -400,6 +410,7 @@ impl TechMaterials {
             green_material,
             selected_object_material,
             large_box_material,
+            deformed_circles_material,
         }
     }
 }
@@ -408,6 +419,7 @@ pub(super) struct TechTextures {
     checkerboard: ProceduralTextureUid,
     lava: ProceduralTextureUid,
     water: ProceduralTextureUid,
+    deformed_circles: ProceduralTextureUid,
 }
 
 impl TechTextures {
@@ -425,7 +437,11 @@ impl TechTextures {
         let water_texture_3d = triplanar_mapper.make_triplanar_mapping(&water_texture_2d, 8.0, None);
         let water = container.add(water_texture_3d, None);
 
-        Self { checkerboard, lava, water }
+        let deformed_circles_texture_2d = Self::make_deformed_circles_texture();
+        let deformed_circles_texture_3d = triplanar_mapper.make_triplanar_mapping(&deformed_circles_texture_2d, 8.0, None);
+        let deformed_circles = container.add(deformed_circles_texture_3d, None);
+
+        Self { checkerboard, lava, water, deformed_circles }
     }
 
     #[must_use]
@@ -439,11 +455,18 @@ impl TechTextures {
     }
 
     #[must_use]
+    fn make_deformed_circles_texture() -> TextureProcedural2D {
+        Self::make_texture_2d(include_str!("texture_2d_filtered_deformed_circles.wgsl"), "deformed_circles_texture")
+    }
+
+    #[must_use]
     fn make_texture_2d(utilities: &str, main_function: &str) -> TextureProcedural2D {
         let body = format!(
-            "return {main_function}({uv_parameter_name}, {time_parameter});",
+            "return {main_function}({uv_parameter_name}, {time_parameter}, {dp_dx_parameter}, {dp_dy_parameter});",
             uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES,
             time_parameter=conventions::PARAMETER_NAME_THE_TIME,
+            dp_dx_parameter = conventions::PARAMETER_DP_DX,
+            dp_dy_parameter = conventions::PARAMETER_DP_DY,
         );
         TextureProcedural2D::new(ShaderCode::<Generic>::new(utilities.to_string()), ShaderCode::<FunctionBody>::new(body.to_string()))
     }
@@ -461,6 +484,11 @@ impl TechTextures {
     #[must_use]
     fn water(&self) -> ProceduralTextureUid {
         self.water
+    }
+
+    #[must_use]
+    fn deformed_circles(&self) -> ProceduralTextureUid {
+        self.deformed_circles
     }
 }
 
@@ -570,7 +598,7 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.9, 0.0, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.subtraction_smooth.name(),
-            self.materials.red_material);
+            self.materials.deformed_circles_material);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, -0.5, -0.8))*Affine::from_scale(0.2)),

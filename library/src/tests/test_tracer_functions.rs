@@ -36,7 +36,7 @@ mod tests {
     const DUMMY_IMPLEMENTATIONS: &str = include_str!("../../assets/shaders/dummy_implementations.wgsl");
 
     const DUMMY_TEXTURE_SELECTION: &str = "\
-        fn procedural_texture_select(index: i32, position: vec3f, normal: vec3f, time: f32) -> vec3f {\
+        fn procedural_texture_select(index: i32, position: vec3f, normal: vec3f, time: f32, dp_dx: vec3f, dp_dy: vec3f) -> vec3f {\
         return vec3f(0.0);\
         }";
 

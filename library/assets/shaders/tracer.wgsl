@@ -55,7 +55,6 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 6) var<storage, read> sdf_time: array<f32>;
 
 var<private> randState: u32 = 0u;
-var<private> pixelCoords: vec2f;
 
 var<private> hitRec: HitRecord;
 var<private> hitMaterial: Material;
@@ -414,10 +413,15 @@ fn evaluate_pixel_index(
         global_invocation_id.x ;
 }
 
-fn setup_pixel_coordinates(pixel_index: u32) {
+struct Pixel {
+    coordinates: vec2f
+}
+
+@must_use
+fn setup_pixel_coordinates(pixel_index: u32) -> Pixel{
     let x: u32 = pixel_index % uniforms.frame_buffer_size.x;
     let y: u32 = pixel_index / uniforms.frame_buffer_size.x;
-    pixelCoords = vec2f(f32(x), f32(y));
+    return Pixel(vec2f(f32(x), f32(y)));
 }
 
 fn setup_camera() {
@@ -425,6 +429,7 @@ fn setup_camera() {
 	cam_origin = uniforms.view_matrix[3].xyz;
 }
 
+@must_use
 fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
     return pixel_index >= uniforms.frame_buffer_area;
 }
@@ -439,20 +444,21 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
         return;
     }
 
-	setup_pixel_coordinates(pixel_index);
+	let pixel = setup_pixel_coordinates(pixel_index);
 	setup_camera();
 
-    let ray = ray_to_pixel(0.5, 0.5);
+    let ray = ray_and_differentials(pixel, 0.5, 0.5);
 	let surface_intersection = trace_first_intersection(ray);
     object_id_buffer[pixel_index] = surface_intersection.object_uid;
     albedo_buffer[pixel_index] = vec4f(surface_intersection.albedo, 1.0f);
     normal_buffer[pixel_index] = vec4f(surface_intersection.normal, 0.0f);
 }
 
-fn make_common_color_evaluation_setup(pixel_index: u32) {
-    setup_pixel_coordinates(pixel_index);
+fn make_common_color_evaluation_setup(pixel_index: u32) -> Pixel {
+    let pixel = setup_pixel_coordinates(pixel_index);
 	setup_camera();
 	get_lights();
+	return pixel;
 }
 
 @compute @workgroup_size(WORK_GROUP_SIZE_X, WORK_GROUP_SIZE_Y, 1) fn compute_color_buffer_monte_carlo(
@@ -465,10 +471,10 @@ fn make_common_color_evaluation_setup(pixel_index: u32) {
         return;
     }
 
-	make_common_color_evaluation_setup(pixel_index);
+	let pixel = make_common_color_evaluation_setup(pixel_index);
 
 	randState = pixel_index + u32(uniforms.frame_number) * 719393;
-	let traced_color = path_trace_monte_carlo();
+	let traced_color = path_trace_monte_carlo(pixel);
 
     pixel_color_buffer[pixel_index] = vec4f(pixel_color_buffer[pixel_index].xyz + traced_color, 1.0);
 }
@@ -477,30 +483,75 @@ fn make_common_color_evaluation_setup(pixel_index: u32) {
 x = aspect * (2 * (x / width) - 1) 	[ranges from -aspect to +aspect]
 y = -(2 * (y / height) - 1)			[ranges from +1 to -1]
 lower left pixel corner -> 0.5, 0.5 gives pixel's center;
+lower left pixel corner -> 0.5, 0.5 gives pixel's center;
 */
-fn ray_to_pixel(sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
-    let s = uniforms.frame_buffer_aspect * (2 * ((pixelCoords.x + sub_pixel_x) * uniforms.inverted_frame_buffer_size.x) - 1);
-    let t = -1 * (2 * ((pixelCoords.y + sub_pixel_y) * uniforms.inverted_frame_buffer_size.y) - 1);
+fn ray_to_pixel(pixel: Pixel, sub_pixel_x: f32, sub_pixel_y: f32) -> Ray {
+    let s = uniforms.frame_buffer_aspect * (2 * ((pixel.coordinates.x + sub_pixel_x) * uniforms.inverted_frame_buffer_size.x) - 1);
+    let t = -1 * (2 * ((pixel.coordinates.y + sub_pixel_y) * uniforms.inverted_frame_buffer_size.y) - 1);
     return get_camera_ray(s, t);
 }
 
+struct RayDifferentials {
+    dx: vec3f,
+    dy: vec3f,
+}
+
 @must_use
-fn path_trace_monte_carlo() -> vec3f {
+fn ray_differentials(pixel: Pixel, sub_pixel_x: f32, sub_pixel_y: f32) -> RayDifferentials {
+    let ray_direction_dx = ray_to_pixel(Pixel(pixel.coordinates+vec2f(1.0, 0.0)), sub_pixel_x, sub_pixel_y);
+    let ray_direction_dy = ray_to_pixel(Pixel(pixel.coordinates+vec2f(0.0, 1.0)), sub_pixel_x, sub_pixel_y);
+    return RayDifferentials(ray_direction_dx.direction, ray_direction_dy.direction);
+}
+
+struct RayAndDifferentials {
+    ray: Ray,
+    differentials: RayDifferentials,
+}
+
+@must_use
+fn ray_and_differentials(pixel: Pixel, sub_pixel_x: f32, sub_pixel_y: f32) -> RayAndDifferentials {
+    let ray = ray_to_pixel(pixel, sub_pixel_x, sub_pixel_y);
+    let differentials = ray_differentials(pixel, sub_pixel_x, sub_pixel_y);
+    return RayAndDifferentials(ray, differentials);
+}
+
+struct RayDerivatives {
+    dp_dx: vec3f,
+    dp_dy: vec3f,
+}
+
+@must_use
+fn ray_derivatives(
+    ray_direction: vec3f,
+    ray_differentials: RayDifferentials,
+    surface_intersection_parameter: f32,
+    surface_normal: vec3f
+) -> RayDerivatives {
+    let ray_dot_normal = dot(ray_direction, surface_normal);
+    let dp_dx = surface_intersection_parameter * (ray_differentials.dx * ray_dot_normal / dot(ray_differentials.dx, surface_normal) - ray_direction);
+    let dp_dy = surface_intersection_parameter * (ray_differentials.dy * ray_dot_normal / dot(ray_differentials.dy, surface_normal) - ray_direction);
+    return RayDerivatives(dp_dx, dp_dy);
+}
+
+@must_use
+fn path_trace_monte_carlo(pixel: Pixel) -> vec3f {
 	let samples_count = uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision;
 	var result_color = vec3f(0.0);
 	if(MONTE_CARLO_STRATIFY_SAMLING) {
 		let reciprocal_sqrt_samples_per_pixel = 1.0 / f32(uniforms.pixel_side_subdivision);
 		for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
 			for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
-                let x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand_0_1());
-                let y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand_0_1());
-                let ray = ray_to_pixel(x, y);
+                let sub_pixel_x = reciprocal_sqrt_samples_per_pixel * (f32(i) + rand_0_1());
+                let sub_pixel_y = reciprocal_sqrt_samples_per_pixel * (f32(j) + rand_0_1());
+                let ray = ray_and_differentials(pixel, sub_pixel_x, sub_pixel_y);
 				result_color += ray_color_monte_carlo(ray);
 			}
 		}
 	} else {
 		for(var i = u32(0); i < samples_count; i++) {
-		    let ray = ray_to_pixel(rand_0_1(), rand_0_1());
+		    let sub_pixel_x = rand_0_1();
+		    let sub_pixel_y = rand_0_1();
+		    let ray = ray_and_differentials(pixel, sub_pixel_x, sub_pixel_y);
 			result_color += ray_color_monte_carlo(ray);
 		}
 	}
@@ -510,7 +561,9 @@ fn path_trace_monte_carlo() -> vec3f {
 }
 
 @must_use
-fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
+fn trace_first_intersection(incident : RayAndDifferentials) -> FirstHitSurface {
+    let ray = incident.ray;
+
     var closest_so_far = MAX_FLOAT;
     var hit_uid: u32 = 0;
     var hit_material_id: u32 = 0;
@@ -565,7 +618,7 @@ fn trace_first_intersection(ray : Ray) -> FirstHitSurface {
 
     var hit_albedo: vec3f;
     if (0 < hit_uid) {
-        hit_albedo = fetch_albedo(hit_local, materials[hit_material_id]);
+        hit_albedo = fetch_albedo(hit_local, incident.ray.direction, closest_so_far, materials[hit_material_id], incident.differentials);
     } else {
         hit_albedo = vec3f(0.0);
     }
@@ -592,7 +645,7 @@ fn snap_to_grid(victim: vec3f, grid_step: f32) -> vec3f {
 }
 
 @must_use
-fn fetch_albedo(hit: HitPlace, material: Material) -> vec3f {
+fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, material: Material, differentials: RayDifferentials) -> vec3f {
     var result = material.albedo;
     if (material.albedo_texture_uid < 0) {
         /*
@@ -608,7 +661,16 @@ fn fetch_albedo(hit: HitPlace, material: Material) -> vec3f {
         */
         const grid_step: f32 = 1e-4;
         let snapped_position = snap_to_grid(hit.position, grid_step);
-        result *= procedural_texture_select(-material.albedo_texture_uid, snapped_position, hit.normal, uniforms.global_time_seconds);
+
+        let derivartives = ray_derivatives(ray_direction, differentials, ray_parameter, hit.normal);
+
+        result *= procedural_texture_select(
+            -material.albedo_texture_uid,
+            snapped_position, hit.normal,
+            uniforms.global_time_seconds,
+            derivartives.dp_dx,
+            derivartives.dp_dy
+        );
     }
     return result;
 }
@@ -657,9 +719,9 @@ fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
 
 // https://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing#Implementation
 
-fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
+fn ray_color_monte_carlo(incident : RayAndDifferentials) -> vec3f {
 
-	var current_ray = incident_ray;
+	var current_ray = incident.ray;
 	var accumulated_radiance = vec3f(0.0);
 	var throughput = vec3f(1.0);
 
@@ -669,7 +731,8 @@ fn ray_color_monte_carlo(incident_ray : Ray) -> vec3f {
 			break;
 		}
 
-        let albedo_color = fetch_albedo(hitRec.local, hitMaterial);
+        // TODO: differentials should be recalculated for each bounce; using same data for rays other than first ray (from eye) is incorrect
+        let albedo_color = fetch_albedo(hitRec.local, current_ray.direction, hitRec.t, hitMaterial, incident.differentials);
 		var emission_color = hitMaterial.emission;
 		if(!hitRec.front_face) {
 			emission_color = vec3f(0.0);
@@ -1025,23 +1088,23 @@ fn pseudo_dither(color: vec3f, pixel_coordinate: vec2f) -> vec3f {
         return;
     }
 
-	make_common_color_evaluation_setup(pixel_index);
+	let pixel = make_common_color_evaluation_setup(pixel_index);
 
-	let traced_color = path_trace_deterministic();
+	let traced_color = path_trace_deterministic(pixel);
 	pixel_color_buffer[pixel_index] = vec4f(traced_color, 1.0);
 }
 
 @must_use
-fn path_trace_deterministic() -> vec3f {
+fn path_trace_deterministic(pixel: Pixel) -> vec3f {
     if (uniforms.pixel_side_subdivision == 1) {
-        return ray_color_deterministic(ray_to_pixel(0.5, 0.5));
+        return ray_color_deterministic(ray_and_differentials(pixel, 0.5, 0.5));
     }
 
     var result_color = vec3f(0.0);
     let sub_pixel_step = 1.0 / f32(uniforms.pixel_side_subdivision - 1);
     for(var i = u32(0); i < uniforms.pixel_side_subdivision; i++) {
         for(var j = u32(0); j < uniforms.pixel_side_subdivision; j++) {
-            let ray = ray_to_pixel(sub_pixel_step * f32(i), sub_pixel_step * f32(j));
+            let ray = ray_and_differentials(pixel, sub_pixel_step * f32(i), sub_pixel_step * f32(j));
             result_color += ray_color_deterministic(ray);
         }
     }
@@ -1051,10 +1114,10 @@ fn path_trace_deterministic() -> vec3f {
 }
 
 @must_use
-fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
+fn ray_color_deterministic(incident: RayAndDifferentials) -> vec3f {
     var accumulated_radiance = vec3f(0.0);
 
-    var current_ray = incident_ray;
+    var current_ray = incident.ray;
     var throughput = vec3f(1.0);
     for (var i = 0; i < DETERMINISTIC_MAX_RAY_BOUNCES; i++) {
         if (false == hit_scene(current_ray, MAX_FLOAT)) {
@@ -1062,8 +1125,9 @@ fn ray_color_deterministic(incident_ray: Ray) -> vec3f {
             break;
         }
 
+        // TODO: differentials should be recalculated for each bounce; using same data for rays other than first ray (from eye) is incorrect
         let hit_material = hitMaterial;
-        let hit_albedo = fetch_albedo(hitRec.local, hit_material);
+        let hit_albedo = fetch_albedo(hitRec.local, current_ray.direction, hitRec.t, hit_material, incident.differentials);
 
         if (MATERIAL_LAMBERTIAN == hit_material.material_class) {
             accumulated_radiance += throughput * evaluate_dielectric_surface_color(hitRec, hit_material, hit_albedo);

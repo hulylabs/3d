@@ -70,7 +70,7 @@ fn water_rot(a: f32) -> mat2x2<f32> {
 
 // https://www.shadertoy.com/view/WdXyDj
 
-fn water_like_surface(uv: vec2<f32>, time: f32) -> vec3<f32> {
+fn water_like_surface(uv: vec2<f32>, time: f32, dp_dx: vec2f, dp_dy: vec2f) -> vec3<f32> {
     var uv_scaled = uv * 15.0;
 
     let i_time: f32 = time;

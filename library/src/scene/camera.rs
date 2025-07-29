@@ -1,7 +1,7 @@
 ﻿use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
 use crate::serialization::serialize_matrix::serialize_matrix_4x4;
-use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector2, Zero};
+use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector3, Zero};
 use std::ops::Mul;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
@@ -69,7 +69,7 @@ pub struct Camera {
     vertical_rotation: Deg<f64>,
     eye_rod_length: f64,
     look_at: Point,
-    xy_plane_eye_offset: Vector2<f64>,
+    eye_offset: Vector3<f64>,
 
     updated: bool,
     zoom_speed: f64,
@@ -91,7 +91,7 @@ impl Camera {
             vertical_rotation: Deg::zero(),
             eye_rod_length,
             look_at,
-            xy_plane_eye_offset: Vector2::zero(),
+            eye_offset: Vector3::zero(),
             updated: false,
             zoom_speed: 1.0,
             linear_speed: 1.0,
@@ -111,7 +111,7 @@ impl Camera {
         self.vertical_rotation = other.vertical_rotation;
         self.eye_rod_length = other.eye_rod_length;
         self.look_at = other.look_at;
-        self.xy_plane_eye_offset = other.xy_plane_eye_offset;
+        self.eye_offset = other.eye_offset;
 
         self.updated = other.updated;
         self.zoom_speed = other.zoom_speed;
@@ -144,12 +144,14 @@ impl Camera {
         let horizontal_rotation = Affine::from_angle_y(self.horizontal_rotation);
         let vertical_rotation = Affine::from_angle_x(self.vertical_rotation);
 
+        let rotation = horizontal_rotation * vertical_rotation;
+
         let eye = Point::new(0.0, 0.0, self.eye_rod_length);
-        let eye = (horizontal_rotation * vertical_rotation).transform_point(eye);
-        let eye = eye + Vector::new(self.xy_plane_eye_offset.x, self.xy_plane_eye_offset.y, 0.0);
+        let eye = rotation.transform_point(eye);
+        let eye = eye + Vector::new(self.eye_offset.x, self.eye_offset.y, self.eye_offset.z);
 
         let up = Vector::new(0.0, 1.0, 0.0);
-        let up = vertical_rotation.transform_vector(up);
+        let up = rotation.transform_vector(up);
 
         self.world_to_camera_space = Affine::look_at_rh(eye, self.look_at, up);
         self.view_ray_origin = self.kind.ray_origin(eye, self.look_at);
@@ -174,15 +176,22 @@ impl Camera {
 
     pub fn move_horizontally(&mut self, delta: f64) {
         let actual_delta = delta * self.linear_speed;
-        self.xy_plane_eye_offset.x += actual_delta;
+        self.eye_offset.x += actual_delta;
         self.look_at.x += actual_delta;
         self.mark_updated_and_build();
     }
 
     pub fn move_vertically(&mut self, delta: f64) {
         let actual_delta = delta * self.linear_speed;
-        self.xy_plane_eye_offset.y += actual_delta;
+        self.eye_offset.y += actual_delta;
         self.look_at.y += actual_delta;
+        self.mark_updated_and_build();
+    }
+
+    pub fn move_depth_wise(&mut self, delta: f64) {
+        let actual_delta = delta * self.linear_speed;
+        self.eye_offset.z += actual_delta;
+        self.look_at.z += actual_delta;
         self.mark_updated_and_build();
     }
 

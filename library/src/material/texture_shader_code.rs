@@ -13,23 +13,27 @@ pub(crate) mod procedural_texture_conventions {
 #[must_use]
 pub(crate) fn format_common_texture_3d_parameters() -> String {
     format!(
-        "{parameter_point}: vec3f, {parameter_normal}: vec3f, {parameter_time}: f32",
+        "{parameter_point}: vec3f, {parameter_normal}: vec3f, {parameter_time}: f32, {parameter_dp_dx}: vec3f, {parameter_dp_dy}: vec3f",
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
         parameter_normal = conventions::PARAMETER_NAME_THE_NORMAL,
         parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+        parameter_dp_dx = conventions::PARAMETER_DP_DX,
+        parameter_dp_dy = conventions::PARAMETER_DP_DY,
     )
 }
 
 pub(super) fn write_texture_3d_selection(function_to_select: &FunctionName, texture_index: ProceduralTextureUid, buffer: &mut String) -> anyhow::Result<()> {
     writeln!(
         buffer,
-        "if ({parameter_index} == {index}) {{ return {function_name}({point_parameter},{normal_parameter},{time_parameter}); }}",
+        "if ({parameter_index} == {index}) {{ return {function_name}({point_parameter},{normal_parameter},{time_parameter},{dp_dx_parameter},{dp_dy_parameter}); }}",
         parameter_index = procedural_texture_conventions::PARAMETER_NAME_INDEX,
         index = texture_index,
         function_name = function_to_select,
         point_parameter = conventions::PARAMETER_NAME_THE_POINT,
         normal_parameter = conventions::PARAMETER_NAME_THE_NORMAL,
         time_parameter = conventions::PARAMETER_NAME_THE_TIME,
+        dp_dx_parameter = conventions::PARAMETER_DP_DX,
+        dp_dy_parameter = conventions::PARAMETER_DP_DY,
     )?;
     Ok(())
 }
@@ -75,7 +79,7 @@ mod tests {
 
         assert_eq!(
             buffer,
-            "prefix: if (texture_index == 17) { return test_texture_function(point,normal,time); }\n"
+            "prefix: if (texture_index == 17) { return test_texture_function(point,normal,time,dp_dx,dp_dy); }\n"
         )
     }
 
@@ -87,7 +91,7 @@ mod tests {
 
         assert_eq!(
             buffer,
-            "prefix: fn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32) -> vec3f {\n"
+            "prefix: fn procedural_texture_select(texture_index: i32, point: vec3f, normal: vec3f, time: f32, dp_dx: vec3f, dp_dy: vec3f) -> vec3f {\n"
         );
     }
 
@@ -101,13 +105,13 @@ mod tests {
 
         assert_eq!(
             buffer,
-            "prefix: fn perlin_noise(point: vec3f, normal: vec3f, time: f32)->vec3f{\nreturn point;\n}\n"
+            "prefix: fn perlin_noise(point: vec3f, normal: vec3f, time: f32, dp_dx: vec3f, dp_dy: vec3f)->vec3f{\nreturn point;\n}\n"
         )
     }
 
     #[test]
     fn test_format_common_texture_parameters() {
         let result = format_common_texture_3d_parameters();
-        assert_eq!(result, "point: vec3f, normal: vec3f, time: f32");
+        assert_eq!(result, "point: vec3f, normal: vec3f, time: f32, dp_dx: vec3f, dp_dy: vec3f");
     }
 }

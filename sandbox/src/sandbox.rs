@@ -158,18 +158,26 @@ impl Sandbox {
     }
     
     pub(super) fn on_keyboard_event(&mut self, event: KeyEvent) {
+        const CAMERA_MOVE_QUANT: f64 = 1.0;
+        const LIGHT_MOVE_QUANT: f64 = 1.0;
         match event.logical_key {
             Key::Named(NamedKey::ArrowUp) => {
-                self.engine.camera().move_vertically(1.0);
+                self.engine.camera().move_vertically(CAMERA_MOVE_QUANT);
             },
             Key::Named(NamedKey::ArrowDown) => {
-                self.engine.camera().move_vertically(-1.0);
+                self.engine.camera().move_vertically(-CAMERA_MOVE_QUANT);
             },
             Key::Named(NamedKey::ArrowRight) => {
-                self.engine.camera().move_horizontally(1.0);
+                self.engine.camera().move_horizontally(CAMERA_MOVE_QUANT);
             },
             Key::Named(NamedKey::ArrowLeft) => {
-                self.engine.camera().move_horizontally(-1.0);
+                self.engine.camera().move_horizontally(-CAMERA_MOVE_QUANT);
+            },
+            Key::Named(NamedKey::PageUp) => {
+                self.engine.camera().move_depth_wise(-CAMERA_MOVE_QUANT);
+            },
+            Key::Named(NamedKey::PageDown) => {
+                self.engine.camera().move_depth_wise(CAMERA_MOVE_QUANT);
             },
             Key::Character(letter_key) => {
                 if "p" == letter_key {
@@ -187,13 +195,13 @@ impl Sandbox {
                 } else if "n" == letter_key {
                     self.engine.use_deterministic_render();
                 } else if "+" == letter_key {
-                    self.tech_world.move_light_z(1.0, self.engine.scene());
+                    self.tech_world.move_light_z(LIGHT_MOVE_QUANT, self.engine.scene());
                 } else if "-" == letter_key {
-                    self.tech_world.move_light_z(-1.0, self.engine.scene());
+                    self.tech_world.move_light_z(-LIGHT_MOVE_QUANT, self.engine.scene());
                 } else if "*" == letter_key {
-                    self.tech_world.move_light_x(1.0, self.engine.scene());
+                    self.tech_world.move_light_x(LIGHT_MOVE_QUANT, self.engine.scene());
                 } else if "/" == letter_key {
-                    self.tech_world.move_light_x(-1.0, self.engine.scene());
+                    self.tech_world.move_light_x(-LIGHT_MOVE_QUANT, self.engine.scene());
                 } else if "1" == letter_key {
                     self.tech_world.load_to_ui_box_scene(self.engine.scene());
                     self.selected_object = None;
