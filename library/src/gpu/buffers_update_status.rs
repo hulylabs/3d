@@ -48,108 +48,114 @@ impl BuffersUpdateStatus {
 
 #[cfg(test)]
 mod tests {
+    use test_context::{test_context, TestContext};
     use super::*;
 
-    #[test]
-    fn test_construction() {
-        let system_under_test = BuffersUpdateStatus::new();
-        assert_eq!(system_under_test.any_resized(), false);
-        assert_eq!(system_under_test.any_updated(), false);
-        assert_eq!(system_under_test.geometry_updated(), false);
+    struct Context {
+        system_under_test: BuffersUpdateStatus
     }
 
-    #[test]
-    fn test_geometry_only_updated() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    impl TestContext for Context {
+        fn setup() -> Context {
+            Context {  system_under_test: BuffersUpdateStatus::new() }
+        }
 
-        system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
-
-        assert_eq!(system_under_test.geometry_updated(), true);
-        assert_eq!(system_under_test.any_resized(), false);
-        assert_eq!(system_under_test.any_updated(), true);
+        fn teardown(self) {
+        }
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_materials_only_updated() {
-        let mut system_under_test = BuffersUpdateStatus::new();
-
-        system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
-
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.any_resized(), false);
-        assert_eq!(system_under_test.geometry_updated(), false);
+    fn test_construction(fixture: &mut Context) {
+        assert_eq!(fixture.system_under_test.any_resized(), false);
+        assert_eq!(fixture.system_under_test.any_updated(), false);
+        assert_eq!(fixture.system_under_test.geometry_updated(), false);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_geometry_and_materials_both_updated() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    fn test_geometry_only_updated(fixture: &mut Context) {
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
 
-        system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
-        system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
-
-        assert_eq!(system_under_test.any_resized(), false);
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.geometry_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), true);
+        assert_eq!(fixture.system_under_test.any_resized(), false);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_geometry_resized() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    fn test_materials_only_updated(fixture: &mut Context) {
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
 
-        system_under_test.merge_geometry(BufferUpdateStatus::new_resized(true));
-
-        assert_eq!(system_under_test.any_resized(), true);
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.geometry_updated(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.any_resized(), false);
+        assert_eq!(fixture.system_under_test.geometry_updated(), false);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_materials_resized() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    fn test_geometry_and_materials_both_updated(fixture: &mut Context) {
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
 
-        system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
-
-        assert_eq!(system_under_test.any_resized(), true);
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.geometry_updated(), false);
+        assert_eq!(fixture.system_under_test.any_resized(), false);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), true);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_geometry_and_materials_resized() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    fn test_geometry_resized(fixture: &mut Context) {
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_resized(true));
 
-        system_under_test.merge_geometry(BufferUpdateStatus::new_resized( true));
-        system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
-
-        assert_eq!(system_under_test.any_resized(), true);
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.geometry_updated(), true);
+        assert_eq!(fixture.system_under_test.any_resized(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), true);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_merge_multiple_statuses() {
-        let mut system_under_test = BuffersUpdateStatus::new();
+    fn test_materials_resized(fixture: &mut Context) {
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
 
-        system_under_test.merge_geometry(BufferUpdateStatus::new_resized(true));
-        system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
-        system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
-        system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
-
-        assert_eq!(system_under_test.any_resized(), true);
-        assert_eq!(system_under_test.any_updated(), true);
-        assert_eq!(system_under_test.geometry_updated(), true);
+        assert_eq!(fixture.system_under_test.any_resized(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), false);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_merge_bvh() {
-        let mut system_under_test = BuffersUpdateStatus::new();
-        
-        system_under_test.merge_bvh(ResizeStatus::SizeKept);
-        assert_eq!(system_under_test.any_resized(), false);
-        assert_eq!(system_under_test.any_updated(), true);
+    fn test_geometry_and_materials_resized(fixture: &mut Context) {
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_resized( true));
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
 
-        system_under_test.merge_bvh(ResizeStatus::Resized);
-        assert_eq!(system_under_test.any_resized(), true);
-        assert_eq!(system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.any_resized(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), true);
+    }
+
+    #[test_context(Context)]
+    #[test]
+    fn test_merge_multiple_statuses(fixture: &mut Context) {
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_resized(true));
+        fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
+        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
+
+        assert_eq!(fixture.system_under_test.any_resized(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+        assert_eq!(fixture.system_under_test.geometry_updated(), true);
+    }
+
+    #[test_context(Context)]
+    #[test]
+    fn test_merge_bvh(fixture: &mut Context) {
+        fixture.system_under_test.merge_bvh(ResizeStatus::SizeKept);
+        assert_eq!(fixture.system_under_test.any_resized(), false);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
+
+        fixture.system_under_test.merge_bvh(ResizeStatus::Resized);
+        assert_eq!(fixture.system_under_test.any_resized(), true);
+        assert_eq!(fixture.system_under_test.any_updated(), true);
     }
 }

@@ -10,23 +10,7 @@ mod tests {
     use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
     use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
     use crate::sdf::object::sdf_box::SdfBox;
-    use crate::sdf::object::sdf_box_frame::SdfBoxFrame;
-    use crate::sdf::object::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
-    use crate::sdf::object::sdf_capped_torus_xy::SdfCappedTorusXy;
-    use crate::sdf::object::sdf_capsule::SdfCapsule;
-    use crate::sdf::object::sdf_cone::SdfCone;
-    use crate::sdf::object::sdf_cut_hollow_sphere::SdfCutHollowSphere;
-    use crate::sdf::object::sdf_hex_prism::SdfHexPrism;
-    use crate::sdf::object::sdf_link::SdfLink;
-    use crate::sdf::object::sdf_octahedron::SdfOctahedron;
-    use crate::sdf::object::sdf_pyramid::SdfPyramid;
-    use crate::sdf::object::sdf_round_box::SdfRoundBox;
-    use crate::sdf::object::sdf_round_cone::SdfRoundCone;
-    use crate::sdf::object::sdf_solid_angle::SdfSolidAngle;
     use crate::sdf::object::sdf_sphere::SdfSphere;
-    use crate::sdf::object::sdf_torus_xz::SdfTorusXz;
-    use crate::sdf::object::sdf_triangular_prism::SdfTriangularPrism;
-    use crate::sdf::object::sdf_vesica_segment::SdfVesicaSegment;
     use crate::sdf::transformation::sdf_translation::SdfTranslation;
     use crate::serialization::pod_vector::PodVector;
     use crate::shader::function_name::FunctionName;
@@ -39,6 +23,22 @@ mod tests {
     use more_asserts::{assert_ge, assert_gt};
     use rstest::rstest;
     use std::rc::Rc;
+    use crate::palette::sdf::sdf_box_frame::SdfBoxFrame;
+    use crate::palette::sdf::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
+    use crate::palette::sdf::sdf_capped_torus_xy::SdfCappedTorusXy;
+    use crate::palette::sdf::sdf_capsule::SdfCapsule;
+    use crate::palette::sdf::sdf_cone::SdfCone;
+    use crate::palette::sdf::sdf_cut_hollow_sphere::SdfCutHollowSphere;
+    use crate::palette::sdf::sdf_hex_prism::SdfHexPrism;
+    use crate::palette::sdf::sdf_link::SdfLink;
+    use crate::palette::sdf::sdf_octahedron::SdfOctahedron;
+    use crate::palette::sdf::sdf_pyramid::SdfPyramid;
+    use crate::palette::sdf::sdf_round_box::SdfRoundBox;
+    use crate::palette::sdf::sdf_round_cone::SdfRoundCone;
+    use crate::palette::sdf::sdf_solid_angle::SdfSolidAngle;
+    use crate::palette::sdf::sdf_torus_xz::SdfTorusXz;
+    use crate::palette::sdf::sdf_triangular_prism::SdfTriangularPrism;
+    use crate::palette::sdf::sdf_vesica_segment::SdfVesicaSegment;
 
     #[test]
     fn test_sdf_union_spheres() {

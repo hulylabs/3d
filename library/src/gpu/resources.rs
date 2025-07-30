@@ -46,12 +46,21 @@ impl Resources {
 
 #[cfg(test)]
 mod tests {
+    use test_context::{test_context, TestContext};
     use super::*;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
 
-    #[must_use]
-    fn make_system_under_test() -> Resources {
-        Resources { context : create_headless_wgpu_context() }
+    struct Context {
+        system_under_test: Resources
+    }
+
+    impl TestContext for Context {
+        fn setup() -> Context {
+            Context { system_under_test: Resources{context: create_headless_wgpu_context()} }
+        }
+
+        fn teardown(self) {
+        }
     }
 
     const TRIVIAL_SHADER_CODE: &str = r#"
@@ -77,37 +86,33 @@ mod tests {
 
     const DUMMY_BYTE_ARRAY: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
+    #[test_context(Context)]
     #[test]
-    fn test_create_shader_module_successful_compilation() {
-        let system_under_test = make_system_under_test();
-
-        let _ = system_under_test.create_shader_module(
+    fn test_create_shader_module_successful_compilation(fixture: &mut Context) {
+        let _ = fixture.system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), TRIVIAL_SHADER_CODE);
     }
 
+    #[test_context(Context)]
     #[test]
     #[should_panic]
-    fn test_create_shader_module_syntax_error_compilation() {
-        let system_under_test = make_system_under_test();
-
-        let _ = system_under_test.create_shader_module(
+    fn test_create_shader_module_syntax_error_compilation(fixture: &Context) {
+        let _ = fixture.system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_SYNTAX_ERROR);
     }
 
+    #[test_context(Context)]
     #[test]
     #[should_panic]
-    fn test_create_shader_module_validation_error_compilation() {
-        let system_under_test = make_system_under_test();
-
-        let _ = system_under_test.create_shader_module(
+    fn test_create_shader_module_validation_error_compilation(fixture: &Context) {
+        let _ = fixture.system_under_test.create_shader_module(
             concat!("unit tests: file ", file!(), ", line: ", line!()), SHADER_CODE_WITH_VALIDATION_ERROR);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_create_uniform_buffer() {
-        let system_under_test = make_system_under_test();
-
-        let buffer = system_under_test.create_uniform_buffer(
+    fn test_create_uniform_buffer(fixture: &Context) {
+        let buffer = fixture.system_under_test.create_uniform_buffer(
             concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
 
         // TODO: do we need to wait for the queue to finish write? guess, yes
@@ -116,11 +121,10 @@ mod tests {
         assert_eq!(buffer.usage(), BufferUsages::UNIFORM | BufferUsages::COPY_DST);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_create_storage_buffer_write_only() {
-        let system_under_test = make_system_under_test();
-
-        let buffer = system_under_test.create_storage_buffer_write_only(
+    fn test_create_storage_buffer_write_only(fixture: &Context) {
+        let buffer = fixture.system_under_test.create_storage_buffer_write_only(
             concat!("unit tests: buffer ", file!(), ", line: ", line!()), &DUMMY_BYTE_ARRAY);
 
         assert_eq!(buffer.usage(), BufferUsages::STORAGE | BufferUsages::COPY_DST);

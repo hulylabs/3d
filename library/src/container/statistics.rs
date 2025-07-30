@@ -41,66 +41,76 @@ impl Statistics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_context::{test_context, TestContext};
 
-    #[test]
-    fn test_initial_statistics() {
-        let system_under_test = Statistics::default();
-        assert_eq!(system_under_test.data_version(), Version(0));
-        assert_eq!(system_under_test.object_count(), 0);
+    struct Context {
+        system_under_test: Statistics
     }
 
-    #[test]
-    fn test_delete_object() {
-        let mut system_under_test = Statistics::default();
+    impl TestContext for Context {
+        fn setup() -> Context {
+            Context {  system_under_test: Statistics::default() }
+        }
 
-        system_under_test.register_new_object();
-        let version_before_deletion = system_under_test.data_version();
-        system_under_test.delete_object();
-        assert_eq!(system_under_test.object_count(), 0);
-        assert_ne!(system_under_test.data_version(), version_before_deletion);
+        fn teardown(self) {
+        }
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_register_new_object() {
-        let mut system_under_test = Statistics::default();
-
-        system_under_test.register_new_object();
-        assert_eq!(system_under_test.object_count(), 1);
-        assert_eq!(system_under_test.data_version(), Version(1));
-
-        system_under_test.register_new_object();
-        assert_eq!(system_under_test.object_count(), 2);
-        assert_eq!(system_under_test.data_version(), Version(2));
+    fn test_initial_statistics(fixture: &mut Context) {
+        assert_eq!(fixture.system_under_test.data_version(), Version(0));
+        assert_eq!(fixture.system_under_test.object_count(), 0);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_register_object_mutation() {
-        let mut system_under_test = Statistics::default();
-
-        system_under_test.register_new_object();
-        assert_eq!(system_under_test.object_count(), 1);
-        assert_eq!(system_under_test.data_version(), Version(1));
-
-        system_under_test.register_object_mutation();
-        assert_eq!(system_under_test.object_count(), 1);
-        assert_eq!(system_under_test.data_version(), Version(2));
-
-        system_under_test.register_new_object();
-        assert_eq!(system_under_test.object_count(), 2);
-        assert_eq!(system_under_test.data_version(), Version(3));
+    fn test_delete_object(fixture: &mut Context) {
+        fixture.system_under_test.register_new_object();
+        let version_before_deletion = fixture.system_under_test.data_version();
+        fixture.system_under_test.delete_object();
+        assert_eq!(fixture.system_under_test.object_count(), 0);
+        assert_ne!(fixture.system_under_test.data_version(), version_before_deletion);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_multiple_mutations() {
-        let mut system_under_test = Statistics::default();
+    fn test_register_new_object(fixture: &mut Context) {
+        fixture.system_under_test.register_new_object();
+        assert_eq!(fixture.system_under_test.object_count(), 1);
+        assert_eq!(fixture.system_under_test.data_version(), Version(1));
 
-        system_under_test.register_new_object();
-        assert_eq!(system_under_test.object_count(), 1);
-        assert_eq!(system_under_test.data_version(), Version(1));
+        fixture.system_under_test.register_new_object();
+        assert_eq!(fixture.system_under_test.object_count(), 2);
+        assert_eq!(fixture.system_under_test.data_version(), Version(2));
+    }
 
-        system_under_test.register_object_mutation();
-        system_under_test.register_object_mutation();
-        assert_eq!(system_under_test.object_count(), 1);
-        assert_eq!(system_under_test.data_version(), Version(3));
+    #[test_context(Context)]
+    #[test]
+    fn test_register_object_mutation(fixture: &mut Context) {
+        fixture.system_under_test.register_new_object();
+        assert_eq!(fixture.system_under_test.object_count(), 1);
+        assert_eq!(fixture.system_under_test.data_version(), Version(1));
+
+        fixture.system_under_test.register_object_mutation();
+        assert_eq!(fixture.system_under_test.object_count(), 1);
+        assert_eq!(fixture.system_under_test.data_version(), Version(2));
+
+        fixture.system_under_test.register_new_object();
+        assert_eq!(fixture.system_under_test.object_count(), 2);
+        assert_eq!(fixture.system_under_test.data_version(), Version(3));
+    }
+
+    #[test_context(Context)]
+    #[test]
+    fn test_multiple_mutations(fixture: &mut Context) {
+        fixture.system_under_test.register_new_object();
+        assert_eq!(fixture.system_under_test.object_count(), 1);
+        assert_eq!(fixture.system_under_test.data_version(), Version(1));
+
+        fixture.system_under_test.register_object_mutation();
+        fixture.system_under_test.register_object_mutation();
+        assert_eq!(fixture.system_under_test.object_count(), 1);
+        assert_eq!(fixture.system_under_test.data_version(), Version(3));
     }
 }

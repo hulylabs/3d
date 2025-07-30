@@ -120,6 +120,7 @@ mod tests {
     use super::*;
     use crate::geometry::alias::Point;
     use cgmath::EuclideanSpace;
+    use test_context::{test_context, TestContext};
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
     const DEFAULT_FRAME_HEIGHT: u32 = 600;
@@ -143,46 +144,55 @@ mod tests {
     const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 42;
     const SLOT_GLOBAL_TIME: usize = 43;
 
-    #[must_use]
-    pub(crate) fn make_test_uniforms_instance() -> Uniforms {
-        let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
-        let camera = Camera::new_perspective_camera(1.0, Point::origin());
+    struct Context {
+        system_under_test: Uniforms
+    }
 
-        Uniforms {
-            frame_buffer_size,
-            frame_number: 0,
-            camera,
+    impl TestContext for Context {
+        fn setup() -> Context {
+            let frame_buffer_size = FrameBufferSize::new(DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT);
+            let camera = Camera::new_perspective_camera(1.0, Point::origin());
 
-            parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
-            bvh_length: DEFAULT_BVH_LENGTH,
-            pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
-            global_time_seconds: DEFAULT_GLOBAL_TIME_SECONDS,
+            let system_under_test = Uniforms {
+                frame_buffer_size,
+                frame_number: 0,
+                camera,
+
+                parallelograms_count: DEFAULT_PARALLELOGRAMS_COUNT,
+                bvh_length: DEFAULT_BVH_LENGTH,
+                pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
+                global_time_seconds: DEFAULT_GLOBAL_TIME_SECONDS,
+            };
+
+            Context {  system_under_test }
+        }
+
+        fn teardown(self) {
         }
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_uniforms_reset_frame_accumulation() {
-        let mut system_under_test = make_test_uniforms_instance();
+    fn test_uniforms_reset_frame_accumulation(fixture: &mut Context) {
+        fixture.system_under_test.next_frame(1);
+        fixture.system_under_test.reset_frame_accumulation(0);
 
-        system_under_test.next_frame(1);
-        system_under_test.reset_frame_accumulation(0);
-
-        let actual_state = system_under_test.serialize();
+        let actual_state = fixture.system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 0.0);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_uniforms_set_frame_size() {
+    fn test_uniforms_set_frame_size(fixture: &mut Context) {
         let expected_width = 1024;
         let expected_height = 768;
         let new_size = PhysicalSize::new(expected_width, expected_height);
-        let mut system_under_test = make_test_uniforms_instance();
 
-        system_under_test.set_frame_size(new_size);
+        fixture.system_under_test.set_frame_size(new_size);
 
-        let actual_state = system_under_test.serialize();
+        let actual_state = fixture.system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
         assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), expected_width);
@@ -193,37 +203,34 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_FRAME_INVERTED_HEIGHT], 1.0 / expected_height as f32);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_uniforms_next_frame() {
-        let mut system_under_test = make_test_uniforms_instance();
-
-        system_under_test.next_frame(1);
-        let actual_state = system_under_test.serialize();
+    fn test_uniforms_next_frame(fixture: &mut Context) {
+        fixture.system_under_test.next_frame(1);
+        let actual_state = fixture.system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 1.0);
 
-        system_under_test.next_frame(1);
-        let actual_state = system_under_test.serialize();
+        fixture.system_under_test.next_frame(1);
+        let actual_state = fixture.system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
         assert_eq!(actual_state_floats[SLOT_FRAME_NUMBER], 2.0);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_uniforms_frame_buffer_area() {
-        let system_under_test = make_test_uniforms_instance();
-
+    fn test_uniforms_frame_buffer_area(fixture: &mut Context) {
         let expected_area = DEFAULT_FRAME_WIDTH * DEFAULT_FRAME_HEIGHT;
-        assert_eq!(system_under_test.frame_buffer_area(), expected_area);
+        assert_eq!(fixture.system_under_test.frame_buffer_area(), expected_area);
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_uniforms_serialize() {
-        let mut system_under_test = make_test_uniforms_instance();
-
+    fn test_uniforms_serialize(fixture: &mut Context) {
         let expected_time = Instant::now().elapsed();
-        system_under_test.update_time(expected_time);
+        fixture.system_under_test.update_time(expected_time);
 
-        let actual_state = system_under_test.serialize();
+        let actual_state = fixture.system_under_test.serialize();
         let actual_state_floats: &[f32] = bytemuck::cast_slice(&actual_state.backend());
 
         assert_eq!(actual_state_floats[SLOT_FRAME_WIDTH].to_bits(), DEFAULT_FRAME_WIDTH);

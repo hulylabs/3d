@@ -98,6 +98,7 @@ impl VersionedBuffer {
 
 #[cfg(test)]
 mod tests {
+    use test_context::{test_context, TestContext};
     use crate::gpu::context::Context;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use super::*;
@@ -117,70 +118,79 @@ mod tests {
     const SYSTEM_UNDER_TEST_INITIAL_SLOTS: usize = 2;
     const SYSTEM_UNDER_TEST_INITIAL_VERSION: Version = Version(0);
 
-    #[must_use]
-    fn make_system_under_test() -> (VersionedBuffer, Resources, Rc<Context>) {
-        let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone());
-        let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
-
-        let system_under_test = VersionedBuffer::from_generator(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
-
-        (system_under_test, resources, context)
+    struct Fixture {
+        system_under_test: VersionedBuffer,
+        resources: Resources,
+        context: Rc<Context>,
     }
 
-    #[test]
-    fn test_construction() {
-        let (system_under_test, _, _) = make_system_under_test();
+    impl TestContext for Fixture {
+        fn setup() -> Fixture {
+            let context = create_headless_wgpu_context();
+            let resources = Resources::new(context.clone());
+            let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
+            let system_under_test = VersionedBuffer::from_generator(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
+
+            Fixture { system_under_test, resources, context }
+        }
+
+        fn teardown(self) {
+        }
+    }
+
+    #[test_context(Fixture)]
+    #[test]
+    fn test_construction(fixture: &mut Fixture) {
         let expected_content = make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
-        assert_eq!(system_under_test.backend().size(), expected_content.backend().len() as u64);
+        assert_eq!(fixture.system_under_test.backend().size(), expected_content.backend().len() as u64);
     }
 
+    #[test_context(Fixture)]
     #[test]
-    fn test_try_update_and_resize_same_version() {
-        let (mut system_under_test, resources, context) = make_system_under_test();
+    fn test_try_update_and_resize_same_version(fixture: &mut Fixture) {
         let make_new_data = || make_test_content(1);
 
-        let status = system_under_test.try_update_with_generator(
+        let status = fixture.system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION,
-            &resources,
-            context.queue(),
+            &fixture.resources,
+            fixture.context.queue(),
             make_new_data);
 
         assert!(!status.resized());
     }
 
+    #[test_context(Fixture)]
     #[test]
-    fn test_try_update_and_resize_smaller_size() {
-        let (mut system_under_test, resources, context) = make_system_under_test();
+    fn test_try_update_and_resize_smaller_size(fixture: &mut Fixture) {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS - 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_with_generator(
+        let status = fixture.system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
-            &resources,
-            context.queue(),
+            &fixture.resources,
+            fixture.context.queue(),
             make_new_data);
 
         assert!(!status.resized());
         let expected_content = make_new_data();
-        assert!(system_under_test.backend().size() > expected_content.backend().len() as u64);
+        assert!(fixture.system_under_test.backend().size() > expected_content.backend().len() as u64);
     }
 
+    #[test_context(Fixture)]
     #[test]
-    fn test_try_update_and_resize_bigger_size() {
-        let (mut system_under_test, resources, context) = make_system_under_test();
+    fn test_try_update_and_resize_bigger_size(fixture: &mut Fixture) {
         let new_slots_count = SYSTEM_UNDER_TEST_INITIAL_SLOTS + 1;
         let make_new_data = || make_test_content(new_slots_count);
 
-        let status = system_under_test.try_update_with_generator(
+        let status = fixture.system_under_test.try_update_with_generator(
             SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
-            &resources,
-            context.queue(),
+            &fixture.resources,
+            fixture.context.queue(),
             make_new_data);
 
         assert!(status.resized());
         let expected_content = make_new_data();
-        assert_eq!(system_under_test.backend().size(), expected_content.backend().len() as u64);
+        assert_eq!(fixture.system_under_test.backend().size(), expected_content.backend().len() as u64);
     }
 }

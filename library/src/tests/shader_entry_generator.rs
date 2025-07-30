@@ -167,5 +167,4 @@ pub(crate) mod tests {
     }
 
     const REFERENCE_SHADER_CODE: &str = include_str!("shader_entry_generator_test_expected_code.wgsl");
-    
 }

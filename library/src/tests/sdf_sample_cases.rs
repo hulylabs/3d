@@ -1,5 +1,6 @@
 ﻿#[cfg(test)]
 pub(crate) mod tests {
+    use test_context::{test_context, TestContext};
     use crate::geometry::alias::Point;
     use crate::serialization::pod_vector::PodVector;
 
@@ -48,36 +49,48 @@ pub(crate) mod tests {
         }
     }
 
-    #[test]
-    fn test_construction() {
-        let system_under_test = SdfSampleCases::<f32>::new();
-        assert_eq!(system_under_test.expected_outcomes().len(), 0);
-        assert_eq!(system_under_test.sample_positions().len(), 0);
+    struct Context {
+        system_under_test: SdfSampleCases::<f32>
     }
 
+    impl TestContext for Context {
+        fn setup() -> Context {
+            Context {  system_under_test: SdfSampleCases::<f32>::new() }
+        }
+
+        fn teardown(self) {
+        }
+    }
+
+    #[test_context(Context)]
     #[test]
-    fn test_add_sample() {
-        let mut system_under_test = SdfSampleCases::<f32>::new();
+    fn test_construction(fixture: &mut Context) {
+        assert_eq!(fixture.system_under_test.expected_outcomes().len(), 0);
+        assert_eq!(fixture.system_under_test.sample_positions().len(), 0);
+    }
+
+    #[test_context(Context)]
+    #[test]
+    fn test_add_sample(fixture: &mut Context) {
         let position = Point::new(1.0, 2.0, 3.0);
         let expected_distance = 5.0;
 
-        system_under_test.add_case_point(position.clone(), expected_distance);
+        fixture.system_under_test.add_case_point(position.clone(), expected_distance);
 
-        assert_eq!(system_under_test.expected_outcomes()[0], expected_distance);
-        assert_eq!(system_under_test.sample_positions()[0], to_gpu_format(position));
+        assert_eq!(fixture.system_under_test.expected_outcomes()[0], expected_distance);
+        assert_eq!(fixture.system_under_test.sample_positions()[0], to_gpu_format(position));
     }
 
+    #[test_context(Context)]
     #[test]
-    fn test_multiple_samples() {
-        let mut system_under_test = SdfSampleCases::<f32>::new();
-
+    fn test_multiple_samples(fixture: &mut Context) {
         let pos_one = Point::new(1.0, 0.0, 0.0);
         let pos_two = Point::new(0.0, 1.0, 0.0);
         
-        system_under_test.add_case_point(pos_one.clone(), 1.5);
-        system_under_test.add_case_point(pos_two.clone(), 2.5);
+        fixture.system_under_test.add_case_point(pos_one.clone(), 1.5);
+        fixture.system_under_test.add_case_point(pos_two.clone(), 2.5);
         
-        assert_eq!(system_under_test.expected_outcomes(), &[1.5, 2.5,]);
-        assert_eq!(system_under_test.sample_positions(), &[to_gpu_format(pos_one), to_gpu_format(pos_two),]);
+        assert_eq!(fixture.system_under_test.expected_outcomes(), &[1.5, 2.5,]);
+        assert_eq!(fixture.system_under_test.sample_positions(), &[to_gpu_format(pos_one), to_gpu_format(pos_two),]);
     }
 }
