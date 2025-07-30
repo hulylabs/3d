@@ -515,17 +515,51 @@ fn ray_and_differentials(pixel: Pixel, sub_pixel_x: f32, sub_pixel_y: f32) -> Ra
     return RayAndDifferentials(ray, differentials);
 }
 
+// position partial derivatives (with respect to x and y axes)
 struct RayDerivatives {
     dp_dx: vec3f,
     dp_dy: vec3f,
 }
 
+/*
+We have a ray (O, d̂) that intersects a surface at point P. There is also a second ray (O, d̂ₓ).
+The surface at point P has a normal N — we’ll assume the surface is a plane (with that same
+normal N and passing through P). For smooth surfaces, in a sufficiently small neighborhood
+of P, this is actually not far from reality.
+
+Let’s denote the intersection of the second ray with this plane as Pₓ. What we need is the
+vector (Pₓ - P) — this will be an approximation of the footprint that the pixel (through which
+the original ray passed) has on the surface.
+
+P = O + t * d̂ where t is a scalar.
+Pₓ = O + tₓ * d̂ₓ where tₓ is some other scalar (which we don’t know).
+
+All points lying on our plane satisfy the equation (?, N) - (P, N) = 0.
+Let’s plug Pₓ and P into this:
+
+(O + tₓ * d̂ₓ - P, N) = 0
+(O, N) + tₓ * (d̂ₓ, N) - (P, N) = 0
+(O, N) + tₓ * (d̂ₓ, N) - (O + t * d̂, N) = 0
+(O, N) + tₓ * (d̂ₓ, N) - (O, N) - t * (d̂, N) = 0
+tₓ * (d̂ₓ, N) - t * (d̂, N) = 0
+tₓ = t * (d̂, N) / (d̂ₓ, N)
+
+Now:
+
+Pₓ - P =
+O + tₓ * d̂ₓ - O - t * d̂ =
+tₓ * d̂ₓ - t * d̂ =
+t * ((d̂, N) / (d̂ₓ, N) * d̂ₓ - d̂)
+
+So, Pₓ - P = t * ((d̂, N) / (d̂ₓ, N) * d̂ₓ - d̂)
+*/
+
 @must_use
-fn ray_derivatives(
+fn ray_hit_position_derivatives(
     ray_direction: vec3f,
-    ray_differentials: RayDifferentials,
     surface_intersection_parameter: f32,
-    surface_normal: vec3f
+    surface_normal: vec3f,
+    ray_differentials: RayDifferentials,
 ) -> RayDerivatives {
     let ray_dot_normal = dot(ray_direction, surface_normal);
     let dp_dx = surface_intersection_parameter * (ray_differentials.dx * ray_dot_normal / dot(ray_differentials.dx, surface_normal) - ray_direction);
@@ -662,7 +696,7 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
         const grid_step: f32 = 1e-4;
         let snapped_position = snap_to_grid(hit.position, grid_step);
 
-        let derivartives = ray_derivatives(ray_direction, differentials, ray_parameter, hit.normal);
+        let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
 
         result *= procedural_texture_select(
             -material.albedo_texture_uid,

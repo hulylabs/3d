@@ -4,14 +4,8 @@ fn manual_fwidth(dx: vec3f, dy: vec3f) -> vec3f {
 
 // Filtered cosine function using manual gradients
 fn fcos_manual(x: vec3f, dx: vec3f, dy: vec3f) -> vec3f {
-    let w = manual_fwidth(dx, dy);
-
-    // Choose your filtering method:
-    // Option 1: filtered-exact
+    let w = manual_fwidth(dx, dy) * 6.28318;
     return cos(x) * sin(0.5 * w) / (0.5 * w);
-
-    // Option 2: filtered-approx (current implementation)
-    //return cos(x) * smoothstep(vec3f(6.28318), vec3f(0.0), w);
 }
 
 fn get_color_manual(t: f32, dt_dx: f32, dt_dy: f32) -> vec3f {
@@ -101,7 +95,7 @@ fn get_color_manual(t: f32, dt_dx: f32, dt_dy: f32) -> vec3f {
     return col;
 }
 
-fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, time: f32) -> array<vec2<f32>, 3> {
+fn deform_with_derivatives(p: vec2f, dp_dx: vec2f, dp_dy: vec2f, time: f32) -> array<vec2f, 3> {
     var q = p;
     var dq_dx = dp_dx;
     var dq_dy = dp_dy;
@@ -133,11 +127,11 @@ fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, tim
     // Term 1: coeff=1.5, time_coeff=0.03*1.0, offset=(0.1,1.1)
     var coeff = 1.5;
     var time_coeff = 0.03 * 1.0;
-    var offset = vec2<f32>(0.1, 1.1);
+    var offset = vec2f(0.1, 1.1);
     var arg = coeff * q.yx + time_coeff * time + offset;
     var sin_arg = sin(arg);
-    var darg_dx = coeff * vec2<f32>(dq_dx.y, dq_dx.x);
-    var darg_dy = coeff * vec2<f32>(dq_dy.y, dq_dy.x);
+    var darg_dx = coeff * vec2f(dq_dx.y, dq_dx.x);
+    var darg_dy = coeff * vec2f(dq_dy.y, dq_dy.x);
     dq_dx += 0.2 * (-sin_arg * darg_dx);
     dq_dy += 0.2 * (-sin_arg * darg_dy);
     q += 0.2 * cos(arg);
@@ -145,11 +139,11 @@ fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, tim
     // Term 2: coeff=2.4, time_coeff=0.03*1.6, offset=(4.5,2.6)
     coeff = 2.4;
     time_coeff = 0.03 * 1.6;
-    offset = vec2<f32>(4.5, 2.6);
+    offset = vec2f(4.5, 2.6);
     arg = coeff * q.yx + time_coeff * time + offset;
     sin_arg = sin(arg);
-    darg_dx = coeff * vec2<f32>(dq_dx.y, dq_dx.x);
-    darg_dy = coeff * vec2<f32>(dq_dy.y, dq_dy.x);
+    darg_dx = coeff * vec2f(dq_dx.y, dq_dx.x);
+    darg_dy = coeff * vec2f(dq_dy.y, dq_dy.x);
     dq_dx += 0.2 * (-sin_arg * darg_dx);
     dq_dy += 0.2 * (-sin_arg * darg_dy);
     q += 0.2 * cos(arg);
@@ -157,11 +151,11 @@ fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, tim
     // Term 3: coeff=3.3, time_coeff=0.03*1.2, offset=(3.2,3.4)
     coeff = 3.3;
     time_coeff = 0.03 * 1.2;
-    offset = vec2<f32>(3.2, 3.4);
+    offset = vec2f(3.2, 3.4);
     arg = coeff * q.yx + time_coeff * time + offset;
     sin_arg = sin(arg);
-    darg_dx = coeff * vec2<f32>(dq_dx.y, dq_dx.x);
-    darg_dy = coeff * vec2<f32>(dq_dy.y, dq_dy.x);
+    darg_dx = coeff * vec2f(dq_dx.y, dq_dx.x);
+    darg_dy = coeff * vec2f(dq_dy.y, dq_dy.x);
     dq_dx += 0.2 * (-sin_arg * darg_dx);
     dq_dy += 0.2 * (-sin_arg * darg_dy);
     q += 0.2 * cos(arg);
@@ -169,11 +163,11 @@ fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, tim
     // Term 4: coeff=4.2, time_coeff=0.03*1.7, offset=(1.8,5.2)
     coeff = 4.2;
     time_coeff = 0.03 * 1.7;
-    offset = vec2<f32>(1.8, 5.2);
+    offset = vec2f(1.8, 5.2);
     arg = coeff * q.yx + time_coeff * time + offset;
     sin_arg = sin(arg);
-    darg_dx = coeff * vec2<f32>(dq_dx.y, dq_dx.x);
-    darg_dy = coeff * vec2<f32>(dq_dy.y, dq_dy.x);
+    darg_dx = coeff * vec2f(dq_dx.y, dq_dx.x);
+    darg_dy = coeff * vec2f(dq_dy.y, dq_dy.x);
     dq_dx += 0.2 * (-sin_arg * darg_dx);
     dq_dy += 0.2 * (-sin_arg * darg_dy);
     q += 0.2 * cos(arg);
@@ -181,16 +175,16 @@ fn deform_with_derivatives(p: vec2<f32>, dp_dx: vec2<f32>, dp_dy: vec2<f32>, tim
     // Term 5: coeff=9.1, time_coeff=0.03*1.1, offset=(6.3,3.9)
     coeff = 9.1;
     time_coeff = 0.03 * 1.1;
-    offset = vec2<f32>(6.3, 3.9);
+    offset = vec2f(6.3, 3.9);
     arg = coeff * q.yx + time_coeff * time + offset;
     sin_arg = sin(arg);
-    darg_dx = coeff * vec2<f32>(dq_dx.y, dq_dx.x);
-    darg_dy = coeff * vec2<f32>(dq_dy.y, dq_dy.x);
+    darg_dx = coeff * vec2f(dq_dx.y, dq_dx.x);
+    darg_dy = coeff * vec2f(dq_dy.y, dq_dy.x);
     dq_dx += 0.2 * (-sin_arg * darg_dx);
     dq_dy += 0.2 * (-sin_arg * darg_dy);
     q += 0.2 * cos(arg);
 
-    return array<vec2<f32>, 3>(q, dq_dx, dq_dy);
+    return array<vec2f, 3>(q, dq_dx, dq_dy);
 }
 
 fn adjust_contrast(color: vec3f, contrast: f32) -> vec3f {
@@ -199,24 +193,24 @@ fn adjust_contrast(color: vec3f, contrast: f32) -> vec3f {
 
 // https://www.shadertoy.com/view/wtXfRH
 
-fn deformed_circles_texture(uv: vec2<f32>, time: f32, ray_diffs_dp_dx: vec2f, ray_diffs_dp_dy: vec2f) -> vec3f {
+fn deformed_circles_texture(uv: vec2f, time: f32, ray_diffs_dp_dx: vec2f, ray_diffs_dp_dy: vec2f) -> vec3f {
     let uv_scaled = 2.0 * uv;
     let dp_dx = 2.0 * ray_diffs_dp_dx;
     let dp_dy = 2.0 * ray_diffs_dp_dy;
 
     // deformation with derivatives
-    let deformation = deform_with_derivatives(uv_scaled, dp_dx, dp_dy, 0.0);
+    let deformation = deform_with_derivatives(uv_scaled, dp_dx, dp_dy, time);
     let uv_deformed = deformation[0];
     let dp_deformed_dx = deformation[1];
     let dp_deformed_dy = deformation[2];
 
-    // Calculate t = 0.5 * length(p_deformed) and its derivatives
-    let half_uv_length = length(uv_deformed);
-    let t = 0.5 * half_uv_length;
+    // Calculate t = 0.5 * length(uv_deformed) and its derivatives
+    let uv_length = length(uv_deformed);
+    let t = 0.5 * uv_length;
 
     // Derivative of length
-    let dt_dx = 0.5 * dot(uv_deformed, dp_deformed_dx) / half_uv_length;
-    let dt_dy = 0.5 * dot(uv_deformed, dp_deformed_dy) / half_uv_length;
+    let dt_dx = 0.5 * dot(uv_deformed, dp_deformed_dx) / uv_length;
+    let dt_dy = 0.5 * dot(uv_deformed, dp_deformed_dy) / uv_length;
 
     // Get base color pattern with gradients
     var color = get_color_manual(t, dt_dx, dt_dy);
