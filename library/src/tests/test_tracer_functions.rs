@@ -9,9 +9,10 @@ mod tests {
     use crate::gpu::pipelines_factory::ComputeRoutineEntryPoint;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
     use crate::gpu::uniforms::Uniforms;
+    use crate::material::material_index::MaterialIndex;
     use crate::objects::common_properties::Linkage;
-    use crate::objects::sdf_instance::SdfInstance;
     use crate::objects::sdf_class_index::SdfClassIndex;
+    use crate::objects::sdf_instance::SdfInstance;
     use crate::scene::camera::Camera;
     use crate::sdf::framework::code_generator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
@@ -19,17 +20,16 @@ mod tests {
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::tests::gpu_code_execution::tests::{execute_code, BindGroupSlot, ExecutionConfig};
+    use crate::tests::gpu_code_execution::tests::{create_checkerboard_texture_data, execute_code, DataBindGroupSlot, ExecutionConfig, SamplerBindGroupSlot, TextureBindGroupSlot};
     use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
     use crate::utils::object_uid::ObjectUid;
     use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use bytemuck::{Pod, Zeroable};
     use cgmath::num_traits::float::FloatCore;
-    use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace};
+    use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace, Vector2};
     use std::f32::consts::SQRT_2;
     use std::time::Instant;
-    use crate::material::material_index::MaterialIndex;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
@@ -55,6 +55,270 @@ mod tests {
                     .with_field("direction", "vec4f")
             )
         }
+    }
+
+    #[test]
+    fn test_pixel_half_size() {
+        let template = ShaderFunction::new("Differentials", "vec4f", "pixel_half_size_t")
+            .with_custom_type(
+                TypeDeclaration::new("Differentials", "ddx_and_ddy", "vec4f")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
+            .with_additional_shader_code(
+                "fn pixel_half_size_t(request: Differentials) -> vec4f \
+                { return vec4f(pixel_half_size(texture_atlas_page, request.ddx_and_ddy.xy, request.ddx_and_ddy.zw), 3.0, 7.0); }"
+            );
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
+        let mut execution_config = config_empty_bindings();
+
+        let texture_size = Vector2::<u32>::new(8, 16);
+        let pixel_size = Vector2::<f32>::new(1.0 / texture_size.x as f32, 1.0 / texture_size.y as f32);
+        let data = create_checkerboard_texture_data(texture_size.x, texture_size.y, 1);
+        execution_config.set_texture_binding(0, TextureBindGroupSlot::new(2, texture_size, data), None);
+
+        #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct Differentials {
+            ddx_and_ddy: PodVector,
+        }
+
+        let test_input = [
+            Differentials{ddx_and_ddy: PodVector::new_full(0.0, 0.0, 0.0, 0.0)},
+            Differentials{ddx_and_ddy: PodVector::new_full(pixel_size.x, 0.0, 0.0, pixel_size.y)},
+        ];
+
+        let expected_pixel_half_size = pixel_size * 0.5;
+
+        let expected_output = [
+            PodVector {x: expected_pixel_half_size.x, y: expected_pixel_half_size.y, z: 3.0, w: 7.0,},
+            PodVector {x: expected_pixel_half_size.x, y: expected_pixel_half_size.y, z: 3.0, w: 7.0,},
+        ];
+
+        let actual_output = execute_code::<Differentials, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test]
+    fn test_read_atlas_no_differentials() {
+        let template = ShaderFunction::new("AtlasReadRequest", "vec4f", "read_atlas_t")
+            .with_custom_type(
+                TypeDeclaration::new("AtlasReadRequest", "local_space_position", "vec4f")
+                    .with_field("atlas_region_mapping", "AtlasMapping")
+                    .with_field("differentials", "RayDifferentials")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
+            .with_additional_shader_code(
+                "fn read_atlas_t(request: AtlasReadRequest) -> vec4f \
+                { return read_atlas(request.local_space_position.xyz, request.atlas_region_mapping, request.differentials); }"
+            );
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
+        let mut execution_config = config_empty_bindings();
+
+        let texture_size = Vector2::<u32>::new(8, 4);
+        let pixel_size = Vector2::<f32>::new(1.0 / texture_size.x as f32, 1.0 / texture_size.y as f32);
+        let data = create_checkerboard_texture_data(texture_size.x, texture_size.y, 1);
+        execution_config.set_texture_binding(0, TextureBindGroupSlot::new(2, texture_size, data), Some(SamplerBindGroupSlot::new(1)));
+
+        #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct AtlasMapping {
+            top_left_corner_and_size: PodVector,
+            local_position_to_texture: [PodVector; 2],
+            out_of_region_mode: [i32; 4],
+        }
+
+        #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct RayDifferentials {
+            dx: PodVector,
+            dy: PodVector,
+        }
+
+        #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct AtlasReadRequest {
+            local_space_position: PodVector,
+            atlas_region_mapping: AtlasMapping,
+            differentials: RayDifferentials,
+        }
+
+        let zero_differentials = RayDifferentials { dx: PodVector::new(0.0, 0.0, 0.0), dy: PodVector::new(0.0, 0.0, 0.0), };
+
+        let xu_yv_mapping = [
+            PodVector::new_full(1.0, 0.0, 0.0, 0.0),
+            PodVector::new_full(0.0, 1.0, 0.0, 0.0),
+        ];
+
+        let whole_texture_xu_yv = AtlasMapping {
+            // whole texture
+            top_left_corner_and_size: PodVector::new_full(0.0, 0.0, 1.0, 1.0),
+            // x -> u, y -> v
+            local_position_to_texture: xu_yv_mapping,
+            out_of_region_mode: [0, 0, 0, 0],
+        };
+        let whole_texture_zu_xv = AtlasMapping {
+            // whole texture
+            top_left_corner_and_size: PodVector::new_full(0.0, 0.0, 1.0, 1.0),
+            // z -> u, x -> v
+            local_position_to_texture: [
+                PodVector::new_full(0.0, 0.0, 1.0, 0.0),
+                PodVector::new_full(1.0, 0.0, 0.0, 0.0),
+            ],
+            out_of_region_mode: [0, 0, 0, 0],
+        };
+
+        /*
+        Our texture:
+
+             A
+             |
+         W [B W] B W  B W  B
+         B [W B] W B [W B] W
+         W  B W  B W [B W] B
+         B  W B  W B [W B] W
+                       |
+                       B
+        */
+
+        let a_region = PodVector::new_full(pixel_size.x * 1.0, pixel_size.y * 0.0, pixel_size.x * 2.0, pixel_size.y * 2.0);
+        let b_region = PodVector::new_full(pixel_size.x * 5.0, pixel_size.y * 1.0, pixel_size.x * 2.0, pixel_size.y * 3.0);
+
+        const TEXTURE_OUT_OF_REGION_MODE_REPEAT: i32 = 0;
+        const TEXTURE_OUT_OF_REGION_MODE_CLAMP: i32 = 1;
+        const TEXTURE_OUT_OF_REGION_MODE_DISCARD: i32 = 2;
+
+        let test_input = [
+
+            // whole texture mapping
+
+            AtlasReadRequest{
+                // center of top left pixel
+                local_space_position: PodVector::new(pixel_size.x/2.0,pixel_size.y/2.0,0.0),
+                atlas_region_mapping: whole_texture_xu_yv,
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                // center of bottom left pixel
+                local_space_position: PodVector::new(1.0-pixel_size.y/2.0, 0.0,pixel_size.x/2.0),
+                atlas_region_mapping: whole_texture_zu_xv,
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                // center of bottom right pixel
+                local_space_position: PodVector::new(1.0-pixel_size.y/2.0, 0.0,1.0-pixel_size.x/2.0),
+                atlas_region_mapping: whole_texture_zu_xv,
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                // center of top right pixel
+                local_space_position: PodVector::new(1.0-pixel_size.x/2.0,pixel_size.y/2.0,0.0),
+                atlas_region_mapping: whole_texture_xu_yv,
+                differentials: zero_differentials
+            },
+
+            // regions mapping
+
+            AtlasReadRequest{
+                // right bottom corner of the 2x2 'A' region
+                local_space_position: PodVector::new(0.25,0.75,0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: a_region,
+                    // x -> u + 0.5 , y -> v - 1 column shift
+                    local_position_to_texture: [
+                        PodVector::new_full(1.0, 0.0, 0.0, 0.5),
+                        PodVector::new_full(0.0, 1.0, 0.0, 0.0),
+                    ],
+                    out_of_region_mode: [0, 0, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                // left top corner of the 2x3 'B' region
+                local_space_position: PodVector::new(0.25,1.0 - (1.0/3.0)/2.0,0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: b_region,
+                    // x -> u, y -> v+2/3 - 2 rows shift
+                    local_position_to_texture: [
+                        PodVector::new_full(1.0, 0.0, 0.0, 0.0),
+                        PodVector::new_full(0.0, 1.0, 0.0, -2.0/3.0),
+                    ],
+                    out_of_region_mode: [0, 0, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+
+            // out_of_region_mode check - clamp
+
+            AtlasReadRequest{
+                local_space_position: PodVector::new(0.25, -(1.0/3.0)/2.0, 0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: b_region,
+                    local_position_to_texture: xu_yv_mapping,
+                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_REPEAT, TEXTURE_OUT_OF_REGION_MODE_CLAMP, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                local_space_position: PodVector::new(1.25, (1.0/3.0)/2.0, 0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: b_region,
+                    local_position_to_texture: xu_yv_mapping,
+                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_CLAMP, TEXTURE_OUT_OF_REGION_MODE_REPEAT, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+
+            // out_of_region_mode check - discard
+
+            AtlasReadRequest{
+                local_space_position: PodVector::new(-0.25, (1.0/3.0)/2.0, 0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: b_region,
+                    local_position_to_texture: xu_yv_mapping,
+                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_DISCARD, TEXTURE_OUT_OF_REGION_MODE_CLAMP, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+
+            AtlasReadRequest{
+                local_space_position: PodVector::new(0.25, 1.0 + (1.0/3.0)/2.0, 0.0),
+                atlas_region_mapping: AtlasMapping {
+                    top_left_corner_and_size: b_region,
+                    local_position_to_texture: xu_yv_mapping,
+                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_CLAMP, TEXTURE_OUT_OF_REGION_MODE_DISCARD, 0, 0],
+                },
+                differentials: zero_differentials
+            },
+        ];
+
+        let expected_output = [
+            // whole texture mapping
+            PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
+            PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
+            // regions mapping
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
+            PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
+            // out_of_region_mode check - clamp
+            PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
+            // out_of_region_mode check - discard
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 0.0,},
+            PodVector {x: 0.0, y: 0.0, z: 0.0, w: 0.0,},
+        ];
+
+        let actual_output = execute_code::<AtlasReadRequest, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+
+        assert_eq!(actual_output, expected_output);
     }
 
     #[test]
@@ -425,7 +689,7 @@ mod tests {
         #[must_use]
         fn common_test_config(&mut self) -> &mut Self {
             self
-                .set_data_binding_group(TEST_DATA_IO_BINDING_GROUP)
+                .set_test_data_binding_group(TEST_DATA_IO_BINDING_GROUP)
                 .set_entry_point(ComputeRoutineEntryPoint::TestDefault)
         }
     }
@@ -435,9 +699,9 @@ mod tests {
         let mut ware = ExecutionConfig::new();
         ware
             .common_test_config()
-            .add_dummy_binding_group(0, vec![])
-            .add_dummy_binding_group(1, vec![])
-            .add_dummy_binding_group(2, vec![])
+            .set_dummy_binding_group(0, vec![], vec![], vec![])
+            .set_dummy_binding_group(1, vec![], vec![], vec![])
+            .set_dummy_binding_group(2, vec![], vec![], vec![])
         ;
         ware
     }
@@ -451,10 +715,10 @@ mod tests {
         let mut ware = ExecutionConfig::new();
         ware
             .common_test_config()
-            .add_dummy_binding_group(1, vec![])
-            .add_binding_group(0, vec![], vec![
+            .set_dummy_binding_group(1, vec![], vec![], vec![])
+            .set_storage_binding_group(0, vec![], vec![
                 // the only value we need (in uniforms) is sdf instances count which is 1
-                BindGroupSlot::new(0, uniforms.serialize().backend()),
+                DataBindGroupSlot::new(0, uniforms.serialize().backend()),
             ])
         ;
         ware
@@ -470,10 +734,10 @@ mod tests {
     #[must_use]
     fn config_sdf_sampling(serialized_sdf: SdfInstances) -> ExecutionConfig {
         let mut execution_config = config_common_sdf_buffers();
-        execution_config.add_binding_group(2, vec![], vec![
-            BindGroupSlot::new(1, serialized_sdf.instances.backend()),
-            BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
-            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
+        execution_config.set_storage_binding_group(2, vec![], vec![
+            DataBindGroupSlot::new(1, serialized_sdf.instances.backend()),
+            DataBindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            DataBindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }
@@ -482,14 +746,14 @@ mod tests {
     fn config_sdf_shadow_sampling(serialized_sdf: SdfInstances) -> ExecutionConfig {
         let mut execution_config = config_common_sdf_buffers();
         let dummy_buffer = [0_u8; 96];
-        execution_config.add_binding_group(2, vec![], vec![
-            BindGroupSlot::new(0, &dummy_buffer),
-            BindGroupSlot::new(1, serialized_sdf.instances.backend()),
-            BindGroupSlot::new(2, &dummy_buffer),
-            BindGroupSlot::new(3, &dummy_buffer),
-            BindGroupSlot::new(4, serialized_sdf.bvh.backend()),
-            BindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
-            BindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
+        execution_config.set_storage_binding_group(2, vec![], vec![
+            DataBindGroupSlot::new(0, &dummy_buffer),
+            DataBindGroupSlot::new(1, serialized_sdf.instances.backend()),
+            DataBindGroupSlot::new(2, &dummy_buffer),
+            DataBindGroupSlot::new(3, &dummy_buffer),
+            DataBindGroupSlot::new(4, serialized_sdf.bvh.backend()),
+            DataBindGroupSlot::new(5, serialized_sdf.inflated_bvh.backend()),
+            DataBindGroupSlot::new(6, bytemuck::bytes_of(&[0_f32; 1])),
         ]);
         execution_config
     }

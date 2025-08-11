@@ -10,6 +10,12 @@ impl From<usize> for ObjectUid {
     }
 }
 
+impl From<u32> for ObjectUid {
+    fn from(value: u32) -> Self {
+        ObjectUid(value)
+    }
+}
+
 impl Display for ObjectUid {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "{}", self.0)

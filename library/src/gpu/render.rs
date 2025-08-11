@@ -33,6 +33,8 @@ use std::rc::Rc;
 use std::time::Instant;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
+use crate::gpu::bitmap_textures::BitmapTextures;
+use crate::material::atlas_region::AtlasRegion;
 use crate::material::material_properties::MaterialProperties;
 
 #[cfg(feature = "denoiser")]
@@ -64,7 +66,10 @@ pub(crate) struct Renderer {
 struct Gpu {
     context: Rc<Context>,
     resources: Resources,
+
     buffers: Buffers,
+    textures: BitmapTextures,
+
     pipelines_factory: PipelinesFactory,
 }
 
@@ -106,8 +111,10 @@ impl Renderer {
 
         let resources = Resources::new(context.clone());
         let buffers = Self::init_buffers(&scene, &context, &mut uniforms, &resources);
+        let textures = BitmapTextures::new(&resources);
         let pipelines_factory = PipelinesFactory::new(context.clone(), frame_buffer_settings.presentation_format, caches_path);
-        let mut gpu = Gpu { context, resources, buffers, pipelines_factory };
+
+        let mut gpu = Gpu { context, resources, buffers, textures, pipelines_factory };
 
         let shader_source_text = scene.container().compose_shader(WHOLE_TRACER_GPU_CODE);
         let shader_source_hash = seahash::hash(shader_source_text.as_bytes());
@@ -212,8 +219,11 @@ impl Renderer {
         
         let mut composite_status = BuffersUpdateStatus::new();
 
-        composite_status.merger_material(self.gpu.buffers.materials.try_update_with_generator(container.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || container.materials().serialize()));
-        
+        composite_status.merge_materials(self.gpu.buffers.materials.try_update_with_generator(container.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || container.materials().serialize()));
+
+        let texture_atlas_regions_version = container.materials().texture_atlas_regions().version();
+        composite_status.merge_materials(self.gpu.buffers.texture_atlases_mapping.try_update_with_generator(texture_atlas_regions_version, &self.gpu.resources, self.gpu.context.queue(), || container.materials().texture_atlas_regions().serialize()));
+
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, container, self.gpu.context.queue()));
         self.uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
         
@@ -300,6 +310,9 @@ impl Renderer {
 
         let materials = if container.materials().count() > 0
             { container.materials().serialize() } else { Self::make_empty_buffer_marker::<MaterialProperties>() };
+
+        let texture_atlas_regions = if container.materials().texture_atlas_regions().count() > 0
+            { container.materials().texture_atlas_regions().serialize() } else { Self::make_empty_buffer_marker::<AtlasRegion>() };
         
         uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
         
@@ -315,7 +328,8 @@ impl Renderer {
             sdf: Self::make_buffer::<SdfInstance>(container, resources, &DataKind::Sdf),
             materials: VersionedBuffer::from_generator(container.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::from_generator(container.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
-            
+            texture_atlases_mapping: VersionedBuffer::from_generator(container.materials().texture_atlas_regions().version(), resources, "texture atlases mapping", || texture_atlas_regions),
+
             bvh: ResizableBuffer::from_generator(resources, "bvh", || bvh),
             bvh_inflated: ResizableBuffer::from_generator(resources, "bvh inflated", || bvh_inflated),
             
@@ -353,8 +367,9 @@ impl Renderer {
 
         pipeline.setup_bind_group(Self::UNIFORMS_GROUP_INDEX, Some("compute pipeline uniform group"), device, |bind_group| {
             bind_group
-                .add_entry(0, gpu.buffers.uniforms.clone())
+                .set_storage_entry(0, gpu.buffers.uniforms.clone())
             ;
+            gpu.textures.bind(bind_group);
         });
 
         customization(device, &gpu.buffers, &mut pipeline);
@@ -368,17 +383,18 @@ impl Renderer {
         let label = Some("compute pipeline scene group");
         pipeline.setup_bind_group(Self::SCENE_GROUP_INDEX, label, gpu.context.device(), |bind_group| {
             bind_group
-                .add_entry(0, gpu.buffers.parallelograms.backend().clone())
-                .add_entry(1, gpu.buffers.sdf.backend().clone())
-                .add_entry(2, gpu.buffers.triangles.backend().clone())
-                .add_entry(3, gpu.buffers.materials.backend().clone())
-                .add_entry(4, gpu.buffers.bvh.backend().clone());
+                .set_storage_entry(0, gpu.buffers.parallelograms.backend().clone())
+                .set_storage_entry(1, gpu.buffers.sdf.backend().clone())
+                .set_storage_entry(2, gpu.buffers.triangles.backend().clone())
+                .set_storage_entry(3, gpu.buffers.materials.backend().clone())
+                .set_storage_entry(4, gpu.buffers.bvh.backend().clone());
                 
             if uses_inflated_bvh {
-                bind_group.add_entry(5, gpu.buffers.bvh_inflated.backend().clone());
+                bind_group.set_storage_entry(5, gpu.buffers.bvh_inflated.backend().clone());
             }
 
-            bind_group.add_entry(6, gpu.buffers.sdf_time.backend().clone());
+            bind_group.set_storage_entry(6, gpu.buffers.sdf_time.backend().clone());
+            bind_group.set_storage_entry(7, gpu.buffers.texture_atlases_mapping.backend().clone());
         });
     }
 
@@ -387,9 +403,9 @@ impl Renderer {
 
         surface_attributes_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder
-                .add_entry(1, buffers.ray_tracing_frame_buffer.object_id_at_gpu())
-                .add_entry(2, buffers.ray_tracing_frame_buffer.normal_at_gpu())
-                .add_entry(3, buffers.ray_tracing_frame_buffer.albedo_gpu())
+                .set_storage_entry(1, buffers.ray_tracing_frame_buffer.object_id_at_gpu())
+                .set_storage_entry(2, buffers.ray_tracing_frame_buffer.normal_at_gpu())
+                .set_storage_entry(3, buffers.ray_tracing_frame_buffer.albedo_gpu())
             ;
         });
     }
@@ -399,7 +415,7 @@ impl Renderer {
 
         ray_tracing_pipeline.setup_bind_group(Self::FRAME_BUFFERS_GROUP_INDEX, label, device, |bind_group_builder| {
             bind_group_builder
-                .add_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                .set_storage_entry(0, buffers.ray_tracing_frame_buffer.noisy_pixel_color())
             ;
         });
     }
@@ -412,7 +428,7 @@ impl Renderer {
         let bind_group_layout = rasterization_pipeline.bind_group_layout(uniforms_binding_index);
         let mut bind_group_builder = BindGroupBuilder::new(uniforms_binding_index, Some("rasterization pipeline uniform group"), bind_group_layout);
         bind_group_builder
-            .add_entry(0, gpu.buffers.uniforms.clone())
+            .set_storage_entry(0, gpu.buffers.uniforms.clone())
         ;
         rasterization_pipeline.commit_bind_group(gpu.context.device(), bind_group_builder);
 
@@ -431,16 +447,16 @@ impl Renderer {
         if cfg!(feature = "denoiser") {
             if flavour == RenderStrategyId::Deterministic {
                 bind_group_builder
-                    .add_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                    .set_storage_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
                 ;   
             } else {
                 bind_group_builder
-                    .add_entry(0, gpu.buffers.denoised_beauty_image.gpu_render_target())
+                    .set_storage_entry(0, gpu.buffers.denoised_beauty_image.gpu_render_target())
                 ;
             }
         } else {
             bind_group_builder
-                .add_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
+                .set_storage_entry(0, gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color())
             ;
         }
         
@@ -726,6 +742,7 @@ struct Buffers {
     sdf: VersionedBuffer,
     triangles: VersionedBuffer,
     materials: VersionedBuffer,
+    texture_atlases_mapping: VersionedBuffer,
 
     bvh: ResizableBuffer,
     bvh_inflated: ResizableBuffer,

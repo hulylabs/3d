@@ -1,6 +1,7 @@
 ﻿use crate::material::material_index::MaterialIndex;
 use crate::material::material_properties::MaterialProperties;
 use crate::material::procedural_textures::ProceduralTextures;
+use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
 use crate::material::texture_reference::TextureReference;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
@@ -10,7 +11,8 @@ use crate::utils::version::Version;
 pub struct MaterialsWarehouse {
     materials: Vec<MaterialProperties>,
     procedural_textures: Option<ProceduralTextures>,
-    materials_version: Version,
+    texture_atlas_regions: TextureAtlasRegionsWarehouse,
+    data_version: Version,
 }
 
 impl MaterialsWarehouse {
@@ -19,7 +21,8 @@ impl MaterialsWarehouse {
         Self {
             materials: Vec::new(),
             procedural_textures,
-            materials_version: Version(0),
+            texture_atlas_regions: TextureAtlasRegionsWarehouse::new(),
+            data_version: Version(0),
         }
     }
 
@@ -37,7 +40,7 @@ impl MaterialsWarehouse {
     #[must_use]
     pub fn add(&mut self, target: &MaterialProperties) -> MaterialIndex {
         self.materials.push(*target);
-        self.materials_version += 1;
+        self.data_version += 1;
         MaterialIndex(self.materials.len() - 1)
     }
 
@@ -48,7 +51,7 @@ impl MaterialsWarehouse {
 
     #[must_use]
     pub(crate) fn data_version(&self) -> Version {
-        self.materials_version
+        self.data_version
     }
 
     #[must_use]
@@ -64,15 +67,25 @@ impl MaterialsWarehouse {
             ProceduralTextures::make_dummy_selection_function()
         }
     }
+
+    #[must_use]
+    pub(crate) fn texture_atlas_regions(&self) -> &TextureAtlasRegionsWarehouse {
+        &self.texture_atlas_regions
+    }
+
+    #[must_use]
+    pub(crate) fn mutate_texture_atlas_regions(&mut self) -> &mut TextureAtlasRegionsWarehouse {
+        &mut self.texture_atlas_regions
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::material::procedural_texture_index::ProceduralTextureUid;
     use crate::material::texture_procedural_3d::TextureProcedural3D;
     use crate::shader::code::FunctionBody;
     use crate::shader::conventions;
-    use super::*;
 
     #[test]
     fn test_data_version_materials() {

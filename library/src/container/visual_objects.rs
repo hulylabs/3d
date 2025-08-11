@@ -43,7 +43,7 @@ pub struct VisualObjects {
     materials: MaterialsWarehouse,
     sdf_prototypes: SdfWarehouse,
     
-    uid_generator: UidGenerator,
+    uid_generator: UidGenerator<ObjectUid>,
 }
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
@@ -284,7 +284,7 @@ impl VisualObjects {
     #[must_use]
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
-        uid_generator: &mut UidGenerator,
+        uid_generator: &mut UidGenerator<ObjectUid>,
         statistics: &mut [Statistics],
         create_object: Constructor,
     ) -> ObjectUid {

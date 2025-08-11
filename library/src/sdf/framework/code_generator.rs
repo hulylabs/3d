@@ -9,9 +9,18 @@ use crate::sdf::framework::sdf_shader_code::{format_sdf_declaration, format_sdf_
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::function_name::FunctionName;
 
+#[derive(Copy, Clone, Debug)]
+pub struct SdfUid(pub u32);
+
+impl From<u32> for SdfUid {
+    fn from(value: u32) -> Self {
+        SdfUid(value)
+    }
+}
+
 pub struct SdfRegistrator {
     sdf_bodies: FunctionBodyDossier,
-    uid_generator: UidGenerator,
+    uid_generator: UidGenerator<SdfUid>,
     registered: HashMap<UniqueSdfClassName, NamedSdf>,
 }
 
