@@ -6,3 +6,4 @@ pub(crate) mod time_throttled_logger;
 pub(crate) mod remove_with_reorder;
 pub(crate) mod tests;
 pub(crate) mod version;
+pub mod bitmap_utils;

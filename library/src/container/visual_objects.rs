@@ -7,6 +7,7 @@ use crate::container::monolithic::Monolithic;
 use crate::container::scene_object::SceneObject;
 use crate::container::sdf_warehouse::SdfWarehouse;
 use crate::container::statistics::Statistics;
+use crate::container::texture_atlas_page_composer::TextureAtlasPageComposer;
 use crate::container::triangulated::Triangulated;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
@@ -19,10 +20,11 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
-use crate::sdf::framework::code_generator::SdfRegistrator;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use crate::sdf::framework::sdf_registrator::SdfRegistrator;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
+use crate::utils::bitmap_utils::BitmapSize;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
@@ -41,6 +43,8 @@ pub struct VisualObjects {
     triangles: Vec<Triangle>,
     
     materials: MaterialsWarehouse,
+    texture_atlas_page_composer: TextureAtlasPageComposer,
+
     sdf_prototypes: SdfWarehouse,
     
     uid_generator: UidGenerator<ObjectUid>,
@@ -55,19 +59,25 @@ pub(crate) enum DataKind {
 
 impl VisualObjects {
     #[must_use]
-    pub fn new(sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
-        let per_object_kind_statistics: Vec<Statistics> = vec![Statistics::default(); DataKind::COUNT];
-
+    pub fn new(texture_atlas_page_size: BitmapSize, sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
+        let materials = MaterialsWarehouse::new(procedural_textures);
+        let texture_atlas_regions = materials.texture_atlas_regions();
         Self {
-            per_object_kind_statistics,
+            per_object_kind_statistics: vec![Statistics::default(); DataKind::COUNT],
             objects: HashMap::new(),
             triangles: Vec::new(),
-            materials: MaterialsWarehouse::new(procedural_textures),
+            materials,
+            texture_atlas_page_composer: TextureAtlasPageComposer::new(texture_atlas_page_size, texture_atlas_regions),
             sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
     }
-    
+
+    #[must_use]
+    pub(crate) fn texture_atlas_page_size(&self) -> BitmapSize {
+        self.texture_atlas_page_composer.page_size()
+    }
+
     pub(crate) fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
         let mut objects_to_tree = self.make_bvh_support(0.0);
         let sdf_list = self.sorted_of_a_kind(DataKind::Sdf as usize, self.count_of_a_kind(DataKind::Sdf));
@@ -111,6 +121,16 @@ impl VisualObjects {
     #[must_use]
     pub(crate) fn materials(&self) -> &MaterialsWarehouse {
         &self.materials
+    }
+
+    #[must_use]
+    pub fn mutable_texture_atlas_page_composer(&mut self) -> &mut TextureAtlasPageComposer {
+        &mut self.texture_atlas_page_composer
+    }
+
+    #[must_use]
+    pub fn texture_atlas_page_composer(&self) -> &TextureAtlasPageComposer {
+        &self.texture_atlas_page_composer
     }
 
     #[must_use]
@@ -348,8 +368,8 @@ mod tests {
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::objects::sdf_instance::SdfInstance;
-    use crate::sdf::framework::code_generator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};

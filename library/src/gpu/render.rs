@@ -34,8 +34,9 @@ use std::time::Instant;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
 use crate::gpu::bitmap_textures::BitmapTextures;
-use crate::material::atlas_region::AtlasRegion;
+use crate::material::atlas_region_mapping::AtlasRegionMapping;
 use crate::material::material_properties::MaterialProperties;
+use crate::utils::version::Version;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -55,7 +56,7 @@ pub(crate) struct Renderer {
     color_buffer_evaluation: ColorBufferEvaluationStrategy,
     pipeline_surface_attributes: ComputePipeline,
     pipeline_final_image_rasterization: RasterizationPipeline,
-    scene: Hub,
+    objects: Hub,
 
     start_time: Instant,
 
@@ -111,7 +112,7 @@ impl Renderer {
 
         let resources = Resources::new(context.clone());
         let buffers = Self::init_buffers(&scene, &context, &mut uniforms, &resources);
-        let textures = BitmapTextures::new(&resources);
+        let textures = BitmapTextures::new(&resources, scene.container().texture_atlas_page_size());
         let pipelines_factory = PipelinesFactory::new(context.clone(), frame_buffer_settings.presentation_format, caches_path);
 
         let mut gpu = Gpu { context, resources, buffers, textures, pipelines_factory };
@@ -144,7 +145,7 @@ impl Renderer {
             color_buffer_evaluation: default_strategy,
             pipeline_surface_attributes: surface_attributes,
             pipeline_final_image_rasterization: final_image_rasterization,
-            scene,
+            objects: scene,
 
             start_time,
 
@@ -157,8 +158,12 @@ impl Renderer {
     }
 
     #[must_use]
-    pub(crate) fn scene(&mut self) -> &mut Hub {
-        &mut self.scene
+    pub(crate) fn objects(&mut self) -> &mut Hub {
+        &mut self.objects
+    }
+    
+    pub(crate) fn upload_texture_atlas_page(&mut self, data: &[u8], data_version: Option<Version>) {
+        self.gpu.textures.set_atlas_page(&self.gpu.resources, data, data_version);
     }
     
     pub(crate) fn set_render_strategy(&mut self, flavour: RenderStrategyId, antialiasing_level: u32) {
@@ -215,14 +220,19 @@ impl Renderer {
     
     #[must_use]
     fn update_buffers_if_scene_changed(&mut self) -> BuffersUpdateStatus {
-        let container = self.scene.container();
+        let container = self.objects.container();
         
         let mut composite_status = BuffersUpdateStatus::new();
 
         composite_status.merge_materials(self.gpu.buffers.materials.try_update_with_generator(container.materials().data_version(), &self.gpu.resources, self.gpu.context.queue(), || container.materials().serialize()));
 
-        let texture_atlas_regions_version = container.materials().texture_atlas_regions().version();
-        composite_status.merge_materials(self.gpu.buffers.texture_atlases_mapping.try_update_with_generator(texture_atlas_regions_version, &self.gpu.resources, self.gpu.context.queue(), || container.materials().texture_atlas_regions().serialize()));
+        let texture_atlas_regions_version = container.materials().texture_atlas_regions().borrow().version();
+        composite_status.merge_materials(self.gpu.buffers.texture_atlases_mapping.try_update_with_generator(texture_atlas_regions_version, &self.gpu.resources, self.gpu.context.queue(), || container.materials().texture_atlas_regions().borrow().serialize()));
+
+        let current_gpu_texture_atlas_data_version = self.gpu.textures.last_seen_data_version();
+        container.texture_atlas_page_composer().try_commit(current_gpu_texture_atlas_data_version, |new_version, data: &[u8]| {
+            self.gpu.textures.set_atlas_page(&self.gpu.resources, data, Some(new_version));
+        });
 
         composite_status.merge_geometry(Self::update_buffer::<Parallelogram>(&DataKind::Parallelogram, &mut self.gpu.buffers.parallelograms, &self.gpu.resources, container, self.gpu.context.queue()));
         self.uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
@@ -253,7 +263,7 @@ impl Renderer {
             assert_eq!(bvh_length, bvh_inflated_length);
         }
         
-        let animator = self.scene.animator();
+        let animator = self.objects.animator();
         if self.gpu.buffers.sdf_time.version_diverges(animator.version()) {
             let per_sdf_time = Self::make_gpu_ready_animation_times_array(animator);
             composite_status.merge_geometry(
@@ -311,8 +321,8 @@ impl Renderer {
         let materials = if container.materials().count() > 0
             { container.materials().serialize() } else { Self::make_empty_buffer_marker::<MaterialProperties>() };
 
-        let texture_atlas_regions = if container.materials().texture_atlas_regions().count() > 0
-            { container.materials().texture_atlas_regions().serialize() } else { Self::make_empty_buffer_marker::<AtlasRegion>() };
+        let texture_atlas_regions = if container.materials().texture_atlas_regions().borrow().count() > 0
+            { container.materials().texture_atlas_regions().borrow().serialize() } else { Self::make_empty_buffer_marker::<AtlasRegionMapping>() };
         
         uniforms.set_parallelograms_count(container.count_of_a_kind(DataKind::Parallelogram) as u32);
         
@@ -328,7 +338,7 @@ impl Renderer {
             sdf: Self::make_buffer::<SdfInstance>(container, resources, &DataKind::Sdf),
             materials: VersionedBuffer::from_generator(container.materials().data_version(), resources, "materials", || materials),
             triangles: VersionedBuffer::from_generator(container.data_version(DataKind::TriangleMesh), resources, "triangles from all meshes", || serialized_triangles),
-            texture_atlases_mapping: VersionedBuffer::from_generator(container.materials().texture_atlas_regions().version(), resources, "texture atlases mapping", || texture_atlas_regions),
+            texture_atlases_mapping: VersionedBuffer::from_generator(container.materials().texture_atlas_regions().borrow().version(), resources, "texture atlases mapping", || texture_atlas_regions),
 
             bvh: ResizableBuffer::from_generator(resources, "bvh", || bvh),
             bvh_inflated: ResizableBuffer::from_generator(resources, "bvh inflated", || bvh_inflated),
@@ -499,13 +509,13 @@ impl Renderer {
     }
 
     pub(crate) fn start_new_frame(&mut self) {
-        self.scene.update_time();
+        self.objects.update_time();
     }
     
     pub(crate) fn accumulate_more_rays(&mut self)  {
         let mut rebuild_geometry_buffers = self.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu().is_empty();
         let buffers_status = self.update_buffers_if_scene_changed();
-        let animated_texture = self.scene.any_objects_have_animated_texture();
+        let animated_texture = self.objects.any_objects_have_animated_texture();
 
         {
             let camera_changed = self.uniforms.mutable_camera().check_and_clear_updated_status();
@@ -767,7 +777,7 @@ mod tests {
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
     use rstest::rstest;
-    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::object::sdf_box::SdfBox;
 

@@ -7,11 +7,13 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::shader::code::ShaderCode;
 use crate::utils::version::Version;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct MaterialsWarehouse {
     materials: Vec<MaterialProperties>,
     procedural_textures: Option<ProceduralTextures>,
-    texture_atlas_regions: TextureAtlasRegionsWarehouse,
+    texture_atlas_regions: Rc<RefCell<TextureAtlasRegionsWarehouse>>,
     data_version: Version,
 }
 
@@ -21,7 +23,7 @@ impl MaterialsWarehouse {
         Self {
             materials: Vec::new(),
             procedural_textures,
-            texture_atlas_regions: TextureAtlasRegionsWarehouse::new(),
+            texture_atlas_regions: Rc::new(RefCell::new(TextureAtlasRegionsWarehouse::new())),
             data_version: Version(0),
         }
     }
@@ -69,13 +71,8 @@ impl MaterialsWarehouse {
     }
 
     #[must_use]
-    pub(crate) fn texture_atlas_regions(&self) -> &TextureAtlasRegionsWarehouse {
-        &self.texture_atlas_regions
-    }
-
-    #[must_use]
-    pub(crate) fn mutate_texture_atlas_regions(&mut self) -> &mut TextureAtlasRegionsWarehouse {
-        &mut self.texture_atlas_regions
+    pub(crate) fn texture_atlas_regions(&self) -> Rc<RefCell<TextureAtlasRegionsWarehouse>> {
+        self.texture_atlas_regions.clone()
     }
 }
 

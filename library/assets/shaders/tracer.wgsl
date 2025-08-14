@@ -332,16 +332,19 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	}
 
 	hitRec.t = t;
-	hitRec.global.position = quad.Q + quad.v * beta + quad.u * alpha;
-	hitRec.local.position = hitRec.global.position;
+
+	hitRec.local.position = quad.v * beta + quad.u * alpha;
+	hitRec.global.position = quad.Q + hitRec.local.position;
+
 	hitRec.global.normal = quad.normal;
 	hitRec.front_face = denom < 0.0;
 	if(false == hitRec.front_face) {
 		hitRec.global.normal = -hitRec.global.normal;
 	}
-
     hitRec.local.normal = hitRec.global.normal;
+
 	hitRec.material_id = quad.material_id;
+
 	return true;
 }
 
@@ -710,7 +713,6 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
         */
         const grid_step: f32 = 1e-4;
         let snapped_position = snap_to_grid(hit.position, grid_step);
-
         let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
 
         result *= procedural_texture_select(
@@ -723,17 +725,18 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
     } else if (material.albedo_texture_uid > 0) {
         let region_index = material.albedo_texture_uid - 1;
         let atlas_region_mapping = texture_atlases_mapping[region_index];
-        let texture_sample = read_atlas(hit.position, atlas_region_mapping, differentials);
+        let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
+        let texture_sample = read_atlas(hit.position, atlas_region_mapping, derivartives);
         result = (1.0 - texture_sample.a) * result + texture_sample.a * texture_sample.rgb;
     }
     return result;
 }
 
 @must_use
-fn read_atlas(local_space_position: vec3f, atlas_region_mapping: AtlasMapping, differentials: RayDifferentials) -> vec4f {
+fn read_atlas(local_space_position: vec3f, atlas_region_mapping: AtlasMapping, differentials: RayDerivatives) -> vec4f {
     var texture_coordinate = vec4f(local_space_position, 1.0) * atlas_region_mapping.local_position_to_texture;
-    let ddx = vec4f(differentials.dx, 0.0) * atlas_region_mapping.local_position_to_texture;
-    let ddy = vec4f(differentials.dy, 0.0) * atlas_region_mapping.local_position_to_texture;
+    let ddx = vec4f(differentials.dp_dx, 0.0) * atlas_region_mapping.local_position_to_texture;
+    let ddy = vec4f(differentials.dp_dy, 0.0) * atlas_region_mapping.local_position_to_texture;
 
     for (var i = 0; i < 2; i++) {
         let coordinate = texture_coordinate[i];

@@ -1,5 +1,5 @@
-﻿use crate::geometry::fundamental_constants::BYTES_IN_RGBA_QUARTET;
-use crate::gpu::context::Context;
+﻿use crate::gpu::context::Context;
+use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 use more_asserts::{assert_gt, assert_le};
 use std::rc::Rc;
 use wgpu::util::DeviceExt;
@@ -64,18 +64,18 @@ impl Resources {
     }
 
     #[must_use]
-    fn calculate_max_mips(width: u32, height: u32) -> u32 {
+    fn calculate_max_mips(width: usize, height: usize) -> u32 {
         (width.max(height) as f32).log2().floor() as u32 + 1
     }
 
     #[must_use]
-    pub(crate) fn create_texture(&self, label: &str, mip_count: u32, width: u32, height: u32) -> Texture {
-        assert_le!(mip_count, Self::calculate_max_mips(width, height), "too many mip_count");
+    pub(crate) fn create_texture(&self, label: &str, mip_count: u32, atlas_page_size: BitmapSize) -> Texture {
+        assert_le!(mip_count, Self::calculate_max_mips(atlas_page_size.width(), atlas_page_size.height()), "too many mip_count");
         assert_gt!(mip_count, 0, "mip_count must be greater than 0");
 
         self.context.device().create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1, },
+            size: wgpu::Extent3d { width: atlas_page_size.width() as u32, height: atlas_page_size.height() as u32, depth_or_array_layers: 1, },
             mip_level_count: mip_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -85,17 +85,17 @@ impl Resources {
         })
     }
 
-    pub(crate) fn write_whole_rgba_texture_data(&self, texture: &Texture, data: &[u8]) {
-        assert_eq!(data.len(), texture.size().width as usize * texture.size().height as usize * BYTES_IN_RGBA_QUARTET);
+    pub(crate) fn write_whole_srgba_texture_data(&self, texture: &Texture, data: &[u8]) {
+        assert_eq!(data.len(), BitmapSize::new(texture.size().width as usize, texture.size().height as usize).bytes_in_bitmap());
 
         self.context.queue().write_texture(
             wgpu::TexelCopyTextureInfo {
-                texture: &texture,
+                texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &data,
+            data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(texture.width() * BYTES_IN_RGBA_QUARTET as u32),

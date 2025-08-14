@@ -1,17 +1,17 @@
-﻿use crate::material::atlas_region::AtlasRegion;
-use crate::material::atlas_region_uid::AtlasRegionUid;
+﻿use crate::material::atlas_region_mapping::AtlasRegionMapping;
+use crate::material::atlas_region_mapping_uid::AtlasRegionMappingUid;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::utils::uid_generator::UidGenerator;
 use crate::utils::version::Version;
 use std::collections::HashMap;
-use futures::StreamExt;
+use crate::material::bitmap_texture_index::BitmapTextureIndex;
 
 pub(crate) struct TextureAtlasRegionsWarehouse {
     data_version: Version,
-    uid_generator: UidGenerator<AtlasRegionUid>,
-    index_from_uid: HashMap<AtlasRegionUid, usize>,
-    regions: Vec<AtlasRegion>,
+    uid_generator: UidGenerator<AtlasRegionMappingUid>,
+    index_from_uid: HashMap<AtlasRegionMappingUid, usize>,
+    regions: Vec<AtlasRegionMapping>,
 }
 
 impl TextureAtlasRegionsWarehouse {
@@ -26,7 +26,7 @@ impl TextureAtlasRegionsWarehouse {
     }
 
     #[must_use]
-    pub(crate) fn add_region(&mut self, region: AtlasRegion) -> AtlasRegionUid {
+    pub(crate) fn add_region(&mut self, region: AtlasRegionMapping) -> AtlasRegionMappingUid {
         let uid = self.uid_generator.next();
         self.regions.push(region);
         self.index_from_uid.insert(uid, self.regions.len() - 1);
@@ -35,8 +35,8 @@ impl TextureAtlasRegionsWarehouse {
     }
 
     #[must_use]
-    pub(crate) fn get_region_index(&self, uid: AtlasRegionUid) -> Option<usize> {
-        self.index_from_uid.get(&uid).copied()
+    pub(crate) fn get_region_index(&self, uid: AtlasRegionMappingUid) -> Option<BitmapTextureIndex> {
+        self.index_from_uid.get(&uid).map(|i| BitmapTextureIndex(*i+1))
     }
 
     #[must_use]
@@ -58,16 +58,17 @@ impl TextureAtlasRegionsWarehouse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::material::atlas_region::AtlasRegionBuilder;
+    use crate::material::atlas_region_mapping::AtlasRegionMappingBuilder;
     use cgmath::{Vector2, Zero};
+    use crate::material::texture_region::TextureRegion;
 
     #[test]
     fn test_add() {
         let mut system_under_test = TextureAtlasRegionsWarehouse::new();
         let version_zero = system_under_test.version();
 
-        let region_one = AtlasRegionBuilder::new(Vector2::zero(), Vector2::new(1.0, 1.0)).build();
-        let region_two = AtlasRegionBuilder::new(Vector2::zero(), Vector2::new(1.0, 1.0)).build();
+        let region_one = AtlasRegionMappingBuilder::new().build(TextureRegion::new(Vector2::zero(), Vector2::new(1.0, 1.0)));
+        let region_two = AtlasRegionMappingBuilder::new().build(TextureRegion::new(Vector2::zero(), Vector2::new(1.0, 1.0)));
 
         let uid_one = system_under_test.add_region(region_one.clone());
         let version_one = system_under_test.version();
@@ -85,11 +86,11 @@ mod tests {
     fn test_get_region_index_unknown_uid() {
         let mut system_under_test = TextureAtlasRegionsWarehouse::new();
 
-        let uid = system_under_test.add_region(AtlasRegionBuilder::new(Vector2::zero(), Vector2::new(1.0, 1.0)).build());
+        let uid = system_under_test.add_region(AtlasRegionMappingBuilder::new().build(TextureRegion::new(Vector2::zero(), Vector2::new(1.0, 1.0))));
         let index = system_under_test.get_region_index(uid).unwrap();
-        assert_eq!(index, 0, "index should be 0 for the single region");
+        assert_eq!(index, BitmapTextureIndex(0), "index should be 0 for the single region");
 
-        let unknown_uid = AtlasRegionUid(999);
+        let unknown_uid = AtlasRegionMappingUid(999);
         assert_eq!(
             system_under_test.get_region_index(unknown_uid),
             None,

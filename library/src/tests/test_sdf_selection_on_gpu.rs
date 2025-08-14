@@ -2,7 +2,7 @@
 mod tests {
     use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::Vector;
-    use crate::sdf::framework::code_generator::SdfRegistrator;
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::sdf::object::sdf_sphere::SdfSphere;

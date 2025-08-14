@@ -30,7 +30,7 @@ impl<'a> BindGroupBuilder<'a> {
         assert_eq!(self.accumulated_texture_entries.contains_key(&slot), false, "slot already occupied by a texture");
 
         let previous = self.accumulated_storage_entries.insert(slot, buffer);
-        assert!(previous.is_none(), "slot {} already set", slot);
+        assert!(previous.is_none(), "slot {slot} already set");
         self
     }
 
@@ -39,7 +39,7 @@ impl<'a> BindGroupBuilder<'a> {
         assert_eq!(self.accumulated_texture_entries.contains_key(&slot), false, "slot already occupied by a texture");
 
         let previous = self.accumulated_sampler_entries.insert(slot, sampler);
-        assert!(previous.is_none(), "slot {} already set", slot);
+        assert!(previous.is_none(), "slot {slot} already set");
         self
     }
 
@@ -48,7 +48,7 @@ impl<'a> BindGroupBuilder<'a> {
         assert_eq!(self.accumulated_sampler_entries.contains_key(&slot), false, "slot already occupied by a sample");
 
         let previous = self.accumulated_texture_entries.insert(slot, sampler);
-        assert!(previous.is_none(), "slot {} already set", slot);
+        assert!(previous.is_none(), "slot {slot} already set");
         self
     }
 

@@ -1,10 +1,11 @@
 ﻿use crate::geometry::aabb::Aabb;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::framework::animation_undo_generator::AnimationUndoGenerator;
-use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
+use crate::sdf::framework::sdf_registrator::SdfRegistrator;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 use crate::sdf::framework::selection_generator::SelectionGenerator;
 use std::collections::HashMap;
+use crate::sdf::framework::sdf_code_generator::SdfCodeGenerator;
 
 pub(crate) struct SdfWarehouse {
     properties_from_name: HashMap<UniqueSdfClassName, SdfClassIndex>,
