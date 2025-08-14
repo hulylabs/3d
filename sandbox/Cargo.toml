@@ -10,6 +10,7 @@ pollster = "0.4"
 cgmath = "0.18.0"
 anyhow = "1.0.98"
 env_logger = "0.11.8"
+image = { version = "0.25.6", features = ["png"] }
 
 library = { path = "../library", features = [] }
 

@@ -98,6 +98,10 @@ impl MaterialProperties {
         self.albedo_texture = reference;
         self
     }
+
+    pub fn set_albedo_texture(&mut self, reference: TextureReference) {
+        self.albedo_texture = reference;
+    }
 }
 
 impl GpuSerializationSize for MaterialProperties {

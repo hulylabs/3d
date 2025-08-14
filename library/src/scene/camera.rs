@@ -153,8 +153,10 @@ impl Camera {
         let up = Vector::new(0.0, 1.0, 0.0);
         let up = rotation.transform_vector(up);
 
-        self.world_to_camera_space = Affine::look_at_rh(eye, self.look_at, up);
-        self.view_ray_origin = self.kind.ray_origin(eye, self.look_at);
+        let look_at = self.look_at;
+
+        self.world_to_camera_space = Affine::look_at_rh(eye, look_at, up);
+        self.view_ray_origin = self.kind.ray_origin(eye, look_at);
     }
 
     fn mark_updated_and_build(&mut self) {

@@ -41,7 +41,7 @@ impl BuffersUpdateStatus {
         self.geometry_status = self.geometry_status.merge(child_status);
     }
 
-    pub(super) fn merger_material(&mut self, child_status: BufferUpdateStatus) {
+    pub(super) fn merge_materials(&mut self, child_status: BufferUpdateStatus) {
         self.materials_status = self.materials_status.merge(child_status);
     }
 }
@@ -85,7 +85,7 @@ mod tests {
     #[test_context(Context)]
     #[test]
     fn test_materials_only_updated(fixture: &mut Context) {
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_updated(true));
 
         assert_eq!(fixture.system_under_test.any_updated(), true);
         assert_eq!(fixture.system_under_test.any_resized(), false);
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_geometry_and_materials_both_updated(fixture: &mut Context) {
         fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_updated(true));
 
         assert_eq!(fixture.system_under_test.any_resized(), false);
         assert_eq!(fixture.system_under_test.any_updated(), true);
@@ -116,7 +116,7 @@ mod tests {
     #[test_context(Context)]
     #[test]
     fn test_materials_resized(fixture: &mut Context) {
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_resized(true));
 
         assert_eq!(fixture.system_under_test.any_resized(), true);
         assert_eq!(fixture.system_under_test.any_updated(), true);
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn test_geometry_and_materials_resized(fixture: &mut Context) {
         fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_resized( true));
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_resized(true));
 
         assert_eq!(fixture.system_under_test.any_resized(), true);
         assert_eq!(fixture.system_under_test.any_updated(), true);
@@ -139,8 +139,8 @@ mod tests {
     fn test_merge_multiple_statuses(fixture: &mut Context) {
         fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_resized(true));
         fixture.system_under_test.merge_geometry(BufferUpdateStatus::new_updated(true));
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_resized(true));
-        fixture.system_under_test.merger_material(BufferUpdateStatus::new_updated(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_resized(true));
+        fixture.system_under_test.merge_materials(BufferUpdateStatus::new_updated(true));
 
         assert_eq!(fixture.system_under_test.any_resized(), true);
         assert_eq!(fixture.system_under_test.any_updated(), true);

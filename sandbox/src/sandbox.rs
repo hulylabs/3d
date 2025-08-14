@@ -1,5 +1,5 @@
-﻿use crate::beautiful_world::{BeautifulMaterials, BeautifulSdfClasses, BeautifulWorld};
-use crate::tech_world::{TechMaterials, TechSdfClasses, TechTextures, TechWorld};
+﻿use crate::beautiful_world::{BeautifulWorldMaterials, BeautifulWorldSdfClasses, BeautifulWorld};
+use crate::tech_world::{TechWorldMaterials, TechWorldSdfClasses, TechWorldProceduralTextures, TechWorld, TechWorldBitmapTextures};
 use cgmath::Deg;
 use library::geometry::alias::Point;
 use library::scene::camera::{Camera, OrthographicCamera, PerspectiveCamera};
@@ -18,7 +18,8 @@ use library::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, 
 use library::container::visual_objects::VisualObjects;
 use library::material::material_index::MaterialIndex;
 use library::material::procedural_textures::ProceduralTextures;
-use library::sdf::framework::code_generator::SdfRegistrator;
+use library::sdf::framework::sdf_registrator::SdfRegistrator;
+use library::utils::bitmap_utils::BitmapSize;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -56,7 +57,7 @@ impl Sandbox {
     }
 
     pub(super) fn on_redraw(&mut self, window: Arc<Window>) {
-        self.engine.render(|| {
+        self.engine.render_frame(|| {
             window.pre_present_notify();
         });
     }
@@ -76,7 +77,7 @@ impl Sandbox {
         if MouseButton::Right == button {
             if let Some((last_x, last_y)) = self.last_cursor_position {
                 let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
-                let scene = self.engine.scene();
+                let scene = self.engine.objects();
                 
                 if let Some(selected_object) = self.selected_object {
                     scene.set_material(selected_object.uid, selected_object.material);
@@ -95,7 +96,7 @@ impl Sandbox {
             if ElementState::Pressed == state {
                 if let Some((last_x, last_y)) = self.last_cursor_position {
                     let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
-                    let scene = self.engine.scene();
+                    let scene = self.engine.objects();
                     
                     if let Some(clicked_object) = clicked_object_or_none {
                         if scene.animator().animating(clicked_object) {
@@ -141,7 +142,7 @@ impl Sandbox {
             if let Some((last_x, last_y)) = self.last_cursor_position {
                 let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
                 if let Some(clicked_object) = clicked_object_or_none {
-                    self.engine.scene().delete(clicked_object);
+                    self.engine.objects().delete(clicked_object);
 
                     if let Some(selected_object) = self.selected_object {
                         if selected_object.uid == clicked_object {
@@ -185,7 +186,7 @@ impl Sandbox {
                 } else if "o" == letter_key {
                     self.engine.camera().set_kind(Box::new(OrthographicCamera {}));
                 } else if "d" == letter_key {
-                    self.engine.scene().dump_scene_bvh("scene_bvh.dot").unwrap_or_else(|e| {
+                    self.engine.objects().dump_scene_bvh("scene_bvh.dot").unwrap_or_else(|e| {
                         println!("Failed to dump scene_bvh.dot: {e}");
                     });
                 } else if "r" == letter_key {
@@ -195,36 +196,39 @@ impl Sandbox {
                 } else if "n" == letter_key {
                     self.engine.use_deterministic_render();
                 } else if "+" == letter_key {
-                    self.tech_world.move_light_z(LIGHT_MOVE_QUANT, self.engine.scene());
+                    self.tech_world.move_light_z(LIGHT_MOVE_QUANT, self.engine.objects());
                 } else if "-" == letter_key {
-                    self.tech_world.move_light_z(-LIGHT_MOVE_QUANT, self.engine.scene());
+                    self.tech_world.move_light_z(-LIGHT_MOVE_QUANT, self.engine.objects());
                 } else if "*" == letter_key {
-                    self.tech_world.move_light_x(LIGHT_MOVE_QUANT, self.engine.scene());
+                    self.tech_world.move_light_x(LIGHT_MOVE_QUANT, self.engine.objects());
                 } else if "/" == letter_key {
-                    self.tech_world.move_light_x(-LIGHT_MOVE_QUANT, self.engine.scene());
+                    self.tech_world.move_light_x(-LIGHT_MOVE_QUANT, self.engine.objects());
                 } else if "1" == letter_key {
-                    self.tech_world.load_to_ui_box_scene(self.engine.scene());
+                    self.tech_world.load_ui_box_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "2" == letter_key {
-                    self.tech_world.load_to_sdf_exhibition_scene(self.engine.scene());
+                    self.tech_world.load_sdf_exhibition_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "3" == letter_key {
-                    self.tech_world.load_to_smooth_operators_scene(self.engine.scene());
+                    self.tech_world.load_smooth_operators_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "4" == letter_key {
-                    self.beautiful_world.load_crystal_palace_scene(self.engine.scene());
+                    self.beautiful_world.load_crystal_palace_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "5" == letter_key {
-                    self.beautiful_world.load_underwater_treasure_scene(self.engine.scene());
+                    self.beautiful_world.load_underwater_treasure_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "6" == letter_key {
-                    self.beautiful_world.load_zen_garden_scene(self.engine.scene());
+                    self.beautiful_world.load_zen_garden_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "7" == letter_key {
-                    self.tech_world.load_to_triangle_mesh_testing_scene(self.engine.scene());
+                    self.tech_world.load_triangle_mesh_testing_scene(self.engine.objects());
                     self.selected_object = None;
                 } else if "8" == letter_key {
-                    self.tech_world.load_morphing_demo_scene(self.engine.scene());
+                    self.tech_world.load_morphing_demo_scene(self.engine.objects());
+                    self.selected_object = None;
+                } else if "9" == letter_key {
+                    self.tech_world.load_bitmap_texturing_demo_scene(self.engine.objects());
                     self.selected_object = None;
                 }
             }
@@ -241,24 +245,27 @@ impl Sandbox {
         let mut sdf_registrator = SdfRegistrator::default();
         let mut procedural_textures_registrator = ProceduralTextures::new(None);
         
-        let tech_sdf_classes = TechSdfClasses::new(&mut sdf_registrator);
-        let beautiful_sdf_classes = BeautifulSdfClasses::new(&mut sdf_registrator);
+        let tech_sdf_classes = TechWorldSdfClasses::new(&mut sdf_registrator);
+        let beautiful_sdf_classes = BeautifulWorldSdfClasses::new(&mut sdf_registrator);
         
-        let tech_textures = TechTextures::new(&mut procedural_textures_registrator);
-        
-        let mut scene = VisualObjects::new(Some(sdf_registrator), Some(procedural_textures_registrator));
-        let tech_materials = TechMaterials::new(&mut scene, tech_textures);
-        let beautiful_materials = BeautifulMaterials::new(&mut scene);
+        let tech_world_procedural_textures = TechWorldProceduralTextures::new(&mut procedural_textures_registrator);
+
+        let texture_atlas_page_size = BitmapSize::new(512, 512);
+        let mut scene = VisualObjects::new(texture_atlas_page_size, Some(sdf_registrator), Some(procedural_textures_registrator));
+
+        let tech_world_bitmap_textures = TechWorldBitmapTextures::new(scene.mutable_texture_atlas_page_composer())?;
+        let tech_materials = TechWorldMaterials::new(&mut scene, tech_world_procedural_textures, tech_world_bitmap_textures);
+        let beautiful_materials = BeautifulWorldMaterials::new(&mut scene);
         
         let mut tech_world = TechWorld::new(tech_sdf_classes, tech_materials);
         let selected_object_material = tech_world.selected_object_material();
-        
+
         let beautiful_world = BeautifulWorld::new(beautiful_sdf_classes, beautiful_materials);
 
         let caches_path = Some(PathBuf::from("./.caches"));
         let mut engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
-
-        tech_world.load_to_ui_box_scene(engine.scene());
+        
+        tech_world.load_bitmap_texturing_demo_scene(engine.objects());
         
         timer.stop();
         info!("sandbox initialized in {} seconds", timer.max_time().as_secs_f64());

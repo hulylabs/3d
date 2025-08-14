@@ -4,7 +4,7 @@ mod tests {
     use crate::geometry::axis::Axis;
     use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
     use crate::sdf::composition::sdf_union::SdfUnion;
-    use crate::sdf::framework::code_generator::{SdfCodeGenerator, SdfRegistrator};
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::framework::sdf_base::Sdf;
     use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
@@ -39,6 +39,7 @@ mod tests {
     use crate::palette::sdf::sdf_torus_xz::SdfTorusXz;
     use crate::palette::sdf::sdf_triangular_prism::SdfTriangularPrism;
     use crate::palette::sdf::sdf_vesica_segment::SdfVesicaSegment;
+    use crate::sdf::framework::sdf_code_generator::SdfCodeGenerator;
 
     #[test]
     fn test_sdf_union_spheres() {

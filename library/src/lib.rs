@@ -1,4 +1,4 @@
-//#![deny(warnings)]
+#![deny(warnings)]
 
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::bool_comparison)]
@@ -109,8 +109,8 @@ impl Engine {
     
     pub async fn new(window: Arc<Window>, scene: VisualObjects, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            flags: wgpu::InstanceFlags::empty(),
+            backends: wgpu::Backends::VULKAN,
+            flags: wgpu::InstanceFlags::DEBUG,
             ..Default::default()
         });
 
@@ -236,7 +236,7 @@ impl Engine {
         self.configure_render();
     }
 
-    pub fn render<Code: Fn()>(&mut self, pre_present_notify: Code) {
+    pub fn render_frame<Code: Fn()>(&mut self, pre_present_notify: Code) {
         if self.ignore_render_requests {
             return;
         }
@@ -313,8 +313,12 @@ impl Engine {
     }
 
     #[must_use]
-    pub fn scene(&mut self) -> &mut Hub {
-        self.renderer.scene()
+    pub fn objects(&mut self) -> &mut Hub {
+        self.renderer.objects()
+    }
+    
+    pub fn upload_texture_atlas_page(&mut self, data: &[u8]) {
+        self.renderer.upload_texture_atlas_page(data, None);
     }
     
     pub fn use_monte_carlo_render(&mut self) {

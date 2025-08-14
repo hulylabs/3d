@@ -3,13 +3,13 @@ use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::container::visual_objects::VisualObjects;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
-use crate::objects::common_properties::ObjectUid;
-use crate::sdf::framework::named_sdf::UniqueSdfClassName;
-use std::io::Error;
-use std::path::Path;
-use more_asserts::assert_gt;
 use crate::geometry::utils::is_affine;
 use crate::material::material_index::MaterialIndex;
+use crate::objects::common_properties::ObjectUid;
+use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use more_asserts::assert_gt;
+use std::io::Error;
+use std::path::Path;
 
 pub struct Hub {
     container: VisualObjects,

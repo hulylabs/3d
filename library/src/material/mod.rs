@@ -9,3 +9,7 @@ pub(crate) mod texture_shader_code;
 pub mod materials_warehouse;
 pub mod texture_procedural_2d;
 mod triplanar_mapper;
+pub(crate) mod texture_atlas_regions_warehouse;
+pub mod atlas_region_mapping;
+pub mod atlas_region_mapping_uid;
+pub mod texture_region;

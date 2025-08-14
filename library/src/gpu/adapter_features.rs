@@ -12,9 +12,15 @@ impl AdapterFeatures {
         let adapter_features = adapter.features();
         
         if adapter_features.contains(wgpu::Features::PIPELINE_CACHE) {
-            AdapterFeatures { desired_features: wgpu::Features::PIPELINE_CACHE, pipeline_caching_supported: true, }
+            AdapterFeatures {
+                desired_features: wgpu::Features::PIPELINE_CACHE | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                pipeline_caching_supported: true,
+            }
         } else {
-            AdapterFeatures { desired_features: wgpu::Features::empty(), pipeline_caching_supported: false, }
+            AdapterFeatures {
+                desired_features: wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+                pipeline_caching_supported: false,
+            }
         }
     }
 
