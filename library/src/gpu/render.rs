@@ -780,6 +780,7 @@ mod tests {
     use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::object::sdf_box::SdfBox;
+    use crate::utils::bitmap_utils::BitmapSize;
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 256;
@@ -801,7 +802,7 @@ mod tests {
     #[case(RenderStrategyId::Deterministic)]
     fn test_empty_scene_rendering(#[case] strategy: RenderStrategyId) {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
-        let scene = VisualObjects::new(None, None);
+        let scene = VisualObjects::new(BitmapSize::new(1,1), None, None);
         let context = create_headless_wgpu_context();
 
         const ANTIALIASING_LEVEL: u32 = 1;
@@ -824,7 +825,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = VisualObjects::new(None, None);
+        let mut scene = VisualObjects::new(BitmapSize::new(1,1), None, None);
         let test_material = scene.materials_mutable().add(&MaterialProperties::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(
@@ -857,7 +858,7 @@ mod tests {
         let test_box_name = UniqueSdfClassName::new("specimen".to_string());
         registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));
         
-        let mut scene = VisualObjects::new(Some(registrator), None);
+        let mut scene = VisualObjects::new(BitmapSize::new(1,1), Some(registrator), None);
         let test_material = MaterialProperties::new()
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);

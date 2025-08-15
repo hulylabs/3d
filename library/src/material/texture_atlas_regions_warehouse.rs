@@ -36,7 +36,7 @@ impl TextureAtlasRegionsWarehouse {
 
     #[must_use]
     pub(crate) fn get_region_index(&self, uid: AtlasRegionMappingUid) -> Option<BitmapTextureIndex> {
-        self.index_from_uid.get(&uid).map(|i| BitmapTextureIndex(*i+1))
+        self.index_from_uid.get(&uid).map(|i| BitmapTextureIndex(*i + 1))
     }
 
     #[must_use]
@@ -88,7 +88,7 @@ mod tests {
 
         let uid = system_under_test.add_region(AtlasRegionMappingBuilder::new().build(TextureRegion::new(Vector2::zero(), Vector2::new(1.0, 1.0))));
         let index = system_under_test.get_region_index(uid).unwrap();
-        assert_eq!(index, BitmapTextureIndex(0), "index should be 0 for the single region");
+        assert_eq!(index, BitmapTextureIndex(1), "index should be 1 for the single region");
 
         let unknown_uid = AtlasRegionMappingUid(999);
         assert_eq!(

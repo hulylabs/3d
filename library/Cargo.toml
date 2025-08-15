@@ -38,6 +38,7 @@ more-asserts = "0.3.1"
 float-cmp = "0.10.0"
 etagere = "0.2.15"
 cast = "0.3.0"
+image = { version = "0.25.6", features = ["png"] }
 
 [dev-dependencies]
 tempfile = "3.20.0"

@@ -77,7 +77,9 @@ impl TechWorldBitmapTextures {
         let bitmap_checkerboard_large= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_large.png", composer)?;
         let bitmap_huly= TechWorldBitmapTextures::load_bitmap("bitmap_huly.png", composer)?;
         //let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
-        let bitmap_rect_grid= TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
+        let bitmap_rect_grid = TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
+
+        composer.save_page_into("textures_atlas.png").expect("failed to save texture atlas page");
 
         Ok(Self {
             bitmap_checkerboard_small,
@@ -106,6 +108,7 @@ impl TechWorldBitmapTextures {
 pub(super) struct TechWorldSdfClasses {
     rectangular_box: NamedSdf,
     sphere: NamedSdf,
+    quad_0_3: NamedSdf,
     identity_box: NamedSdf,
     identity_box_frame: NamedSdf,
     xz_torus: NamedSdf,
@@ -138,6 +141,9 @@ impl TechWorldSdfClasses {
     pub(super) fn new(registrator: &mut SdfRegistrator) -> Self {
         let rectangular_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.24)), UniqueSdfClassName::new("button".to_string()));
         registrator.add(&rectangular_box);
+
+        let quad_0_3= NamedSdf::new(SdfBox::new(Vector::new(0.15, 0.15, 0.005)), UniqueSdfClassName::new("quad_zero_three".to_string()));
+        registrator.add(&quad_0_3);
 
         let sphere = NamedSdf::new(SdfSphere::new(1.0), UniqueSdfClassName::new("bubble".to_string()));
         registrator.add(&sphere);
@@ -284,7 +290,8 @@ impl TechWorldSdfClasses {
 
         Self { 
             rectangular_box, 
-            sphere, 
+            sphere,
+            quad_0_3,
             identity_box, 
             identity_box_frame, 
             xz_torus, 
@@ -359,6 +366,8 @@ impl TechWorldMaterials {
             let builder = AtlasRegionMappingBuilder::new()
                 .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.0))
                 .local_position_to_texture_v(Vector4::new(0.0, -3.0, 0.0, 1.0))
+                // .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.0))
+                // .local_position_to_texture_v(Vector4::new(0.0, 3.0, 0.0, 0.0))
                 ;
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_huly, builder, &mut properties)
@@ -411,7 +420,7 @@ impl TechWorldMaterials {
             .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(0.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
         let purple_glass = materials
-            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.4));
+            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.01));
 
         let red_glass = materials
             .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.2, 0.0).with_refractive_index_eta(1.4));
@@ -1020,7 +1029,7 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.4, 0.0, -0.45)) * Affine::from_nonuniform_scale(0.5, 0.5, 0.5)),
             self.sdf_classes.sphere.name(),
-            self.materials.white_chrome_mirror);
+            self.materials.purple_glass);
 
         scene.add_parallelogram(
             Point::new(0.2, -0.6, -0.7),
@@ -1028,6 +1037,11 @@ impl TechWorld {
             Vector::new(0.0, 0.3, 0.0),
             self.materials.huly_icon_above_blue
         );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(-0.05, -0.45, -0.7))),
+            self.sdf_classes.quad_0_3.name(),
+            self.materials.huly_icon_above_blue);
 
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.7, -0.45, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),

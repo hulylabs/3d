@@ -107,14 +107,14 @@ mod tests {
             .with_custom_type(
                 TypeDeclaration::new("AtlasReadRequest", "local_space_position", "vec4f")
                     .with_field("atlas_region_mapping", "AtlasMapping")
-                    .with_field("differentials", "RayDifferentials")
+                    .with_field("derivatives", "RayDerivatives")
             )
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 "fn read_atlas_t(request: AtlasReadRequest) -> vec4f \
-                { return read_atlas(request.local_space_position.xyz, request.atlas_region_mapping, request.differentials); }"
+                { return read_atlas(request.local_space_position.xyz, request.atlas_region_mapping, request.derivatives); }"
             );
 
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
@@ -133,19 +133,19 @@ mod tests {
         }
 
         #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
-        struct RayDifferentials {
-            dx: PodVector,
-            dy: PodVector,
+        struct RayDerivatives {
+            dp_dx: PodVector,
+            dp_dy: PodVector,
         }
 
         #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
         struct AtlasReadRequest {
             local_space_position: PodVector,
             atlas_region_mapping: AtlasMapping,
-            differentials: RayDifferentials,
+            differentials: RayDerivatives,
         }
 
-        let zero_differentials = RayDifferentials { dx: PodVector::new(0.0, 0.0, 0.0), dy: PodVector::new(0.0, 0.0, 0.0), };
+        let zero_differentials = RayDerivatives { dp_dx: PodVector::new(0.0, 0.0, 0.0), dp_dy: PodVector::new(0.0, 0.0, 0.0), };
 
         let xu_yv_mapping = [
             PodVector::new_full(1.0, 0.0, 0.0, 0.0),

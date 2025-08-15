@@ -333,7 +333,7 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 	hitRec.t = t;
 
-	hitRec.local.position = quad.v * beta + quad.u * alpha;
+	hitRec.local.position = quad.u * alpha + quad.v * beta;
 	hitRec.global.position = quad.Q + hitRec.local.position;
 
 	hitRec.global.normal = quad.normal;
@@ -726,6 +726,7 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
         let region_index = material.albedo_texture_uid - 1;
         let atlas_region_mapping = texture_atlases_mapping[region_index];
         let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
+
         let texture_sample = read_atlas(hit.position, atlas_region_mapping, derivartives);
         result = (1.0 - texture_sample.a) * result + texture_sample.a * texture_sample.rgb;
     }
@@ -741,15 +742,15 @@ fn read_atlas(local_space_position: vec3f, atlas_region_mapping: AtlasMapping, d
     for (var i = 0; i < 2; i++) {
         let coordinate = texture_coordinate[i];
         let mode = atlas_region_mapping.out_of_region_mode[i];
+        let inset = pixel_half_size(texture_atlas_page, ddx, ddy)[i];
+        let min_edge = inset/atlas_region_mapping.size[i];
+        let max_edge = 1.0 - inset/atlas_region_mapping.size[i];
         if (TEXTURE_OUT_OF_REGION_MODE_REPEAT == mode) {
             texture_coordinate[i] = fract(coordinate);
         } else if (TEXTURE_OUT_OF_REGION_MODE_CLAMP == mode) {
-            let inset = pixel_half_size(texture_atlas_page, ddx, ddy)[i];
-            let min_edge = inset/atlas_region_mapping.size[i];
-            let max_edge = 1.0 - inset/atlas_region_mapping.size[i];
             texture_coordinate[i] = clamp(coordinate, min_edge, max_edge);
         } else {
-            if (coordinate < 0.0 || coordinate > 1.0) {
+            if (coordinate < min_edge || coordinate > max_edge) {
                 return vec4f(0.0);
             }
         }

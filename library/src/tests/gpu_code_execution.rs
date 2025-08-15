@@ -14,7 +14,7 @@ pub(crate) mod tests {
     use more_asserts::assert_gt;
     use std::collections::{HashMap, HashSet};
     use wgpu::BufferUsages;
-    use crate::utils::bitmap_utils::BYTES_IN_RGBA_QUARTET;
+    use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 
     pub(crate) struct DataBindGroupSlot {
         index: u32,
@@ -177,7 +177,7 @@ pub(crate) mod tests {
         let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
         let dummy_buffer = resources.create_buffer("dummy_buffer", universal_usage, &vec![0_u8; 256]);
         let dummy_sampler = resources.create_sampler("dummy_sampler");
-        let dummy_texture = resources.create_texture("dummy_texture", 1, 1, 1);
+        let dummy_texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(1,1));
         let dummy_texture_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
         for (_, group) in config.bind_groups {
             pipeline.setup_bind_group(group.index, None, context.device(), |bind_group|{
@@ -200,7 +200,7 @@ pub(crate) mod tests {
                     bind_group.set_texture_entry(slot, dummy_texture_view.clone());
                 }
                 for slot in group.texture_slots.slots {
-                    let texture = resources.create_texture("dummy_texture", 1, slot.size.x, slot.size.y);
+                    let texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(slot.size.x as usize, slot.size.y as usize));
                     resources.write_whole_srgba_texture_data(&texture, slot.data.as_ref());
                     bind_group.set_texture_entry(slot.index, texture.create_view(&wgpu::TextureViewDescriptor::default()));
                 }

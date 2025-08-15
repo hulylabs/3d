@@ -385,6 +385,7 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
+    use crate::utils::bitmap_utils::BitmapSize;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -405,7 +406,7 @@ mod tests {
 
     #[must_use]
     fn make_empty_container() -> VisualObjects {
-        VisualObjects::new(None, None)
+        VisualObjects::new(BitmapSize::new(1,1), None, None)
     }
 
     #[must_use]
@@ -419,7 +420,7 @@ mod tests {
         let sdf_class_name = UniqueSdfClassName::new("i".to_string());
         sdf_registrator.add(&NamedSdf::new(SdfSphere::new(1.0), sdf_class_name.clone()));
 
-        (VisualObjects::new(Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
+        (VisualObjects::new(BitmapSize::new(1,1), Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
     }
 
     #[must_use]
@@ -462,7 +463,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(Some(sdf_classes), None)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None)));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
@@ -500,7 +501,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = VisualObjects::new(Some(sdf_classes), None);
+        let mut system_under_test = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -726,7 +727,7 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = VisualObjects::new(Some(sdf_classes), None);
+        let mut container = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
 
         let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();

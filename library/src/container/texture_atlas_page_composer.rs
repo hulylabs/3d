@@ -3,13 +3,14 @@ use crate::material::material_properties::MaterialProperties;
 use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
 use crate::material::texture_reference::TextureReference;
 use crate::material::texture_region::TextureRegion;
-use crate::utils::bitmap_utils::{write_sub_bitmap, BitmapSize, ImmutableBitmapReference, MutableBitmapReference};
+use crate::utils::bitmap_utils::{save_bitmap_to_png, set_texel, write_sub_bitmap, write_sub_bitmap_column, write_sub_bitmap_row, BitmapSize, ImmutableBitmapReference, MutableBitmapReference};
 use crate::utils::version::Version;
 use cast::i32;
 use cgmath::Vector2;
 use etagere::{AllocId, AtlasAllocator, Size};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 
 pub type AtlasRegionUid = AllocId;
@@ -38,8 +39,6 @@ impl TextureAtlasPageComposer {
         }
     }
 
-
-
     #[must_use]
     pub fn allocate(&mut self, bitmap: ImmutableBitmapReference) -> Option<AtlasRegionUid> {
         const BORDER: usize = TextureAtlasPageComposer::DEFENSIVE_BORDER_SIZE;
@@ -59,7 +58,21 @@ impl TextureAtlasPageComposer {
         let region = TextureRegion::new(Vector2::new(u, v), Vector2::new(width, height));
         self.allocations.insert(allocation.id, region);
 
-        write_sub_bitmap(MutableBitmapReference::new(&mut self.atlas_page_buffer, self.page_size), bitmap, pixel_x, pixel_y);
+        let mut atlas = MutableBitmapReference::new(&mut self.atlas_page_buffer, self.page_size);
+        write_sub_bitmap(&mut atlas, &bitmap, pixel_x, pixel_y);
+
+        // borders for the "repeat" wrapping mode (so the filtering of the edge texels is correct)
+
+        write_sub_bitmap_column(&mut atlas, pixel_x+bitmap.size().width(), pixel_y, &bitmap, 0);
+        write_sub_bitmap_column(&mut atlas, pixel_x-1, pixel_y, &bitmap, bitmap.size().width()-1);
+
+        write_sub_bitmap_row(&mut atlas, pixel_x, pixel_y+bitmap.size().height(), &bitmap, 0);
+        write_sub_bitmap_row(&mut atlas, pixel_x, pixel_y-1, &bitmap, bitmap.size().height()-1);
+
+        set_texel(&mut atlas, pixel_x-1, pixel_y-1, &bitmap, bitmap.size().width()-1, bitmap.size().height()-1);
+        set_texel(&mut atlas, pixel_x+bitmap.size().width(), pixel_y-1, &bitmap, 0, bitmap.size().height()-1);
+        set_texel(&mut atlas, pixel_x-1, pixel_y+bitmap.size().height(), &bitmap, bitmap.size().width()-1, 0);
+        set_texel(&mut atlas, pixel_x+bitmap.size().width(), pixel_y+bitmap.size().height(), &bitmap, 0, 0);
 
         self.atlas_page_data_version += 1;
 
@@ -68,13 +81,13 @@ impl TextureAtlasPageComposer {
 
     pub fn map_into(&mut self, region: AtlasRegionUid, mapping: AtlasRegionMappingBuilder, target: &mut MaterialProperties) -> anyhow::Result<()> {
         let allocation = self.allocations.get(&region)
-            .ok_or_else(|| anyhow::anyhow!("allocation failed"))?;
+            .ok_or_else(|| anyhow::anyhow!(format!("atlas region allocation not found for uid: {:?}", region)))?;
 
         let atlas_region_mapping = mapping.build(allocation.clone());
         let mapped_region_uid = self.warehouse.borrow_mut().add_region(atlas_region_mapping);
 
         let bitmap_index = self.warehouse.borrow_mut().get_region_index(mapped_region_uid)
-            .ok_or_else(|| anyhow::anyhow!("region index not found"))?;
+            .ok_or_else(|| anyhow::anyhow!(format!("region index not found for uid {:?}", mapped_region_uid)))?;
 
         target.set_albedo_texture(TextureReference::Bitmap(bitmap_index));
         Ok(())
@@ -89,5 +102,9 @@ impl TextureAtlasPageComposer {
     #[must_use]
     pub fn page_size(&self) -> BitmapSize {
         self.page_size
+    }
+
+    pub fn save_page_into<FilePath: AsRef<Path>>(&self, file_name: FilePath) -> Result<(), Box<dyn std::error::Error>> {
+        save_bitmap_to_png(&self.atlas_page_buffer, self.page_size, file_name.as_ref())
     }
 }
