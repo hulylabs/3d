@@ -6,3 +6,4 @@ mod scene_object;
 mod statistics;
 mod triangulated;
 pub(crate) mod bvh_proxies;
+pub mod texture_atlas_page_composer;

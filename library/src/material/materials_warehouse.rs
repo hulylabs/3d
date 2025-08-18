@@ -1,16 +1,20 @@
 ﻿use crate::material::material_index::MaterialIndex;
 use crate::material::material_properties::MaterialProperties;
 use crate::material::procedural_textures::ProceduralTextures;
+use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
 use crate::material::texture_reference::TextureReference;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
 use crate::shader::code::ShaderCode;
 use crate::utils::version::Version;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct MaterialsWarehouse {
     materials: Vec<MaterialProperties>,
     procedural_textures: Option<ProceduralTextures>,
-    materials_version: Version,
+    texture_atlas_regions: Rc<RefCell<TextureAtlasRegionsWarehouse>>,
+    data_version: Version,
 }
 
 impl MaterialsWarehouse {
@@ -19,25 +23,25 @@ impl MaterialsWarehouse {
         Self {
             materials: Vec::new(),
             procedural_textures,
-            materials_version: Version(0),
+            texture_atlas_regions: Rc::new(RefCell::new(TextureAtlasRegionsWarehouse::new())),
+            data_version: Version(0),
         }
     }
 
     #[must_use]
     pub(crate) fn animated(&self, index: MaterialIndex) -> bool {
         let albedo_texture = self.materials[index.0].albedo_texture();
-        if let TextureReference::Procedural(id) = albedo_texture {
-            if let Some(textures) = &self.procedural_textures {
+        if let TextureReference::Procedural(id) = albedo_texture
+            && let Some(textures) = &self.procedural_textures {
                 return textures.animated(id);
             }
-        }
         false
     }
 
     #[must_use]
     pub fn add(&mut self, target: &MaterialProperties) -> MaterialIndex {
         self.materials.push(*target);
-        self.materials_version += 1;
+        self.data_version += 1;
         MaterialIndex(self.materials.len() - 1)
     }
 
@@ -48,7 +52,7 @@ impl MaterialsWarehouse {
 
     #[must_use]
     pub(crate) fn data_version(&self) -> Version {
-        self.materials_version
+        self.data_version
     }
 
     #[must_use]
@@ -64,15 +68,20 @@ impl MaterialsWarehouse {
             ProceduralTextures::make_dummy_selection_function()
         }
     }
+
+    #[must_use]
+    pub(crate) fn texture_atlas_regions(&self) -> Rc<RefCell<TextureAtlasRegionsWarehouse>> {
+        self.texture_atlas_regions.clone()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::material::procedural_texture_index::ProceduralTextureUid;
     use crate::material::texture_procedural_3d::TextureProcedural3D;
     use crate::shader::code::FunctionBody;
     use crate::shader::conventions;
-    use super::*;
 
     #[test]
     fn test_data_version_materials() {

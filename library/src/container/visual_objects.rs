@@ -7,6 +7,7 @@ use crate::container::monolithic::Monolithic;
 use crate::container::scene_object::SceneObject;
 use crate::container::sdf_warehouse::SdfWarehouse;
 use crate::container::statistics::Statistics;
+use crate::container::texture_atlas_page_composer::TextureAtlasPageComposer;
 use crate::container::triangulated::Triangulated;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::{Affine, Transformation};
@@ -19,10 +20,11 @@ use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
-use crate::sdf::framework::code_generator::SdfRegistrator;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use crate::sdf::framework::sdf_registrator::SdfRegistrator;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
+use crate::utils::bitmap_utils::BitmapSize;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::remove_with_reorder::remove_with_reorder;
 use crate::utils::uid_generator::UidGenerator;
@@ -41,9 +43,11 @@ pub struct VisualObjects {
     triangles: Vec<Triangle>,
     
     materials: MaterialsWarehouse,
+    texture_atlas_page_composer: TextureAtlasPageComposer,
+
     sdf_prototypes: SdfWarehouse,
     
-    uid_generator: UidGenerator,
+    uid_generator: UidGenerator<ObjectUid>,
 }
 
 #[derive(EnumIter, EnumCount, Display, AsRefStr, Copy, Clone, PartialEq, Debug)]
@@ -55,19 +59,25 @@ pub(crate) enum DataKind {
 
 impl VisualObjects {
     #[must_use]
-    pub fn new(sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
-        let per_object_kind_statistics: Vec<Statistics> = vec![Statistics::default(); DataKind::COUNT];
-
+    pub fn new(texture_atlas_page_size: BitmapSize, sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
+        let materials = MaterialsWarehouse::new(procedural_textures);
+        let texture_atlas_regions = materials.texture_atlas_regions();
         Self {
-            per_object_kind_statistics,
+            per_object_kind_statistics: vec![Statistics::default(); DataKind::COUNT],
             objects: HashMap::new(),
             triangles: Vec::new(),
-            materials: MaterialsWarehouse::new(procedural_textures),
+            materials,
+            texture_atlas_page_composer: TextureAtlasPageComposer::new(texture_atlas_page_size, texture_atlas_regions),
             sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
     }
-    
+
+    #[must_use]
+    pub(crate) fn texture_atlas_page_size(&self) -> BitmapSize {
+        self.texture_atlas_page_composer.page_size()
+    }
+
     pub(crate) fn dump_scene_bvh(&self, destination: impl AsRef<Path>) -> Result<(), Error> {
         let mut objects_to_tree = self.make_bvh_support(0.0);
         let sdf_list = self.sorted_of_a_kind(DataKind::Sdf as usize, self.count_of_a_kind(DataKind::Sdf));
@@ -111,6 +121,16 @@ impl VisualObjects {
     #[must_use]
     pub(crate) fn materials(&self) -> &MaterialsWarehouse {
         &self.materials
+    }
+
+    #[must_use]
+    pub fn mutable_texture_atlas_page_composer(&mut self) -> &mut TextureAtlasPageComposer {
+        &mut self.texture_atlas_page_composer
+    }
+
+    #[must_use]
+    pub fn texture_atlas_page_composer(&self) -> &TextureAtlasPageComposer {
+        &self.texture_atlas_page_composer
     }
 
     #[must_use]
@@ -284,7 +304,7 @@ impl VisualObjects {
     #[must_use]
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
-        uid_generator: &mut UidGenerator,
+        uid_generator: &mut UidGenerator<ObjectUid>,
         statistics: &mut [Statistics],
         create_object: Constructor,
     ) -> ObjectUid {
@@ -313,7 +333,7 @@ impl VisualObjects {
         result
     }
     
-    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<IdentifiedObject> {
+    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<IdentifiedObject<'_>> {
         let mut sorted = Vec::with_capacity(expected_count);
         for (key, object) in self.objects.iter() {
             if object.data_kind_uid() == desired_kind {
@@ -348,8 +368,8 @@ mod tests {
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::objects::sdf_instance::SdfInstance;
-    use crate::sdf::framework::code_generator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
@@ -365,6 +385,7 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
+    use crate::utils::bitmap_utils::BitmapSize;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -385,7 +406,7 @@ mod tests {
 
     #[must_use]
     fn make_empty_container() -> VisualObjects {
-        VisualObjects::new(None, None)
+        VisualObjects::new(BitmapSize::new(1,1), None, None)
     }
 
     #[must_use]
@@ -399,7 +420,7 @@ mod tests {
         let sdf_class_name = UniqueSdfClassName::new("i".to_string());
         sdf_registrator.add(&NamedSdf::new(SdfSphere::new(1.0), sdf_class_name.clone()));
 
-        (VisualObjects::new(Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
+        (VisualObjects::new(BitmapSize::new(1,1), Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
     }
 
     #[must_use]
@@ -442,7 +463,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(Some(sdf_classes), None)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None)));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
@@ -480,7 +501,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = VisualObjects::new(Some(sdf_classes), None);
+        let mut system_under_test = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -706,7 +727,7 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = VisualObjects::new(Some(sdf_classes), None);
+        let mut container = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
 
         let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();

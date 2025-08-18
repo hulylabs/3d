@@ -1,4 +1,4 @@
-﻿use cgmath::Deg;
+﻿use cgmath::{Deg, Vector4};
 use library::container::mesh_warehouse::MeshWarehouse;
 use library::container::visual_objects::VisualObjects;
 use library::geometry::alias::{Point, Vector};
@@ -35,7 +35,7 @@ use library::sdf::composition::sdf_subtraction::SdfSubtraction;
 use library::sdf::composition::sdf_subtraction_smooth::SdfSubtractionSmooth;
 use library::sdf::composition::sdf_union::SdfUnion;
 use library::sdf::composition::sdf_union_smooth::SdfUnionSmooth;
-use library::sdf::framework::code_generator::SdfRegistrator;
+use library::sdf::framework::sdf_registrator::SdfRegistrator;
 use library::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
 use library::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
 use library::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
@@ -47,11 +47,68 @@ use library::shader::conventions;
 use library::utils::object_uid::ObjectUid;
 use log::error;
 use std::env;
+use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
+use anyhow::anyhow;
+use library::container::texture_atlas_page_composer::{AtlasRegionUid, TextureAtlasPageComposer};
+use library::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
+use library::utils::bitmap_utils::{BitmapSize, ImmutableBitmapReference};
 
-pub(super) struct TechSdfClasses {
+const CONTENT_ROOT_FOLDER_NAME: &str = "assets";
+
+#[must_use]
+fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
+    let exe_path = env::current_exe().unwrap();
+    let exe_directory = exe_path.parent().unwrap();
+    exe_directory.join(file_name)
+}
+
+pub(super) struct TechWorldBitmapTextures {
+    bitmap_checkerboard_small: AtlasRegionUid,
+    bitmap_checkerboard_large: AtlasRegionUid,
+    bitmap_huly: AtlasRegionUid,
+    bitmap_huly_2: AtlasRegionUid,
+    bitmap_rect_grid: AtlasRegionUid,
+}
+
+impl TechWorldBitmapTextures {
+    pub(super) fn new(composer: &mut TextureAtlasPageComposer) -> anyhow::Result<Self> {
+        let bitmap_checkerboard_small= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_small.png", composer)?;
+        let bitmap_checkerboard_large= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_large.png", composer)?;
+        let bitmap_huly= TechWorldBitmapTextures::load_bitmap("bitmap_huly.png", composer)?;
+        let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
+        let bitmap_rect_grid = TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
+
+        composer.save_page_into("textures_atlas.png").expect("failed to save texture atlas page");
+
+        Ok(Self {
+            bitmap_checkerboard_small,
+            bitmap_checkerboard_large,
+            bitmap_huly,
+            bitmap_huly_2,
+            bitmap_rect_grid,
+        })
+    }
+
+    fn load_bitmap(file_name: &str, composer: &mut TextureAtlasPageComposer) -> anyhow::Result<AtlasRegionUid> {
+        let image_path = Path::new(CONTENT_ROOT_FOLDER_NAME).join(file_name);
+        let image
+            = image::open(get_resource_path(&image_path))
+                .map_err(|e| anyhow!("failed to open image {}: {}", image_path.display(), e))?;
+
+        let buffer = image.to_rgba8();
+        let bitmap_size = BitmapSize::new(buffer.width() as usize, buffer.height() as usize);
+
+        composer
+            .allocate(ImmutableBitmapReference::new(buffer.as_raw(), bitmap_size))
+                .ok_or_else(|| anyhow!("failed to allocate region in texture atlas for {}", file_name))
+    }
+}
+
+pub(super) struct TechWorldSdfClasses {
     rectangular_box: NamedSdf,
     sphere: NamedSdf,
+    quad_0_3: NamedSdf,
     identity_box: NamedSdf,
     identity_box_frame: NamedSdf,
     xz_torus: NamedSdf,
@@ -79,11 +136,14 @@ pub(super) struct TechSdfClasses {
     bent_box: NamedSdf,
 }
 
-impl TechSdfClasses {
+impl TechWorldSdfClasses {
     #[must_use]
     pub(super) fn new(registrator: &mut SdfRegistrator) -> Self {
         let rectangular_box = NamedSdf::new(SdfBox::new(Vector::new(0.24, 0.1, 0.24)), UniqueSdfClassName::new("button".to_string()));
         registrator.add(&rectangular_box);
+
+        let quad_0_3= NamedSdf::new(SdfBox::new(Vector::new(0.15, 0.15, 0.005)), UniqueSdfClassName::new("quad_zero_three".to_string()));
+        registrator.add(&quad_0_3);
 
         let sphere = NamedSdf::new(SdfSphere::new(1.0), UniqueSdfClassName::new("bubble".to_string()));
         registrator.add(&sphere);
@@ -230,7 +290,8 @@ impl TechSdfClasses {
 
         Self { 
             rectangular_box, 
-            sphere, 
+            sphere,
+            quad_0_3,
             identity_box, 
             identity_box_frame, 
             xz_torus, 
@@ -259,30 +320,101 @@ impl TechSdfClasses {
     }
 }
 
-pub(super) struct TechMaterials {
+pub(super) struct TechWorldMaterials {
     gold_metal: MaterialIndex,
     blue_glass: MaterialIndex,
     purple_glass: MaterialIndex,
     red_glass: MaterialIndex,
     green_mirror: MaterialIndex,
-    light_material: MaterialIndex,
-    black_material: MaterialIndex,
-    coral_material: MaterialIndex,
-    red_material: MaterialIndex,
-    blue_material: MaterialIndex,
-    bright_red_material: MaterialIndex,
-    silver_material: MaterialIndex,
-    green_material: MaterialIndex,
-    selected_object_material: MaterialIndex,
+    light: MaterialIndex,
+    black: MaterialIndex,
+    coral: MaterialIndex,
+    red: MaterialIndex,
+    blue: MaterialIndex,
+    bright_red: MaterialIndex,
+    silver: MaterialIndex,
+    green: MaterialIndex,
+    selected_object: MaterialIndex,
     large_box_material: MaterialIndex,
     deformed_circles_material: MaterialIndex,
+    white_chrome_mirror: MaterialIndex,
+    large_grid_above_white: MaterialIndex,
+    huly_icon_above_blue: MaterialIndex,
+    huly_icon_2_vertically_repeated: MaterialIndex,
+    rect_grid_bitmap_above_yellow: MaterialIndex,
+    checkerboard_small: MaterialIndex,
 }
 
-impl TechMaterials {
+impl TechWorldMaterials {
     #[must_use]
-    pub(super) fn new(scene: &mut VisualObjects, textures: TechTextures) -> Self {
+    pub(super) fn new(scene: &mut VisualObjects, procedural_textures: TechWorldProceduralTextures, bitmap_textures: TechWorldBitmapTextures) -> Self {
+
+        let large_grid_above_white = {
+            let mut properties = MaterialProperties::new().with_albedo(3.0, 3.0, 3.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(1.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -1.0, 0.0, 0.5))
+                .wrap_mode([WrapMode::Repeat, WrapMode::Discard])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_checkerboard_large, builder, &mut properties)
+                .expect("failed to make 'bitmap_checkerboard_large' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
+        let huly_icon_above_blue = {
+            let mut properties = MaterialProperties::new().with_albedo(0.0, 0.5, 3.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -3.0, 0.0, 0.5))
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_huly, builder, &mut properties)
+                .expect("failed to make 'bitmap_huly' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
+        let huly_icon_2_vertically_repeated = {
+            let mut properties = MaterialProperties::new().with_albedo(2.0, 0.5, 0.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(2.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -2.0, 0.0, 0.5))
+                .wrap_mode([WrapMode::Discard, WrapMode::Repeat])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_huly_2, builder, &mut properties)
+                .expect("failed to make 'bitmap_huly_2' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
+        let rect_grid_bitmap_above_yellow = {
+            let mut properties = MaterialProperties::new().with_albedo(1.0, 0.84, 0.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(1.0, 0.0, 0.0, 0.0))
+                .local_position_to_texture_v(Vector4::new(0.0, 1.0, 0.0, 0.0))
+                .wrap_mode([WrapMode::Clamp, WrapMode::Clamp])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_rect_grid, builder, &mut properties)
+                .expect("failed to make 'bitmap_rect_grid' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
+        let checkerboard_small = {
+            let mut properties = MaterialProperties::new().with_albedo(1.0, 1.0, 1.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(0.0, 4.0, 0.0, 0.0))
+                .local_position_to_texture_v(Vector4::new(0.0, 0.0, 4.0, 0.0))
+                .wrap_mode([WrapMode::Repeat, WrapMode::Repeat])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_checkerboard_small, builder, &mut properties)
+                .expect("failed to make 'bitmap_checkerboard_small' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
         let materials = scene.materials_mutable();
-        
+
         let gold_metal = materials.add(
             &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
@@ -300,7 +432,7 @@ impl TechMaterials {
             .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(0.0, 0.5, 0.9).with_refractive_index_eta(1.4));
 
         let purple_glass = materials
-            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.4));
+            .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.5, 0.9).with_refractive_index_eta(1.01));
 
         let red_glass = materials
             .add(&MaterialProperties::new().with_class(MaterialClass::Glass).with_albedo(1.0, 0.2, 0.0).with_refractive_index_eta(1.4));
@@ -312,12 +444,12 @@ impl TechMaterials {
                 .with_refractive_index_eta(1.4)
         );
 
-        let light_material = materials.add(
+        let light = materials.add(
             &MaterialProperties::new()
                 .with_emission(2.0, 2.0, 2.0)
         );
 
-        let black_material = materials.add(
+        let black = materials.add(
             &MaterialProperties::new()
                 .with_albedo(0.2, 0.2, 0.2)
                 .with_specular(0.2, 0.2, 0.2)
@@ -325,13 +457,13 @@ impl TechMaterials {
                 .with_roughness(0.95),
         );
 
-        let coral_material = materials.add(
+        let coral = materials.add(
             &MaterialProperties::new()
                 .with_albedo(1.0, 0.5, 0.3)
                 .with_specular(0.2, 0.2, 0.2)
                 .with_specular_strength(0.01)
                 .with_roughness(0.0)
-                .with_albedo_texture(TextureReference::Procedural(textures.lava()))
+                .with_albedo_texture(TextureReference::Procedural(procedural_textures.lava()))
         );
 
         let deformed_circles_material = materials.add(
@@ -340,10 +472,10 @@ impl TechMaterials {
                 .with_specular(0.2, 0.2, 0.2)
                 .with_specular_strength(0.01)
                 .with_roughness(0.0)
-                .with_albedo_texture(TextureReference::Procedural(textures.deformed_circles()))
+                .with_albedo_texture(TextureReference::Procedural(procedural_textures.deformed_circles()))
         );
 
-        let red_material = materials.add(
+        let red = materials.add(
             &MaterialProperties::new()
                 .with_albedo(0.75, 0.1, 0.1)
                 .with_specular(0.75, 0.1, 0.1)
@@ -351,16 +483,16 @@ impl TechMaterials {
                 .with_roughness(0.95)
         );
 
-        let blue_material = materials.add(
+        let blue = materials.add(
             &MaterialProperties::new()
                 .with_albedo(0.1, 0.1, 0.75)
                 .with_specular(0.1, 0.1, 0.75)
                 .with_specular_strength(0.05)
                 .with_roughness(0.95)
-                .with_albedo_texture(TextureReference::Procedural(textures.water()))
+                .with_albedo_texture(TextureReference::Procedural(procedural_textures.water()))
         );
 
-        let bright_red_material = materials.add(
+        let bright_red = materials.add(
             &MaterialProperties::new()
                 .with_albedo(1.0, 0.0, 0.0)
                 .with_specular(1.0, 1.0, 1.0)
@@ -368,7 +500,7 @@ impl TechMaterials {
                 .with_roughness(0.95)
         );
 
-        let silver_material = materials.add(
+        let silver = materials.add(
             &MaterialProperties::new()
                 .with_class(MaterialClass::Mirror)
                 .with_albedo(0.75, 0.75, 0.75)
@@ -377,7 +509,7 @@ impl TechMaterials {
                 .with_roughness(0.0)
         );
 
-        let green_material = materials.add(
+        let green = materials.add(
             &MaterialProperties::new()
                 .with_albedo(0.05, 0.55, 0.05)
                 .with_specular(0.05, 0.55, 0.05)
@@ -385,13 +517,22 @@ impl TechMaterials {
                 .with_roughness(0.95)
         );
 
-        let selected_object_material = materials.add(
+        let selected_object = materials.add(
             &MaterialProperties::new()
                 .with_albedo(0.05, 0.05, 2.05)
                 .with_specular(0.05, 0.05, 0.55)
                 .with_specular_strength(0.15)
                 .with_roughness(0.45)
-                .with_albedo_texture(TextureReference::Procedural(textures.checkerboard()))
+                .with_albedo_texture(TextureReference::Procedural(procedural_textures.checkerboard()))
+        );
+
+        let white_chrome_mirror = materials.add(
+            &MaterialProperties::new()
+                .with_class(MaterialClass::Mirror)
+                .with_albedo(1.0, 1.0, 1.0)
+                .with_specular(0.0, 0.0, 0.0)
+                .with_specular_strength(0.0)
+                .with_roughness(0.0)
         );
 
         Self {
@@ -400,29 +541,35 @@ impl TechMaterials {
             purple_glass,
             red_glass,
             green_mirror,
-            light_material,
-            black_material,
-            coral_material,
-            red_material,
-            blue_material,
-            bright_red_material,
-            silver_material,
-            green_material,
-            selected_object_material,
+            light,
+            black,
+            coral,
+            red,
+            blue,
+            bright_red,
+            silver,
+            green,
+            selected_object,
             large_box_material,
             deformed_circles_material,
+            white_chrome_mirror,
+            large_grid_above_white,
+            huly_icon_above_blue,
+            huly_icon_2_vertically_repeated,
+            rect_grid_bitmap_above_yellow,
+            checkerboard_small,
         }
     }
 }
 
-pub(super) struct TechTextures {
+pub(super) struct TechWorldProceduralTextures {
     checkerboard: ProceduralTextureUid,
     lava: ProceduralTextureUid,
     water: ProceduralTextureUid,
     deformed_circles: ProceduralTextureUid,
 }
 
-impl TechTextures {
+impl TechWorldProceduralTextures {
     #[must_use]
     pub(super) fn new(container: &mut ProceduralTextures) -> Self {
         let checkerboard = container.add(make_checkerboard_texture(10.0), None);
@@ -493,8 +640,8 @@ impl TechTextures {
 }
 
 pub(super) struct TechWorld {
-    sdf_classes: TechSdfClasses,
-    materials: TechMaterials,
+    sdf_classes: TechWorldSdfClasses,
+    materials: TechWorldMaterials,
     
     light_panel: Option<ObjectUid>,
     light_panel_z: f64,
@@ -513,7 +660,7 @@ pub(super) struct TechWorld {
 
 impl TechWorld {
     #[must_use]
-    pub(super) fn new(sdf_classes: TechSdfClasses, materials: TechMaterials) -> Self {
+    pub(super) fn new(sdf_classes: TechWorldSdfClasses, materials: TechWorldMaterials) -> Self {
         Self { 
             sdf_classes,
             materials,
@@ -536,7 +683,7 @@ impl TechWorld {
     
     #[must_use]
     pub(super) fn selected_object_material(&self) -> MaterialIndex {
-        self.materials.selected_object_material
+        self.materials.selected_object
     }
 
     pub(super) fn move_light_z(&mut self, sign: f64, scene: &mut Hub) {
@@ -558,15 +705,15 @@ impl TechWorld {
 
     fn make_light_panel(&mut self, scene: &mut Hub) {
         self.light_panel = Some(
-            scene.add_parallelogram(Point::new(self.light_panel_x, 1.0, self.light_panel_z), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light_material)
+            scene.add_parallelogram(Point::new(self.light_panel_x, 1.0, self.light_panel_z), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, 1.0), self.materials.light)
         );
     }
 
     fn make_common_scene_walls(&mut self, scene: &mut Hub) {
         self.make_light_panel(scene);
-        scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
-        scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
-        scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black);
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red);
+        scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green);
     }
 
     fn clear_scene(&mut self, scene: &mut Hub) {
@@ -585,7 +732,7 @@ impl TechWorld {
         self.light_panel = None;
     }
 
-    pub(super) fn load_to_smooth_operators_scene(&mut self, scene: &mut Hub) {
+    pub(super) fn load_smooth_operators_scene(&mut self, scene: &mut Hub) {
         self.clear_scene(scene);
 
         self.make_common_scene_walls(scene);
@@ -593,7 +740,7 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, 0.0, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.union_smooth.name(),
-            self.materials.blue_material);
+            self.materials.blue);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.9, 0.0, -0.8))*Affine::from_scale(0.2)),
@@ -608,10 +755,10 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, 0.4, -0.3))*Affine::from_scale(0.3)),
             self.sdf_classes.csg_example.name(),
-            self.materials.blue_material);
+            self.materials.blue);
     }
 
-    pub(super) fn load_to_sdf_exhibition_scene(&mut self, scene: &mut Hub) {
+    pub(super) fn load_sdf_exhibition_scene(&mut self, scene: &mut Hub) {
         self.clear_scene(scene);
 
         self.make_common_scene_walls(scene);
@@ -619,17 +766,17 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.8, 0.8, -0.9))*Affine::from_scale(0.1)),
             self.sdf_classes.sphere.name(),
-            self.materials.green_material);
+            self.materials.green);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.5, 0.75, -0.9))*Affine::from_nonuniform_scale(0.1, 0.2, 0.01)),
             self.sdf_classes.identity_box.name(),
-            self.materials.blue_material);
+            self.materials.blue);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.2, 0.75, -0.9))*Affine::from_scale(0.1)),
             self.sdf_classes.identity_box_frame.name(),
-            self.materials.red_material);
+            self.materials.red);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.15, 0.75, -0.9))*Affine::from_nonuniform_scale(0.05, 0.05, 0.05)*Affine::from_angle_x(Deg(90.0))),
@@ -644,7 +791,7 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.95, 0.75, -0.85))*Affine::from_scale(0.05)),
             self.sdf_classes.capped_xy_torus.name(),
-            self.materials.coral_material);
+            self.materials.coral);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.3, 0.75, -0.95))*Affine::from_scale(0.1)),
@@ -654,32 +801,32 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.7, 0.8, -0.8))*Affine::from_scale(0.2)),
             self.sdf_classes.cone.name(),
-            self.materials.silver_material);
+            self.materials.silver);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.8, 0.4, -0.8))*Affine::from_nonuniform_scale(0.1, 0.1, 0.05)),
             self.sdf_classes.hex_prism.name(),
-            self.materials.bright_red_material);
+            self.materials.bright_red);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.5, 0.35, -0.8))*Affine::from_nonuniform_scale(0.1, 0.1, 0.05)),
             self.sdf_classes.triangular_prism.name(),
-            self.materials.coral_material);
+            self.materials.coral);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.2, 0.35, -0.8))*Affine::from_angle_z(Deg(90.0))*Affine::from_nonuniform_scale(0.1, 0.05, 0.05)),
             self.sdf_classes.capsule.name(),
-            self.materials.green_material);
+            self.materials.green);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.1, 0.35, -0.8))*Affine::from_scale(0.1)),
             self.sdf_classes.cylinder_cross.name(),
-            self.materials.blue_material);
+            self.materials.blue);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.4, 0.35, -0.9))*Affine::from_scale(0.1)),
             self.sdf_classes.solid_angle.name(),
-            self.materials.red_material);
+            self.materials.red);
         
         scene.add_sdf(
             &(
@@ -688,12 +835,12 @@ impl TechWorld {
                 Affine::from_angle_z(Deg(15.0))*
                 Affine::from_scale(0.1)),
             self.sdf_classes.cut_hollow_sphere.name(),
-            self.materials.bright_red_material);
+            self.materials.bright_red);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.0, 0.35, -0.9))*Affine::from_scale(0.15)),
             self.sdf_classes.round_cone.name(),
-            self.materials.black_material);
+            self.materials.black);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.3, 0.35, -0.9))*Affine::from_scale(0.15)),
@@ -713,23 +860,16 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.5, 0.0, -0.9))*Affine::from_scale(0.15)),
             self.sdf_classes.pyramid.name(),
-            self.materials.blue_material);
-    }
-    
-    #[must_use]
-    fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
-        let exe_path = env::current_exe().unwrap();
-        let exe_directory = exe_path.parent().unwrap();
-        exe_directory.join(file_name)
+            self.materials.blue);
     }
 
-    pub(super) fn load_to_triangle_mesh_testing_scene(&mut self, scene: &mut Hub) {
+    pub(super) fn load_triangle_mesh_testing_scene(&mut self, scene: &mut Hub) {
         self.clear_scene(scene);
 
         self.make_common_scene_walls(scene);
 
         let mut meshes = MeshWarehouse::new();
-        let mesh_file = Self::get_resource_path(Path::new("assets").join("monkey.obj"));
+        let mesh_file = get_resource_path(Path::new(CONTENT_ROOT_FOLDER_NAME).join("monkey.obj"));
         let mesh_or_error = meshes.load(mesh_file);
 
         match mesh_or_error {
@@ -739,7 +879,7 @@ impl TechWorld {
                     Affine::from_translation(Vector::new(0.5, 0.0, 0.0)) *
                         Affine::from_scale(1.0)
                     );
-                scene.add_mesh(&meshes, mesh, &location, self.materials.black_material);
+                scene.add_mesh(&meshes, mesh, &location, self.materials.black);
             },
             Err(mesh_loading_error) => {
                 error!("failed to load mesh: {mesh_loading_error}");
@@ -750,11 +890,11 @@ impl TechWorld {
     pub(super) fn load_morphing_demo_scene(&mut self, scene: &mut Hub) {
         self.clear_scene(scene);
         
-        scene.add_parallelogram(Point::new(-0.15, -0.15, 2.0), Vector::new(0.3, 0.0, 0.0), Vector::new(0.0, 0.3, 0.0), self.materials.light_material);
+        scene.add_parallelogram(Point::new(-0.15, -0.15, 2.0), Vector::new(0.3, 0.0, 0.0), Vector::new(0.0, 0.3, 0.0), self.materials.light);
         
-        scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black_material);
-        scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red_material);
-        scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green_material);
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -1.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 2.1, 0.0), self.materials.black);
+        scene.add_parallelogram(Point::new(-1.0, -1.1, -0.5), Vector::new(0.0, 0.0, -0.5), Vector::new(0.0, 2.1, 0.0), self.materials.red);
+        scene.add_parallelogram(Point::new(2.0, -1.1, -1.0), Vector::new(0.0, 0.0, 0.5), Vector::new(0.0, 2.1, 0.0), self.materials.green);
 
         // twist demo
 
@@ -776,7 +916,7 @@ impl TechWorld {
             &Affine::from_translation(Vector::new(0.2, -0.1, 0.0)),
             TWIST_RAY_MARCH_FIX,
             self.sdf_classes.twisted_box.name(),
-            self.materials.blue_material));
+            self.materials.blue));
 
         self.very_slow_twisted_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.2, -0.3, 0.0)),
@@ -792,13 +932,13 @@ impl TechWorld {
             &Affine::from_translation(Vector::new(0.7, 0.3, 0.0)),
             BEND_RAY_MARCH_FIX,
             self.sdf_classes.bent_box.name(),
-            self.materials.green_material));
+            self.materials.green));
 
         self.single_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, 0.1, 0.0)),
             BEND_RAY_MARCH_FIX,
             self.sdf_classes.bent_box.name(),
-            self.materials.coral_material));
+            self.materials.coral));
 
         self.back_n_forth_bent_button = Some(scene.add_sdf_with_ray_march_fix(
             &Affine::from_translation(Vector::new(0.7, -0.1, 0.0)),
@@ -810,21 +950,21 @@ impl TechWorld {
             &Affine::from_translation(Vector::new(0.7, -0.3, 0.0)),
             BEND_RAY_MARCH_FIX,
             self.sdf_classes.bent_box.name(),
-            self.materials.red_material));
+            self.materials.red));
     }
 
-    pub(super) fn load_to_ui_box_scene(&mut self, scene: &mut Hub) {
+    pub(super) fn load_ui_box_scene(&mut self, scene: &mut Hub) {
         self.clear_scene(scene);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.7, 0.2, -0.7))*Affine::from_angle_z(Deg(-30.0))),
             self.sdf_classes.rectangular_box.name(),
-            self.materials.silver_material);
+            self.materials.silver);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, -0.4, -0.9))*Affine::from_angle_z(Deg(30.0))),
             self.sdf_classes.rectangular_box.name(),
-            self.materials.bright_red_material);
+            self.materials.bright_red);
         
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.5, 0.6, -1.0))*Affine::from_scale(0.25) ),
@@ -849,12 +989,12 @@ impl TechWorld {
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, 0.0, -1.0))*Affine::from_scale(0.25) ),
             self.sdf_classes.sphere.name(),
-            self.materials.coral_material);
+            self.materials.coral);
 
         self.make_common_scene_walls(scene);
 
         let mut meshes = MeshWarehouse::new();
-        let cube_mesh_file = Self::get_resource_path(Path::new("assets").join("cube.obj"));
+        let cube_mesh_file = get_resource_path(Path::new(CONTENT_ROOT_FOLDER_NAME).join("cube.obj"));
         let cube_mesh_or_error = meshes.load(cube_mesh_file);
         
         match cube_mesh_or_error {
@@ -887,6 +1027,58 @@ impl TechWorld {
                 error!("failed to load cube mesh: {mesh_loading_error}");
             },
         }
+    }
+
+    pub(super) fn load_bitmap_texturing_demo_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
+
+        self.make_common_scene_walls(scene);
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(-0.4, 0.0, -0.45)) * Affine::from_nonuniform_scale(0.5, 0.5, 0.5)),
+            self.sdf_classes.sphere.name(),
+            self.materials.white_chrome_mirror);
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(1.4, 0.0, -0.45)) * Affine::from_nonuniform_scale(0.5, 0.5, 0.5)),
+            self.sdf_classes.sphere.name(),
+            self.materials.purple_glass);
+
+        scene.add_parallelogram(
+            Point::new(0.2, -0.6, -0.7),
+            Vector::new(0.3, 0.0, 0.0),
+            Vector::new(0.0, 0.3, 0.0),
+            self.materials.huly_icon_above_blue
+        );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(-0.05, -0.45, -0.7))),
+            self.sdf_classes.quad_0_3.name(),
+            self.materials.huly_icon_above_blue);
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.7, -0.45, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            self.sdf_classes.sphere.name(),
+            self.materials.large_grid_above_white
+        );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.35, -0.1, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.02)),
+            self.sdf_classes.hex_prism.name(),
+            self.materials.rect_grid_bitmap_above_yellow
+        );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.7, -0.1, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            self.sdf_classes.sphere.name(),
+            self.materials.checkerboard_small
+        );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.7, 0.1, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            self.sdf_classes.round_cone.name(),
+            self.materials.huly_icon_2_vertically_repeated
+        );
     }
 
     #[must_use]

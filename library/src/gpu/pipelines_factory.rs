@@ -35,11 +35,10 @@ impl PipelinesFactory {
 
     #[must_use]
     fn new_with_custom_io(context: Rc<Context>, presentation_format: wgpu::TextureFormat, caches_path: Option<PathBuf>, io: Rc<dyn Io>,) -> Self {
-        if let Some(path) = caches_path.clone() {
-            if let Err(e) = fs::create_dir_all(&path) {
+        if let Some(path) = caches_path.clone()
+            && let Err(e) = fs::create_dir_all(&path) {
                 info!("failed to create directories in path {path:?}: {e}");
             }
-        }
         Self { context, presentation_format, caches_path, caches: HashMap::new(), io, }
     }
 

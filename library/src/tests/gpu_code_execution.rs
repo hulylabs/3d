@@ -10,29 +10,62 @@ pub(crate) mod tests {
     use crate::gpu::resources::Resources;
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use bytemuck::{Pod, Zeroable};
+    use cgmath::Vector2;
+    use more_asserts::assert_gt;
     use std::collections::{HashMap, HashSet};
     use wgpu::BufferUsages;
+    use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 
-    struct BindGroup {
-        index: u32,
-        dummy_slots: HashSet<u32>,
-        slots: Vec<BindGroupSlot>,
-    }
-
-    pub(crate) struct BindGroupSlot {
+    pub(crate) struct DataBindGroupSlot {
         index: u32,
         data: Vec<u8>,
     }
 
-    impl BindGroupSlot {
+    pub(crate) struct SamplerBindGroupSlot {
+        index: u32,
+    }
+
+    pub(crate) struct TextureBindGroupSlot {
+        index: u32,
+        size: Vector2<u32>,
+        data: Vec<u8>,
+    }
+
+    struct SlotClass<T> {
+        dummy_slots: HashSet<u32>,
+        slots: Vec<T>,
+    }
+
+    struct BindGroup {
+        index: u32,
+        storage_slots: SlotClass<DataBindGroupSlot>,
+        sampler_slots: SlotClass<SamplerBindGroupSlot>,
+        texture_slots: SlotClass<TextureBindGroupSlot>,
+    }
+
+    impl DataBindGroupSlot {
         #[must_use]
         pub(crate) fn new(index: u32, data: &[u8]) -> Self {
             Self { index, data: data.to_vec() }
         }
     }
+    
+    impl SamplerBindGroupSlot {
+        pub(crate) fn new(index: u32) -> Self {
+            Self { index }
+        }
+    }
+    
+    impl TextureBindGroupSlot {
+        #[must_use]
+        pub(crate) fn new(index: u32, size: Vector2<u32>, data: Vec<u8>) -> Self {
+            assert_eq!((size.x * size.y) as usize * BYTES_IN_RGBA_QUARTET, data.len(), "data size mismatch");
+            Self { index, size, data }
+        }
+    }
 
     pub(crate) struct ExecutionConfig {
-        data_binding_group: u32,
+        test_data_binding_group: u32,
         entry_point: ComputeRoutineEntryPoint,
         bind_groups: HashMap<u32, BindGroup>,
     }
@@ -40,33 +73,69 @@ pub(crate) mod tests {
     impl ExecutionConfig {
         pub(crate) fn new() -> Self {
             Self { 
-                data_binding_group: 0, 
+                test_data_binding_group: 0,
                 entry_point: ComputeRoutineEntryPoint::Default,
                 bind_groups: HashMap::new(),
             }
         }
 
-        pub(crate) fn set_data_binding_group(&mut self, data_binding_group: u32) -> &mut Self {
-            self.data_binding_group = data_binding_group;
+        pub(crate) fn set_test_data_binding_group(&mut self, data_binding_group: u32) -> &mut Self {
+            self.test_data_binding_group = data_binding_group;
             self
         }
 
-        pub(crate) fn add_dummy_binding_group(&mut self, binding_group: u32, slots: Vec<u32>) -> &mut Self {
-            assert_ne!(self.data_binding_group, binding_group, "can't stab test data binding group");
-            self.bind_groups.insert(binding_group, BindGroup {
-                index: binding_group, 
-                dummy_slots: slots.into_iter().collect(), 
-                slots: Vec::new()
-            });
+        pub(crate) fn set_dummy_binding_group(&mut self, binding_group: u32, storage_slots: Vec<u32>, sampler_slots: Vec<u32>, texture_slots: Vec<u32>, ) -> &mut Self {
+            assert_ne!(self.test_data_binding_group, binding_group, "can't stab test data binding group");
+            let dummy_bind_group = Self::make_dummy_bind_group(binding_group, storage_slots, sampler_slots, texture_slots);
+            self.bind_groups.insert(binding_group, dummy_bind_group);
             self
         }
 
-        pub(crate) fn add_binding_group(&mut self, binding_group: u32, slots_to_stab: Vec<u32>, slots: Vec<BindGroupSlot>) -> &mut Self {
-            assert_ne!(self.data_binding_group, binding_group, "can't set test data binding group");
+        fn make_dummy_bind_group(binding_group: u32, storage_slots: Vec<u32>, sampler_slots: Vec<u32>, texture_slots: Vec<u32>) -> BindGroup {
+            BindGroup {
+                index: binding_group,
+                storage_slots: SlotClass::<DataBindGroupSlot> {
+                    dummy_slots: storage_slots.into_iter().collect(),
+                    slots: Vec::new(),
+                },
+                sampler_slots: SlotClass::<SamplerBindGroupSlot> {
+                    dummy_slots: sampler_slots.into_iter().collect(),
+                    slots: Vec::new(),
+                },
+                texture_slots: SlotClass::<TextureBindGroupSlot> {
+                    dummy_slots: texture_slots.into_iter().collect(),
+                    slots: Vec::new(),
+                },
+            }
+        }
+
+        pub(crate) fn set_texture_binding(&mut self, binding_group: u32, texture: TextureBindGroupSlot, sampler: Option<SamplerBindGroupSlot>) -> &mut Self {
+            assert_ne!(self.test_data_binding_group, binding_group, "can't set test data binding group");
+
+            let group = self.bind_groups.entry(binding_group).or_insert(Self::make_dummy_bind_group(binding_group, vec![], vec![], vec![]));
+
+            group.texture_slots.slots.push(texture);
+            
+            if let Some(sampler) = sampler {
+                group.sampler_slots.slots.push(sampler);   
+            }
+            
+            self
+        }
+
+        pub(crate) fn set_storage_binding_group(&mut self, binding_group: u32, slots_to_stab: Vec<u32>, slots: Vec<DataBindGroupSlot>) -> &mut Self {
+            assert_ne!(self.test_data_binding_group, binding_group, "can't set test data binding group");
             self.bind_groups.insert(binding_group, BindGroup {
-                index: binding_group, 
-                dummy_slots: slots_to_stab.into_iter().collect(), 
-                slots
+                index: binding_group,
+                storage_slots: SlotClass::<DataBindGroupSlot> {
+                    dummy_slots: slots_to_stab.into_iter().collect(), slots,
+                },
+                sampler_slots: SlotClass::<SamplerBindGroupSlot> {
+                    dummy_slots: HashSet::new(), slots: Vec::new(),
+                },
+                texture_slots: SlotClass::<TextureBindGroupSlot> {
+                    dummy_slots: HashSet::new(), slots: Vec::new(),
+                },
             });
             self
         }
@@ -100,21 +169,40 @@ pub(crate) mod tests {
         let mut pipeline_factory = PipelinesFactory::new(context.clone(), COMMON_PRESENTATION_FORMAT, None);
         
         let mut pipeline = ComputePipeline::new(pipeline_factory.create_compute_pipeline(config.entry_point, &code));
-        pipeline.setup_bind_group(config.data_binding_group, Some("test data"), context.device(), |bind_group|{
-            bind_group.add_entry(0, input_buffer.clone());
-            bind_group.add_entry(1, output_buffer.gpu_copy());
+        pipeline.setup_bind_group(config.test_data_binding_group, Some("test data"), context.device(), |bind_group|{
+            bind_group.set_storage_entry(0, input_buffer.clone());
+            bind_group.set_storage_entry(1, output_buffer.gpu_copy());
         });
 
         let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
-        let dummy_buffer = resources.create_buffer("dummy", universal_usage, &vec![0_u8; 256]);
+        let dummy_buffer = resources.create_buffer("dummy_buffer", universal_usage, &vec![0_u8; 256]);
+        let dummy_sampler = resources.create_sampler("dummy_sampler");
+        let dummy_texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(1,1));
+        let dummy_texture_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
         for (_, group) in config.bind_groups {
             pipeline.setup_bind_group(group.index, None, context.device(), |bind_group|{
-                for slot in group.dummy_slots {
-                    bind_group.add_entry(slot, dummy_buffer.clone());
+                for slot in group.storage_slots.dummy_slots {
+                    bind_group.set_storage_entry(slot, dummy_buffer.clone());
                 }
-                for slot in group.slots {
-                    let buffer = resources.create_buffer("custom", universal_usage, &slot.data);
-                    bind_group.add_entry(slot.index, buffer.clone());
+                for slot in group.storage_slots.slots {
+                    let buffer = resources.create_buffer("custom_buffer", universal_usage, &slot.data);
+                    bind_group.set_storage_entry(slot.index, buffer.clone());
+                }
+
+                for slot in group.sampler_slots.dummy_slots {
+                    bind_group.set_sampler_entry(slot, dummy_sampler.clone());
+                }
+                for slot in group.sampler_slots.slots {
+                    bind_group.set_sampler_entry(slot.index, resources.create_sampler("custom_sampler"));
+                }
+
+                for slot in group.texture_slots.dummy_slots {
+                    bind_group.set_texture_entry(slot, dummy_texture_view.clone());
+                }
+                for slot in group.texture_slots.slots {
+                    let texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(slot.size.x as usize, slot.size.y as usize));
+                    resources.write_whole_srgba_texture_data(&texture, slot.data.as_ref());
+                    bind_group.set_texture_entry(slot.index, texture.create_view(&wgpu::TextureViewDescriptor::default()));
                 }
             });
         }
@@ -134,5 +222,34 @@ pub(crate) mod tests {
         pollster::block_on(copy_wait);
 
         output_buffer.cpu_copy().clone()
+    }
+
+    #[must_use]
+    pub(crate) fn create_checkerboard_texture_data(
+        width: u32,
+        height: u32,
+        checker_size: u32,
+    ) -> Vec<u8> {
+        assert_gt!(width, 0, "width must be greater than 0");
+        assert_gt!(height, 0, "height must be greater than 0");
+        assert_gt!(checker_size, 0, "checker_size must be greater than 0");
+
+        let mut data: Vec<u8> = Vec::with_capacity((width * height) as usize * BYTES_IN_RGBA_QUARTET);
+
+        let white = [255_u8, 255, 255, 255];
+        let black = [  0_u8,   0,   0, 255];
+
+        for y in 0..height {
+            let checker_y = y / checker_size;
+
+            for x in 0..width {
+                let checker_x = x / checker_size;
+
+                let is_white = (checker_x + checker_y) % 2 == 0;
+                data.extend_from_slice(if is_white { &white } else { &black });
+            }
+        }
+
+        data
     }
 }

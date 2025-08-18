@@ -11,7 +11,6 @@ use crate::denoiser::filter::RayTracing;
 use log::error;
 use std::rc::Rc;
 
-
 const CHANNELS_PER_PIXEL: usize = 4;
 
 #[must_use]
@@ -134,7 +133,7 @@ impl Denoiser {
     }
     
     #[must_use]
-    pub(crate) fn begin_denoise(&mut self, width: usize, height: usize) -> DenoiserExecutor {
+    pub(crate) fn begin_denoise(&'_ mut self, width: usize, height: usize) -> DenoiserExecutor<'_> {
         assert!(width > 0);
         assert!(height > 0);
 

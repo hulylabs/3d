@@ -11,6 +11,10 @@ const MATERIAL_MIRROR: i32 = 1;
 const MATERIAL_GLASS: i32 = 2;
 const MATERIAL_ISOTROPIC: i32 = 3;
 
+const TEXTURE_WRAP_MODE_REPEAT: i32 = 0;
+const TEXTURE_WRAP_MODE_CLAMP: i32 = 1;
+// const TEXTURE_WRAP_MODE_DISCARD: i32 = 2; - default behavior if the mode is none of the above
+
 const PRIMITIVE_TYPE_SDF: u32 = 1;
 const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
 
@@ -41,6 +45,9 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 
 @group(0) @binding( 0) var<uniform> uniforms : Uniforms;
 
+@group(0) @binding( 1) var atlases_sampler: sampler;
+@group(0) @binding( 2) var texture_atlas_page: texture_2d<f32>;
+
 @group(1) @binding( 0) var<storage, read_write> pixel_color_buffer: array<vec4f>;
 @group(1) @binding( 1) var<storage, read_write> object_id_buffer: array<u32>;
 @group(1) @binding( 2) var<storage, read_write> normal_buffer: array<vec4f>;
@@ -53,6 +60,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(2) @binding( 4) var<storage, read> bvh: array<BvhNode>;
 @group(2) @binding( 5) var<storage, read> bvh_inflated: array<BvhNode>;
 @group(2) @binding( 6) var<storage, read> sdf_time: array<f32>;
+@group(2) @binding( 7) var<storage, read> texture_atlases_mapping: array<AtlasMapping>;
 
 var<private> randState: u32 = 0u;
 
@@ -94,8 +102,15 @@ struct Material {
 	specular_strength: f32, // chance that a ray hitting would reflect specularly
 	roughness: f32, // diffuse strength
 	refractive_index_eta: f32, // refractive index
-	albedo_texture_uid: i32, // > 0 - texture index (1-based), < 0 - procedural texture uid, = 0 - none
+	albedo_texture_uid: i32, // > 0 - atlas r_e_g_i_o_n index (1-based), < 0 - procedural texture uid, = 0 - none
 	material_class: i32,
+}
+
+struct AtlasMapping {
+    top_left_corner_uv: vec2f,
+    size: vec2f,
+    local_position_to_texture: mat2x4<f32>,
+    wrap_mode: vec2i,
 }
 
 struct Parallelogram {
@@ -317,16 +332,23 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 	}
 
 	hitRec.t = t;
-	hitRec.global.position = quad.Q + quad.v * beta + quad.u * alpha;
-	hitRec.local.position = hitRec.global.position;
+
+    let local_position = quad.u * alpha + quad.v * beta;
+    /* To match coordinate frame of the SDFs (all of them
+    centered in kind of mass center) - so texture coordinates
+    of thin cube matches with parallelogram. */
+	hitRec.local.position = local_position - (quad.u + quad.v) * 0.5;
+	hitRec.global.position = quad.Q + local_position;
+
 	hitRec.global.normal = quad.normal;
 	hitRec.front_face = denom < 0.0;
 	if(false == hitRec.front_face) {
 		hitRec.global.normal = -hitRec.global.normal;
 	}
-
     hitRec.local.normal = hitRec.global.normal;
+
 	hitRec.material_id = quad.material_id;
+
 	return true;
 }
 
@@ -695,7 +717,6 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
         */
         const grid_step: f32 = 1e-4;
         let snapped_position = snap_to_grid(hit.position, grid_step);
-
         let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
 
         result *= procedural_texture_select(
@@ -705,8 +726,72 @@ fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, materia
             derivartives.dp_dx,
             derivartives.dp_dy
         );
+    } else if (material.albedo_texture_uid > 0) {
+        let region_index = material.albedo_texture_uid - 1;
+        let atlas_region_mapping = texture_atlases_mapping[region_index];
+        let derivartives = ray_hit_position_derivatives(ray_direction, ray_parameter, hit.normal, differentials);
+
+        let texture_sample = read_atlas(hit.position, atlas_region_mapping, derivartives);
+        result = (1.0 - texture_sample.a) * result + texture_sample.a * texture_sample.rgb;
     }
     return result;
+}
+
+@must_use
+fn read_atlas(local_space_position: vec3f, atlas_region_mapping: AtlasMapping, differentials: RayDerivatives) -> vec4f {
+    var texture_coordinate = vec4f(local_space_position, 1.0) * atlas_region_mapping.local_position_to_texture;
+    let ddx = vec4f(differentials.dp_dx, 0.0) * atlas_region_mapping.local_position_to_texture;
+    let ddy = vec4f(differentials.dp_dy, 0.0) * atlas_region_mapping.local_position_to_texture;
+
+    for (var i = 0; i < 2; i++) {
+        let coordinate = texture_coordinate[i];
+        let mode = atlas_region_mapping.wrap_mode[i];
+        let inset = pixel_half_size(texture_atlas_page, ddx, ddy)[i];
+        let min_edge = inset/atlas_region_mapping.size[i];
+        let max_edge = 1.0 - inset/atlas_region_mapping.size[i];
+        if (TEXTURE_WRAP_MODE_REPEAT == mode) {
+            texture_coordinate[i] = fract(coordinate);
+        } else if (TEXTURE_WRAP_MODE_CLAMP == mode) {
+            texture_coordinate[i] = clamp(coordinate, min_edge, max_edge);
+        } else {
+            if (coordinate < min_edge || coordinate > max_edge) {
+                return vec4f(0.0);
+            }
+        }
+    }
+
+    let uv = atlas_region_mapping.top_left_corner_uv + texture_coordinate * atlas_region_mapping.size;
+    let texture_sample = textureSampleGrad(texture_atlas_page, atlases_sampler, uv, ddx, ddy);
+
+    return texture_sample;
+}
+
+@must_use
+fn calculate_mip_level(target_texture: texture_2d<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> u32 {
+    let texture_size = vec2<f32>(textureDimensions(target_texture, 0));
+
+    // uv gradients -> texel gradients
+    let ddx_texel = ddx * texture_size;
+    let ddy_texel = ddy * texture_size;
+
+    // maximum change per pixel
+    let delta_max_sqr = max(length(ddx_texel), length(ddy_texel));
+
+    if (delta_max_sqr <= 0.0) {
+        return 0;
+    }
+
+    // calculate mip level using the same formula as GPU hardware
+    let mip_level = u32(0.5 * log2(delta_max_sqr));
+
+    return clamp(mip_level, 0, textureNumLevels(target_texture) - 1);
+}
+
+@must_use
+fn pixel_half_size(target_texture: texture_2d<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> vec2f {
+   let mip_level = calculate_mip_level(target_texture, ddx, ddy);
+   let mip_size = textureDimensions(target_texture, mip_level);
+   return 0.5 / vec2<f32>(mip_size);
 }
 
 fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {

@@ -95,7 +95,7 @@ impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
     }
 
     #[must_use]
-    fn parameters(frame_buffer_size: FrameBufferSize, usage: BufferUsages, label: &str) -> FrameBufferLayerParameters {
+    fn parameters(frame_buffer_size: FrameBufferSize, usage: BufferUsages, label: &str) -> FrameBufferLayerParameters<'_> {
         FrameBufferLayerParametersBuilder::new(usage)
             .label(label)
             .frame_buffer_size(frame_buffer_size)
