@@ -26,7 +26,7 @@ impl ColorBufferEvaluationStrategy {
     }
     
     #[must_use]
-    pub(super) fn pipeline(&self) -> Ref<ComputePipeline> {
+    pub(super) fn pipeline(&self) -> Ref<'_, ComputePipeline> {
         self.ray_tracing_pipeline.borrow()
     }
     #[must_use]

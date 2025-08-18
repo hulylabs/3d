@@ -51,7 +51,7 @@ use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
 use anyhow::anyhow;
 use library::container::texture_atlas_page_composer::{AtlasRegionUid, TextureAtlasPageComposer};
-use library::material::atlas_region_mapping::{AtlasRegionMappingBuilder, OutOfRegionMode};
+use library::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
 use library::utils::bitmap_utils::{BitmapSize, ImmutableBitmapReference};
 
 const CONTENT_ROOT_FOLDER_NAME: &str = "assets";
@@ -353,7 +353,7 @@ impl TechWorldMaterials {
             let builder = AtlasRegionMappingBuilder::new()
                 .local_position_to_texture_u(Vector4::new(1.0, 0.0, 0.0, 0.5))
                 .local_position_to_texture_v(Vector4::new(0.0, -1.0, 0.0, 0.5))
-                .out_of_region_mode([OutOfRegionMode::Repeat, OutOfRegionMode::Discard])
+                .wrap_mode([WrapMode::Repeat, WrapMode::Discard])
                 ;
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_checkerboard_large, builder, &mut properties)
@@ -364,10 +364,8 @@ impl TechWorldMaterials {
         let huly_icon_above_blue = {
             let mut properties = MaterialProperties::new().with_albedo(0.0, 0.5, 3.0);
             let builder = AtlasRegionMappingBuilder::new()
-                .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.0))
-                .local_position_to_texture_v(Vector4::new(0.0, -3.0, 0.0, 1.0))
-                // .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.0))
-                // .local_position_to_texture_v(Vector4::new(0.0, 3.0, 0.0, 0.0))
+                .local_position_to_texture_u(Vector4::new(3.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -3.0, 0.0, 0.5))
                 ;
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_huly, builder, &mut properties)
@@ -380,7 +378,7 @@ impl TechWorldMaterials {
             let builder = AtlasRegionMappingBuilder::new()
                 .local_position_to_texture_u(Vector4::new(1.0, 0.0, 0.0, 0.0))
                 .local_position_to_texture_v(Vector4::new(0.0, 1.0, 0.0, 0.0))
-                .out_of_region_mode([OutOfRegionMode::Clamp, OutOfRegionMode::Clamp])
+                .wrap_mode([WrapMode::Clamp, WrapMode::Clamp])
                 ;
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_rect_grid, builder, &mut properties)
@@ -393,7 +391,7 @@ impl TechWorldMaterials {
             let builder = AtlasRegionMappingBuilder::new()
                 .local_position_to_texture_u(Vector4::new(0.0, 4.0, 0.0, 0.0))
                 .local_position_to_texture_v(Vector4::new(0.0, 0.0, 4.0, 0.0))
-                .out_of_region_mode([OutOfRegionMode::Repeat, OutOfRegionMode::Repeat])
+                .wrap_mode([WrapMode::Repeat, WrapMode::Repeat])
                 ;
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_checkerboard_small, builder, &mut properties)

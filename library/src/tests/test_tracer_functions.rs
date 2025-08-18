@@ -129,7 +129,7 @@ mod tests {
         struct AtlasMapping {
             top_left_corner_and_size: PodVector,
             local_position_to_texture: [PodVector; 2],
-            out_of_region_mode: [i32; 4],
+            wrap_mode: [i32; 4],
         }
 
         #[repr(C)] #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -157,7 +157,7 @@ mod tests {
             top_left_corner_and_size: PodVector::new_full(0.0, 0.0, 1.0, 1.0),
             // x -> u, y -> v
             local_position_to_texture: xu_yv_mapping,
-            out_of_region_mode: [0, 0, 0, 0],
+            wrap_mode: [0, 0, 0, 0],
         };
         let whole_texture_zu_xv = AtlasMapping {
             // whole texture
@@ -167,7 +167,7 @@ mod tests {
                 PodVector::new_full(0.0, 0.0, 1.0, 0.0),
                 PodVector::new_full(1.0, 0.0, 0.0, 0.0),
             ],
-            out_of_region_mode: [0, 0, 0, 0],
+            wrap_mode: [0, 0, 0, 0],
         };
 
         /*
@@ -186,9 +186,9 @@ mod tests {
         let a_region = PodVector::new_full(pixel_size.x * 1.0, pixel_size.y * 0.0, pixel_size.x * 2.0, pixel_size.y * 2.0);
         let b_region = PodVector::new_full(pixel_size.x * 5.0, pixel_size.y * 1.0, pixel_size.x * 2.0, pixel_size.y * 3.0);
 
-        const TEXTURE_OUT_OF_REGION_MODE_REPEAT: i32 = 0;
-        const TEXTURE_OUT_OF_REGION_MODE_CLAMP: i32 = 1;
-        const TEXTURE_OUT_OF_REGION_MODE_DISCARD: i32 = 2;
+        const TEXTURE_WRAP_MODE_REPEAT: i32 = 0;
+        const TEXTURE_WRAP_MODE_CLAMP: i32 = 1;
+        const TEXTURE_WRAP_MODE_DISCARD: i32 = 2;
 
         let test_input = [
 
@@ -234,7 +234,7 @@ mod tests {
                         PodVector::new_full(1.0, 0.0, 0.0, 0.5),
                         PodVector::new_full(0.0, 1.0, 0.0, 0.0),
                     ],
-                    out_of_region_mode: [0, 0, 0, 0],
+                    wrap_mode: [0, 0, 0, 0],
                 },
                 differentials: zero_differentials
             },
@@ -249,19 +249,19 @@ mod tests {
                         PodVector::new_full(1.0, 0.0, 0.0, 0.0),
                         PodVector::new_full(0.0, 1.0, 0.0, -2.0/3.0),
                     ],
-                    out_of_region_mode: [0, 0, 0, 0],
+                    wrap_mode: [0, 0, 0, 0],
                 },
                 differentials: zero_differentials
             },
 
-            // out_of_region_mode check - clamp
+            // wrap_mode check - clamp
 
             AtlasReadRequest{
                 local_space_position: PodVector::new(0.25, -(1.0/3.0)/2.0, 0.0),
                 atlas_region_mapping: AtlasMapping {
                     top_left_corner_and_size: b_region,
                     local_position_to_texture: xu_yv_mapping,
-                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_REPEAT, TEXTURE_OUT_OF_REGION_MODE_CLAMP, 0, 0],
+                    wrap_mode: [TEXTURE_WRAP_MODE_REPEAT, TEXTURE_WRAP_MODE_CLAMP, 0, 0],
                 },
                 differentials: zero_differentials
             },
@@ -271,19 +271,19 @@ mod tests {
                 atlas_region_mapping: AtlasMapping {
                     top_left_corner_and_size: b_region,
                     local_position_to_texture: xu_yv_mapping,
-                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_CLAMP, TEXTURE_OUT_OF_REGION_MODE_REPEAT, 0, 0],
+                    wrap_mode: [TEXTURE_WRAP_MODE_CLAMP, TEXTURE_WRAP_MODE_REPEAT, 0, 0],
                 },
                 differentials: zero_differentials
             },
 
-            // out_of_region_mode check - discard
+            // wrap_mode check - discard
 
             AtlasReadRequest{
                 local_space_position: PodVector::new(-0.25, (1.0/3.0)/2.0, 0.0),
                 atlas_region_mapping: AtlasMapping {
                     top_left_corner_and_size: b_region,
                     local_position_to_texture: xu_yv_mapping,
-                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_DISCARD, TEXTURE_OUT_OF_REGION_MODE_CLAMP, 0, 0],
+                    wrap_mode: [TEXTURE_WRAP_MODE_DISCARD, TEXTURE_WRAP_MODE_CLAMP, 0, 0],
                 },
                 differentials: zero_differentials
             },
@@ -293,7 +293,7 @@ mod tests {
                 atlas_region_mapping: AtlasMapping {
                     top_left_corner_and_size: b_region,
                     local_position_to_texture: xu_yv_mapping,
-                    out_of_region_mode: [TEXTURE_OUT_OF_REGION_MODE_CLAMP, TEXTURE_OUT_OF_REGION_MODE_DISCARD, 0, 0],
+                    wrap_mode: [TEXTURE_WRAP_MODE_CLAMP, TEXTURE_WRAP_MODE_DISCARD, 0, 0],
                 },
                 differentials: zero_differentials
             },
@@ -308,10 +308,10 @@ mod tests {
             // regions mapping
             PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
             PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
-            // out_of_region_mode check - clamp
+            // wrap_mode check - clamp
             PodVector {x: 1.0, y: 1.0, z: 1.0, w: 1.0,},
             PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
-            // out_of_region_mode check - discard
+            // wrap check - discard
             PodVector {x: 0.0, y: 0.0, z: 0.0, w: 0.0,},
             PodVector {x: 0.0, y: 0.0, z: 0.0, w: 0.0,},
         ];

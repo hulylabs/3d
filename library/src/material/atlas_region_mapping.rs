@@ -6,7 +6,7 @@ use cgmath::Vector4;
 
 #[repr(i32)]
 #[derive(Debug, Copy, Clone)]
-pub enum OutOfRegionMode {
+pub enum WrapMode {
     Repeat = 0,
     Clamp = 1,
     Discard = 2,
@@ -17,13 +17,13 @@ pub(crate) struct AtlasRegionMapping {
     area: TextureRegion,
     local_position_to_texture_u: Vector4<f32>,
     local_position_to_texture_v: Vector4<f32>,
-    out_of_region_mode: [OutOfRegionMode; COMPONENTS_IN_TEXTURE_COORDINATE],
+    wrap_mode: [WrapMode; COMPONENTS_IN_TEXTURE_COORDINATE],
 }
 
 pub struct AtlasRegionMappingBuilder {
     local_position_to_texture_u: Vector4<f32>,
     local_position_to_texture_v: Vector4<f32>,
-    out_of_region_mode: [OutOfRegionMode; COMPONENTS_IN_TEXTURE_COORDINATE],
+    wrap_mode: [WrapMode; COMPONENTS_IN_TEXTURE_COORDINATE],
 }
 
 impl Default for AtlasRegionMappingBuilder {
@@ -37,7 +37,7 @@ impl AtlasRegionMappingBuilder {
         Self {
             local_position_to_texture_u: Vector4::new(1.0, 0.0, 0.0, 0.0),
             local_position_to_texture_v: Vector4::new(0.0, 1.0, 0.0, 0.0),
-            out_of_region_mode: [OutOfRegionMode::Discard; COMPONENTS_IN_TEXTURE_COORDINATE],
+            wrap_mode: [WrapMode::Discard; COMPONENTS_IN_TEXTURE_COORDINATE],
         }
     }
 
@@ -51,8 +51,8 @@ impl AtlasRegionMappingBuilder {
         self
     }
 
-    pub fn out_of_region_mode(mut self, mode: [OutOfRegionMode; COMPONENTS_IN_TEXTURE_COORDINATE]) -> Self {
-        self.out_of_region_mode = mode;
+    pub fn wrap_mode(mut self, mode: [WrapMode; COMPONENTS_IN_TEXTURE_COORDINATE]) -> Self {
+        self.wrap_mode = mode;
         self
     }
 
@@ -62,7 +62,7 @@ impl AtlasRegionMappingBuilder {
             area,
             local_position_to_texture_u: self.local_position_to_texture_u,
             local_position_to_texture_v: self.local_position_to_texture_v,
-            out_of_region_mode: self.out_of_region_mode,
+            wrap_mode: self.wrap_mode,
         }
     }
 }
@@ -95,8 +95,8 @@ impl GpuSerializable for AtlasRegionMapping {
         );
 
         container.write_quartet(|writer| {
-            writer.write_signed(self.out_of_region_mode[0] as i32);
-            writer.write_signed(self.out_of_region_mode[1] as i32);
+            writer.write_signed(self.wrap_mode[0] as i32);
+            writer.write_signed(self.wrap_mode[1] as i32);
         });
     }
 }
@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(f32::from_bits(serialized[3]), size.y);
     }
 
-    fn assert_edge_mode(serialized: &[u32], u: OutOfRegionMode, v: OutOfRegionMode,) {
+    fn assert_edge_mode(serialized: &[u32], u: WrapMode, v: WrapMode,) {
         assert_eq!(i32::from_ne_bytes(serialized[12].to_ne_bytes()), u as i32);
         assert_eq!(i32::from_ne_bytes(serialized[13].to_ne_bytes()), v as i32);
     }
@@ -152,7 +152,7 @@ mod tests {
 
         assert_region_area(expected_top_left, expected_size, serialized);
         assert_texture_coordinates_mapping(serialized, Vector4::new(1.0, 0.0, 0.0, 0.0), Vector4::new(0.0, 1.0, 0.0, 0.0));
-        assert_edge_mode(serialized, OutOfRegionMode::Discard, OutOfRegionMode::Discard);
+        assert_edge_mode(serialized, WrapMode::Discard, WrapMode::Discard);
     }
 
     #[test]
@@ -172,15 +172,15 @@ mod tests {
         let serialized: &[u32] = cast_slice(&container.backend());
 
         assert_texture_coordinates_mapping(serialized, expected_u_mapping, expected_v_mapping);
-        assert_edge_mode(serialized, OutOfRegionMode::Discard, OutOfRegionMode::Discard);
+        assert_edge_mode(serialized, WrapMode::Discard, WrapMode::Discard);
     }
 
     #[rstest]
-    #[case(OutOfRegionMode::Repeat, OutOfRegionMode::Clamp)]
-    #[case(OutOfRegionMode::Clamp, OutOfRegionMode::Repeat)]
-    fn test_builder_with_out_of_region_modes(#[case] u: OutOfRegionMode, #[case] v: OutOfRegionMode,) {
+    #[case(WrapMode::Repeat, WrapMode::Clamp)]
+    #[case(WrapMode::Clamp, WrapMode::Repeat)]
+    fn test_builder_with_wrap_modes(#[case] u: WrapMode, #[case] v: WrapMode,) {
         let system_under_test = AtlasRegionMappingBuilder::new()
-            .out_of_region_mode([u, v])
+            .wrap_mode([u, v])
             .build(TextureRegion::new(
                 Vector2::new(0.0, 0.0),
                 Vector2::new(1.0, 1.0)
@@ -198,13 +198,13 @@ mod tests {
         let expected_size = Vector2::new(0.3, 0.4);
         let expected_u_mapping = Vector4::new(2.0, 0.0, 0.0, 0.0);
         let expected_v_mapping = Vector4::new(0.0, 3.0, 0.0, 0.0);
-        let expected_u_out_of_edge_mode = OutOfRegionMode::Repeat;
-        let expected_v_out_of_edge_mode = OutOfRegionMode::Clamp;
+        let expected_u_out_of_edge_mode = WrapMode::Repeat;
+        let expected_v_out_of_edge_mode = WrapMode::Clamp;
 
         let system_under_test = AtlasRegionMappingBuilder::new()
             .local_position_to_texture_u(expected_u_mapping)
             .local_position_to_texture_v(expected_v_mapping)
-            .out_of_region_mode([expected_u_out_of_edge_mode, expected_v_out_of_edge_mode])
+            .wrap_mode([expected_u_out_of_edge_mode, expected_v_out_of_edge_mode])
             .build(TextureRegion::new(
                 expected_top_left,
                 expected_size

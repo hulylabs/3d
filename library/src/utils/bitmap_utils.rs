@@ -78,8 +78,8 @@ fn copy_bitmap_region(
     source_texel: Vector2<usize>,
     copy_size: BitmapSize,
 ) {
-    assert!(source.size.inside(source_texel.x + copy_size.width, source_texel.y + copy_size.height), "source region exceeds source size");
-    assert!(destination.size.inside(destination_texel.x + copy_size.width, destination_texel.y + copy_size.height), "destination region exceeds destination size");
+    assert!(source.size.inside(source_texel.x + copy_size.width - 1, source_texel.y + copy_size.height - 1), "source region exceeds source size");
+    assert!(destination.size.inside(destination_texel.x + copy_size.width - 1, destination_texel.y + copy_size.height - 1), "destination region exceeds destination size");
 
     let bytes_per_pixel = BYTES_IN_RGBA_QUARTET;
 
@@ -454,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "source region exceeds source width")]
+    #[should_panic(expected = "source region exceeds source size")]
     fn test_write_sub_bitmap_column_source_out_of_bounds() {
         let source_size = BitmapSize { width: 2, height: 2 };
         let source_data = allocate_bitmap_of_size(source_size, 0u8);
@@ -468,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "destination region exceeds destination width")]
+    #[should_panic(expected = "destination region exceeds destination size")]
     fn test_write_sub_bitmap_column_dest_out_of_bounds() {
         let source_size = BitmapSize { width: 2, height: 2 };
         let source_data = allocate_bitmap_of_size(source_size, 0u8);
@@ -482,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "source region exceeds source height")]
+    #[should_panic(expected = "source region exceeds source size")]
     fn test_write_sub_bitmap_row_source_out_of_bounds() {
         let source_size = BitmapSize { width: 2, height: 2 };
         let source_data = allocate_bitmap_of_size(source_size, 0u8);
@@ -496,7 +496,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "destination region exceeds destination height")]
+    #[should_panic(expected = "destination region exceeds destination size")]
     fn test_write_sub_bitmap_row_dest_out_of_bounds() {
         let source_size = BitmapSize { width: 2, height: 2 };
         let source_data = allocate_bitmap_of_size(source_size, 0u8);

@@ -64,12 +64,11 @@ impl Sandbox {
     
     pub(super) fn on_mouse_move(&mut self, position: PhysicalPosition<f64>) {
         let (current_x, current_y) = (position.x, position.y);
-        if self.left_mouse_down {
-            if let Some((last_x, _last_y)) = self.last_cursor_position {
+        if self.left_mouse_down
+            && let Some((last_x, _last_y)) = self.last_cursor_position {
                 let delta_x = current_x - last_x;
                 self.engine.camera().rotate_horizontal(delta_x);
             }
-        }
         self.last_cursor_position = Some((current_x, current_y));
     }
 
@@ -93,8 +92,8 @@ impl Sandbox {
             }
         } else if MouseButton::Left == button {
             self.left_mouse_down = ElementState::Pressed == state;
-            if ElementState::Pressed == state {
-                if let Some((last_x, last_y)) = self.last_cursor_position {
+            if ElementState::Pressed == state
+                && let Some((last_x, last_y)) = self.last_cursor_position {
                     let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
                     let scene = self.engine.objects();
                     
@@ -137,21 +136,18 @@ impl Sandbox {
                         }
                     }
                 }
-            }
-        } else if MouseButton::Middle == button && state == ElementState::Pressed {
-            if let Some((last_x, last_y)) = self.last_cursor_position {
+        } else if MouseButton::Middle == button && state == ElementState::Pressed
+            && let Some((last_x, last_y)) = self.last_cursor_position {
                 let clicked_object_or_none = self.engine.object_in_pixel(last_x as u32, last_y as u32);
                 if let Some(clicked_object) = clicked_object_or_none {
                     self.engine.objects().delete(clicked_object);
 
-                    if let Some(selected_object) = self.selected_object {
-                        if selected_object.uid == clicked_object {
+                    if let Some(selected_object) = self.selected_object
+                        && selected_object.uid == clicked_object {
                             self.selected_object = None;
                         }
-                    }
                 }
             }
-        }
     }
     
     pub(super) fn on_mouse_wheel(&mut self, delta: f64) {

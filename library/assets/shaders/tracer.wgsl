@@ -11,9 +11,9 @@ const MATERIAL_MIRROR: i32 = 1;
 const MATERIAL_GLASS: i32 = 2;
 const MATERIAL_ISOTROPIC: i32 = 3;
 
-const TEXTURE_OUT_OF_REGION_MODE_REPEAT: i32 = 0;
-const TEXTURE_OUT_OF_REGION_MODE_CLAMP: i32 = 1;
-// const TEXTURE_OUT_OF_REGION_MODE_DISCARD: i32 = 2; - default behavior if the mode is none of the above
+const TEXTURE_WRAP_MODE_REPEAT: i32 = 0;
+const TEXTURE_WRAP_MODE_CLAMP: i32 = 1;
+// const TEXTURE_WRAP_MODE_DISCARD: i32 = 2; - default behavior if the mode is none of the above
 
 const PRIMITIVE_TYPE_SDF: u32 = 1;
 const PRIMITIVE_TYPE_TRIANGLE: u32 = 2;
@@ -110,7 +110,7 @@ struct AtlasMapping {
     top_left_corner_uv: vec2f,
     size: vec2f,
     local_position_to_texture: mat2x4<f32>,
-    out_of_region_mode: vec2i,
+    wrap_mode: vec2i,
 }
 
 struct Parallelogram {
@@ -333,8 +333,12 @@ fn hit_quad(quad : Parallelogram, tmin : f32, tmax : f32, ray : Ray) -> bool {
 
 	hitRec.t = t;
 
-	hitRec.local.position = quad.u * alpha + quad.v * beta;
-	hitRec.global.position = quad.Q + hitRec.local.position;
+    let local_position = quad.u * alpha + quad.v * beta;
+    /* To match coordinate frame of the SDFs (all of them
+    centered in kind of mass center) - so texture coordinates
+    of thin cube matches with parallelogram. */
+	hitRec.local.position = local_position - (quad.u + quad.v) * 0.5;
+	hitRec.global.position = quad.Q + local_position;
 
 	hitRec.global.normal = quad.normal;
 	hitRec.front_face = denom < 0.0;
@@ -741,13 +745,13 @@ fn read_atlas(local_space_position: vec3f, atlas_region_mapping: AtlasMapping, d
 
     for (var i = 0; i < 2; i++) {
         let coordinate = texture_coordinate[i];
-        let mode = atlas_region_mapping.out_of_region_mode[i];
+        let mode = atlas_region_mapping.wrap_mode[i];
         let inset = pixel_half_size(texture_atlas_page, ddx, ddy)[i];
         let min_edge = inset/atlas_region_mapping.size[i];
         let max_edge = 1.0 - inset/atlas_region_mapping.size[i];
-        if (TEXTURE_OUT_OF_REGION_MODE_REPEAT == mode) {
+        if (TEXTURE_WRAP_MODE_REPEAT == mode) {
             texture_coordinate[i] = fract(coordinate);
-        } else if (TEXTURE_OUT_OF_REGION_MODE_CLAMP == mode) {
+        } else if (TEXTURE_WRAP_MODE_CLAMP == mode) {
             texture_coordinate[i] = clamp(coordinate, min_edge, max_edge);
         } else {
             if (coordinate < min_edge || coordinate > max_edge) {

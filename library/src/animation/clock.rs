@@ -26,11 +26,10 @@ impl Clock {
     pub(super) fn local_time(&self, global_time: Instant) -> f64 {
         let local_forward_time = self.local_forward_time(global_time);
 
-        if let Some(ttl) = self.parameters.get_time_to_live() {
-            if ttl.reverse() {
+        if let Some(ttl) = self.parameters.get_time_to_live()
+            && ttl.reverse() {
                 return (ttl.span() + self.parameters.get_birth_time_offset()).as_secs_f64() - local_forward_time;
             }
-        }
 
         local_forward_time
     }
@@ -39,15 +38,14 @@ impl Clock {
     fn local_forward_time(&self, global_time: Instant) -> f64 {
         let global_elapsed = global_time.duration_since(self.global_clock_start);
 
-        if let Some(time_to_live) = self.parameters.get_time_to_live() {
-            if global_elapsed > time_to_live.span() {
+        if let Some(time_to_live) = self.parameters.get_time_to_live()
+            && global_elapsed > time_to_live.span() {
                 return match self.parameters.get_end_action() {
                     EndActionKind::TeleportToZero => 0.0,
                     EndActionKind::LeaveAsIs => self.evaluate_time_point(time_to_live.span()),
                     EndActionKind::TeleportToEnd => time_to_live.span().as_secs_f64() * self.parameters.get_playback_speed_multiplier(),
                 };
             }
-        }
 
         self.evaluate_time_point(global_elapsed)
     }

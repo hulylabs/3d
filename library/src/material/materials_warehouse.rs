@@ -31,11 +31,10 @@ impl MaterialsWarehouse {
     #[must_use]
     pub(crate) fn animated(&self, index: MaterialIndex) -> bool {
         let albedo_texture = self.materials[index.0].albedo_texture();
-        if let TextureReference::Procedural(id) = albedo_texture {
-            if let Some(textures) = &self.procedural_textures {
+        if let TextureReference::Procedural(id) = albedo_texture
+            && let Some(textures) = &self.procedural_textures {
                 return textures.animated(id);
             }
-        }
         false
     }
 

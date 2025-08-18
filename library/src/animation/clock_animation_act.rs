@@ -86,11 +86,10 @@ impl ClockAnimationAct<PhaseConstruction> {
 
     #[must_use]
     pub fn make(self) -> ClockAnimationAct<PhaseAlive> {
-        if let Some(ttl) = self.time_to_live {
-            if ttl.direction == TimeDirection::Backward {
+        if let Some(ttl) = self.time_to_live
+            && ttl.direction == TimeDirection::Backward {
                 assert_gt!(ttl.span, self.birth_time_offset)
             }
-        }
         
         ClockAnimationAct::<PhaseAlive> {
             birth_time_offset: self.birth_time_offset,

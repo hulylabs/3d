@@ -333,7 +333,7 @@ impl VisualObjects {
         result
     }
     
-    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<IdentifiedObject> {
+    fn sorted_of_a_kind(&self, desired_kind: usize, expected_count: usize) -> Vec<IdentifiedObject<'_>> {
         let mut sorted = Vec::with_capacity(expected_count);
         for (key, object) in self.objects.iter() {
             if object.data_kind_uid() == desired_kind {
