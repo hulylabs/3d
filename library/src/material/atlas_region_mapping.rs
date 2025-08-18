@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(i32::from_ne_bytes(serialized[13].to_ne_bytes()), v as i32);
     }
 
-    fn assert_texture_coordinates_mapping(serialized: &[u32], u: Vector4<f32>, v:Vector4<f32>, ) {
+    fn assert_texture_coordinates_mapping(serialized: &[u32], u: Vector4<f32>, v: Vector4<f32>, ) {
         assert_eq!(f32::from_bits(serialized[4]), u.x);
         assert_eq!(f32::from_bits(serialized[5]), u.y);
         assert_eq!(f32::from_bits(serialized[6]), u.z);

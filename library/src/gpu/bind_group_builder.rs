@@ -45,7 +45,7 @@ impl<'a> BindGroupBuilder<'a> {
 
     pub(crate) fn set_texture_entry(&mut self, slot: u32, sampler: TextureView) -> &mut Self {
         assert_eq!(self.accumulated_storage_entries.contains_key(&slot), false, "slot already occupied by a storage buffer");
-        assert_eq!(self.accumulated_sampler_entries.contains_key(&slot), false, "slot already occupied by a sample");
+        assert_eq!(self.accumulated_sampler_entries.contains_key(&slot), false, "slot already occupied by a sampler");
 
         let previous = self.accumulated_texture_entries.insert(slot, sampler);
         assert!(previous.is_none(), "slot {slot} already set");

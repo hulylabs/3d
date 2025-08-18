@@ -67,7 +67,7 @@ pub(super) struct TechWorldBitmapTextures {
     bitmap_checkerboard_small: AtlasRegionUid,
     bitmap_checkerboard_large: AtlasRegionUid,
     bitmap_huly: AtlasRegionUid,
-    //bitmap_huly_2: AtlasRegionUid,
+    bitmap_huly_2: AtlasRegionUid,
     bitmap_rect_grid: AtlasRegionUid,
 }
 
@@ -76,7 +76,7 @@ impl TechWorldBitmapTextures {
         let bitmap_checkerboard_small= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_small.png", composer)?;
         let bitmap_checkerboard_large= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_large.png", composer)?;
         let bitmap_huly= TechWorldBitmapTextures::load_bitmap("bitmap_huly.png", composer)?;
-        //let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
+        let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
         let bitmap_rect_grid = TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
 
         composer.save_page_into("textures_atlas.png").expect("failed to save texture atlas page");
@@ -85,7 +85,7 @@ impl TechWorldBitmapTextures {
             bitmap_checkerboard_small,
             bitmap_checkerboard_large,
             bitmap_huly,
-            //bitmap_huly_2,
+            bitmap_huly_2,
             bitmap_rect_grid,
         })
     }
@@ -340,6 +340,7 @@ pub(super) struct TechWorldMaterials {
     white_chrome_mirror: MaterialIndex,
     large_grid_above_white: MaterialIndex,
     huly_icon_above_blue: MaterialIndex,
+    huly_icon_2_vertically_repeated: MaterialIndex,
     rect_grid_bitmap_above_yellow: MaterialIndex,
     checkerboard_small: MaterialIndex,
 }
@@ -370,6 +371,19 @@ impl TechWorldMaterials {
             scene.mutable_texture_atlas_page_composer()
                 .map_into(bitmap_textures.bitmap_huly, builder, &mut properties)
                 .expect("failed to make 'bitmap_huly' atlas page mapping");
+            scene.materials_mutable().deref_mut().add(&properties)
+        };
+
+        let huly_icon_2_vertically_repeated = {
+            let mut properties = MaterialProperties::new().with_albedo(2.0, 0.5, 0.0);
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(2.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -2.0, 0.0, 0.5))
+                .wrap_mode([WrapMode::Discard, WrapMode::Repeat])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(bitmap_textures.bitmap_huly_2, builder, &mut properties)
+                .expect("failed to make 'bitmap_huly_2' atlas page mapping");
             scene.materials_mutable().deref_mut().add(&properties)
         };
 
@@ -541,6 +555,7 @@ impl TechWorldMaterials {
             white_chrome_mirror,
             large_grid_above_white,
             huly_icon_above_blue,
+            huly_icon_2_vertically_repeated,
             rect_grid_bitmap_above_yellow,
             checkerboard_small,
         }
@@ -1057,6 +1072,12 @@ impl TechWorld {
             &(Affine::from_translation(Vector::new(0.7, -0.1, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
             self.sdf_classes.sphere.name(),
             self.materials.checkerboard_small
+        );
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.7, 0.1, -0.7)) * Affine::from_nonuniform_scale(0.1, 0.1, 0.1)),
+            self.sdf_classes.round_cone.name(),
+            self.materials.huly_icon_2_vertically_repeated
         );
     }
 

@@ -6,7 +6,7 @@ pub(crate) struct UidGenerator<T> {
 
 impl<T> UidGenerator<T>
 where
-    T: From<u32> + Copy, // or Clone, depending on needs
+    T: From<u32> + Copy,
 {
     #[must_use]
     pub(crate) fn new() -> Self {
