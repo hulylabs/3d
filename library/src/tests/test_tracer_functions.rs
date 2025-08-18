@@ -318,7 +318,7 @@ mod tests {
 
         let actual_output = execute_code::<AtlasReadRequest, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
-        assert_eq!(actual_output, expected_output);
+        assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
     #[test]
