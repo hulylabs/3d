@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::rc::Rc;
 use wgpu::{BindGroup, BindingResource, Buffer, Sampler, TextureView};
 

@@ -1,4 +1,4 @@
-﻿use crate::geometry::axis::Axis;
+use crate::geometry::axis::Axis;
 use crate::shader::conventions;
 
 pub struct Swizzle {

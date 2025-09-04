@@ -1,4 +1,4 @@
-﻿use crate::gpu::resources::Resources;
+use crate::gpu::resources::Resources;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use std::rc::Rc;
 use bytemuck::Pod;

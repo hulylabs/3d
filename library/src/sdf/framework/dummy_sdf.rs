@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 pub(crate) mod tests {
     use std::rc::Rc;
     use crate::geometry::aabb::Aabb;

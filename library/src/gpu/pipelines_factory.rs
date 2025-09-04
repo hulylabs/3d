@@ -1,4 +1,4 @@
-﻿use crate::gpu::context::Context;
+use crate::gpu::context::Context;
 use crate::gpu::pipeline_code::{PipelineCode, ShaderHash};
 use bitflags::bitflags;
 use derive_more::Display;

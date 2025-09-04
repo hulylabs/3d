@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::geometry::alias::Point;
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::shader::formatting_utils::format_scalar;

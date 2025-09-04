@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::axis::Axis;
 use crate::geometry::transform::{TransformableCoordinate, Transformation};
 use crate::geometry::vertex::Vertex;

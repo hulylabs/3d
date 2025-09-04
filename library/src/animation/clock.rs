@@ -1,4 +1,4 @@
-﻿use crate::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, PhaseAlive, WrapKind};
+use crate::animation::clock_animation_act::{ClockAnimationAct, EndActionKind, PhaseAlive, WrapKind};
 use std::time::{Duration, Instant};
 
 pub(super) struct Clock {

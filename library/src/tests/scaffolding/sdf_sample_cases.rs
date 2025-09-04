@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 pub(crate) mod tests {
     use test_context::{test_context, TestContext};
     use crate::geometry::alias::Point;

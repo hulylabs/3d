@@ -1,4 +1,4 @@
-﻿use crate::animation::clock::Clock;
+use crate::animation::clock::Clock;
 use crate::animation::clock_animation_act::{ClockAnimationAct, PhaseAlive};
 use crate::objects::common_properties::ObjectUid;
 use std::collections::HashMap;

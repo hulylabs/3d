@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::framework::animation_undo_generator::AnimationUndoGenerator;
 use crate::sdf::framework::sdf_registrator::SdfRegistrator;

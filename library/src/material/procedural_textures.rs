@@ -1,4 +1,4 @@
-﻿use crate::material::procedural_texture_index::ProceduralTextureUid;
+use crate::material::procedural_texture_index::ProceduralTextureUid;
 use crate::material::texture_procedural_3d::TextureProcedural3D;
 use crate::material::texture_shader_code::{write_texture_3d_code, write_texture_3d_selection, write_texture_3d_selection_function_opening};
 use crate::shader::code::{Generic, ShaderCode};

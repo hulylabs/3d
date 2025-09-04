@@ -1,4 +1,4 @@
-﻿use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
+use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
 use bytemuck::{Pod, Zeroable};
 use cgmath::AbsDiffEq;
 use std::fmt::{Display, Formatter, };

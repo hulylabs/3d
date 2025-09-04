@@ -1,4 +1,4 @@
-﻿use crate::sdf::framework::named_sdf::UniqueSdfClassName;
+use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 use crate::shader::function_name::FunctionName;
 
 impl From<&UniqueSdfClassName> for FunctionName {

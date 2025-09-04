@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 pub(crate) mod tests {
     use std::fmt::{Display, Write};
     use crate::geometry::alias::Point;

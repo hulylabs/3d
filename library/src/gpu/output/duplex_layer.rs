@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::frame_buffer_layer::{FrameBufferLayer, SupportUpdateFromCpu};
 use bytemuck::{AnyBitPattern, Pod};
 use std::rc::Rc;

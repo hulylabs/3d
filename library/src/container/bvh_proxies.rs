@@ -1,4 +1,4 @@
-﻿use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
+use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::geometry::aabb::Aabb;
 use crate::objects::triangle::Triangle;
 

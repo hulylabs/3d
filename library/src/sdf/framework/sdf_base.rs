@@ -1,4 +1,4 @@
-﻿use std::rc::Rc;
+use std::rc::Rc;
 use crate::geometry::aabb::Aabb;
 use crate::sdf::framework::stack::Stack;
 use crate::shader::code::{FunctionBody, ShaderCode};

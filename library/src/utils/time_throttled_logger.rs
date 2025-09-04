@@ -1,4 +1,4 @@
-﻿use std::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 use log::info;
 
 pub(crate) struct TimeThrottledInfoLogger {

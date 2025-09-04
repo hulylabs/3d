@@ -1,4 +1,4 @@
-﻿#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MaterialIndex(pub usize);
 
 impl From<usize> for MaterialIndex {

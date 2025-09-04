@@ -1,4 +1,4 @@
-﻿use crate::material::atlas_region_mapping::AtlasRegionMappingBuilder;
+use crate::material::atlas_region_mapping::AtlasRegionMappingBuilder;
 use crate::material::material_properties::MaterialProperties;
 use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
 use crate::material::texture_reference::TextureReference;
@@ -10,6 +10,7 @@ use cgmath::Vector2;
 use etagere::{AllocId, AtlasAllocator, Size};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -104,7 +105,10 @@ impl TextureAtlasPageComposer {
         self.page_size
     }
 
-    pub fn save_page_into<FilePath: AsRef<Path>>(&self, file_name: FilePath) -> Result<(), Box<dyn std::error::Error>> {
-        save_bitmap_to_png(&self.atlas_page_buffer, self.page_size, file_name.as_ref())
+    pub fn save_page_into<FilePath: AsRef<Path>>(&self, file_path: FilePath) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(parent_dir) = file_path.as_ref().parent() {
+            fs::create_dir_all(parent_dir)?;
+        }
+        save_bitmap_to_png(&self.atlas_page_buffer, self.page_size, file_path.as_ref())
     }
 }

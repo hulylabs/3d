@@ -1,4 +1,4 @@
-﻿use crate::gpu::context::Context;
+use crate::gpu::context::Context;
 use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 use more_asserts::{assert_gt, assert_le};
 use std::rc::Rc;

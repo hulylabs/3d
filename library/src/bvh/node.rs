@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
 use std::cell::RefCell;
 use std::cmp::Ordering;

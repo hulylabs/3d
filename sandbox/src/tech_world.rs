@@ -1,4 +1,4 @@
-﻿use cgmath::{Deg, Vector4};
+use cgmath::{Deg, Vector4};
 use library::container::mesh_warehouse::MeshWarehouse;
 use library::container::visual_objects::VisualObjects;
 use library::geometry::alias::{Point, Vector};
@@ -79,7 +79,7 @@ impl TechWorldBitmapTextures {
         let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
         let bitmap_rect_grid = TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
 
-        composer.save_page_into("textures_atlas.png").expect("failed to save texture atlas page");
+        composer.save_page_into(Path::new("debug_output").join("textures_atlas.png")).expect("failed to save texture atlas page");
 
         Ok(Self {
             bitmap_checkerboard_small,

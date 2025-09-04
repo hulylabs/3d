@@ -1,4 +1,4 @@
-﻿use derive_more::Display;
+use derive_more::Display;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Display)]
 pub(crate) struct SdfClassIndex(pub usize);

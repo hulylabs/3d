@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::container::sdf_warehouse::SdfWarehouse;
     use crate::geometry::alias::Vector;
@@ -7,8 +7,8 @@ mod tests {
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::sdf::object::sdf_sphere::SdfSphere;
     use crate::serialization::pod_vector::PodVector;
-    use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
-    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
+    use crate::tests::scaffolding::gpu_code_execution::tests::{ExecutionConfig, GpuCodeExecutor};
+    use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
     use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
     use crate::sdf::framework::sdf_shader_code::sdf_conventions;
@@ -54,7 +54,8 @@ mod tests {
 
         let function_execution = make_executable(&template,create_argument_formatter!("i32({argument}.w), {argument}.xyz, 0.0"));
 
-        let actual_distances = execute_code(&input_points, function_execution, ExecutionConfig::default());
+        let executor = GpuCodeExecutor::new();
+        let actual_distances = executor.execute_code(&input_points, function_execution, ExecutionConfig::default());
         
         assert_eq(&actual_distances, &expected_distances, COMMON_GPU_EVALUATIONS_EPSILON);
     }

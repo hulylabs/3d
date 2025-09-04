@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias;
+use crate::geometry::alias;
 use crate::geometry::axis::Axis;
 use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use alias::Point;

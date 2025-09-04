@@ -1,4 +1,4 @@
-﻿use crate::beautiful_world::{BeautifulWorldMaterials, BeautifulWorldSdfClasses, BeautifulWorld};
+use crate::beautiful_world::{BeautifulWorldMaterials, BeautifulWorldSdfClasses, BeautifulWorld};
 use crate::tech_world::{TechWorldMaterials, TechWorldSdfClasses, TechWorldProceduralTextures, TechWorld, TechWorldBitmapTextures};
 use cgmath::Deg;
 use library::geometry::alias::Point;

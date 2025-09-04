@@ -1,4 +1,4 @@
-﻿use std::cell::RefCell;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 pub(super) fn depth_first_search<T, F, G>(

@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 pub(crate) mod tests {
     use crate::gpu::adapter_features::AdapterFeatures;
     use crate::gpu::context::Context;

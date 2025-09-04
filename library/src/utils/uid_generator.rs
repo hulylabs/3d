@@ -1,4 +1,4 @@
-﻿#[derive(Default)]
+#[derive(Default)]
 pub(crate) struct UidGenerator<T> {
     last_generated_uid: u32,
     returned: Vec<T>,

@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::sdf::composition::intersection::intersection_aabb;
 use crate::sdf::framework::n_ary_operations_utils::produce_binary_operation_body;
 use crate::sdf::framework::sdf_base::Sdf;

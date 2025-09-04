@@ -1,4 +1,4 @@
-﻿use crate::material::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 pub(crate) use crate::utils::object_uid::ObjectUid;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

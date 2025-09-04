@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use wgpu::{BufferAddress, BufferUsages};
 
 pub(super) struct FrameBufferLayerParameters<'a> {

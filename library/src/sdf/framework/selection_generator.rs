@@ -1,4 +1,4 @@
-﻿use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::framework::sdf_shader_code::{format_sdf_selection, format_sdf_selection_function_opening};
 use crate::shader::function_name::FunctionName;
 

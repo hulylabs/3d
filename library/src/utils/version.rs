@@ -1,4 +1,4 @@
-﻿use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub(crate) struct Version(pub u64);

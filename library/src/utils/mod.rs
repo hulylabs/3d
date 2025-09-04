@@ -1,4 +1,4 @@
-﻿pub mod object_uid;
+pub mod object_uid;
 pub mod min_max_time_measurer;
 pub(crate) mod uid_generator;
 pub(crate) mod sliding_time_frame;

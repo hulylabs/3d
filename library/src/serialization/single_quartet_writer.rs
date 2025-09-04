@@ -1,4 +1,4 @@
-﻿use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET, QUARTET_ELEMENT_SIZE_BYTES, QUARTET_SIZE_BYTES};
+use crate::serialization::gpu_ready_serialization_buffer::{DEFAULT_PAD_VALUE, ELEMENTS_IN_QUARTET, QUARTET_ELEMENT_SIZE_BYTES, QUARTET_SIZE_BYTES};
 
 pub(crate) struct SingleQuartetWriter<'a> {
     storage: &'a mut Vec<u8>,

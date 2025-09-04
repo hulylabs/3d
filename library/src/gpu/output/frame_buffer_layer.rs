@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::utils::{create_frame_buffer_layer, frame_buffer_layer_size_bytes, FrameBufferLayerParameters, FrameBufferLayerParametersBuilder};
 use bytemuck::{AnyBitPattern, Pod};
 use futures_intrusive::channel::shared::oneshot_channel;
@@ -21,7 +21,7 @@ pub(crate) struct FrameBufferLayer<T: Sized + AnyBitPattern + Pod> {
 }
 
 impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
-    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = " render target";
+    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = "render target";
     const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = " cpu mappable mediator";
 
     #[must_use]

@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::duplex_layer::DuplexLayer;
 use crate::serialization::pod_vector::PodVector;
 use std::rc::Rc;

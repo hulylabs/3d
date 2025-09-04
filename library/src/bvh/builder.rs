@@ -1,4 +1,4 @@
-﻿use crate::bvh::node::{get_bvh_node_children, BvhNode};
+use crate::bvh::node::{get_bvh_node_children, BvhNode};
 use crate::bvh::proxy::SceneObjectProxy;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;

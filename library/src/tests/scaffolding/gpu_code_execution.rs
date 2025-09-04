@@ -1,5 +1,5 @@
-﻿#[cfg(test)]
-pub(crate) mod tests {
+#[cfg(test)]
+pub mod tests {
     use crate::gpu::compute_pipeline::ComputePipeline;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
@@ -13,7 +13,11 @@ pub(crate) mod tests {
     use cgmath::Vector2;
     use more_asserts::assert_gt;
     use std::collections::{HashMap, HashSet};
+    use std::rc::Rc;
+    use std::thread;
+    use test_context::TestContext;
     use wgpu::BufferUsages;
+    use crate::gpu::context::Context;
     use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 
     pub(crate) struct DataBindGroupSlot {
@@ -45,20 +49,20 @@ pub(crate) mod tests {
 
     impl DataBindGroupSlot {
         #[must_use]
-        pub(crate) fn new(index: u32, data: &[u8]) -> Self {
+        pub fn new(index: u32, data: &[u8]) -> Self {
             Self { index, data: data.to_vec() }
         }
     }
     
     impl SamplerBindGroupSlot {
-        pub(crate) fn new(index: u32) -> Self {
+        pub fn new(index: u32) -> Self {
             Self { index }
         }
     }
     
     impl TextureBindGroupSlot {
         #[must_use]
-        pub(crate) fn new(index: u32, size: Vector2<u32>, data: Vec<u8>) -> Self {
+        pub fn new(index: u32, size: Vector2<u32>, data: Vec<u8>) -> Self {
             assert_eq!((size.x * size.y) as usize * BYTES_IN_RGBA_QUARTET, data.len(), "data size mismatch");
             Self { index, size, data }
         }
@@ -151,77 +155,116 @@ pub(crate) mod tests {
             Self::new()
         }
     }
-    
-    #[must_use]
-    pub(crate) fn execute_code<TInput, TOutput>(input: &[TInput], gpu_code: String, config: ExecutionConfig) -> Vec<TOutput> 
-    where TInput: Zeroable + Pod, TOutput: Zeroable + Pod
-    {
-        let context = create_headless_wgpu_context();
-        let resources = Resources::new(context.clone());
 
-        let module = resources.create_shader_module("test GPU function execution", &gpu_code);
-        let code = PipelineCode::new(module, seahash::hash(gpu_code.as_bytes()), "some_gpu_code".to_string());
-        
-        let input_buffer = resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
-        let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
-        let mut output_buffer = DuplexLayer::<TOutput>::new(context.device(), buffer_size, SupportUpdateFromCpu::Yes, "output");
+    pub(crate) struct GpuCodeExecutionContext {
+    }
 
-        let mut pipeline_factory = PipelinesFactory::new(context.clone(), COMMON_PRESENTATION_FORMAT, None);
-        
-        let mut pipeline = ComputePipeline::new(pipeline_factory.create_compute_pipeline(config.entry_point, &code));
-        pipeline.setup_bind_group(config.test_data_binding_group, Some("test data"), context.device(), |bind_group|{
-            bind_group.set_storage_entry(0, input_buffer.clone());
-            bind_group.set_storage_entry(1, output_buffer.gpu_copy());
-        });
-
-        let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
-        let dummy_buffer = resources.create_buffer("dummy_buffer", universal_usage, &vec![0_u8; 256]);
-        let dummy_sampler = resources.create_sampler("dummy_sampler");
-        let dummy_texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(1,1));
-        let dummy_texture_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        for (_, group) in config.bind_groups {
-            pipeline.setup_bind_group(group.index, None, context.device(), |bind_group|{
-                for slot in group.storage_slots.dummy_slots {
-                    bind_group.set_storage_entry(slot, dummy_buffer.clone());
-                }
-                for slot in group.storage_slots.slots {
-                    let buffer = resources.create_buffer("custom_buffer", universal_usage, &slot.data);
-                    bind_group.set_storage_entry(slot.index, buffer.clone());
-                }
-
-                for slot in group.sampler_slots.dummy_slots {
-                    bind_group.set_sampler_entry(slot, dummy_sampler.clone());
-                }
-                for slot in group.sampler_slots.slots {
-                    bind_group.set_sampler_entry(slot.index, resources.create_sampler("custom_sampler"));
-                }
-
-                for slot in group.texture_slots.dummy_slots {
-                    bind_group.set_texture_entry(slot, dummy_texture_view.clone());
-                }
-                for slot in group.texture_slots.slots {
-                    let texture = resources.create_texture("dummy_texture", 1, BitmapSize::new(slot.size.x as usize, slot.size.y as usize));
-                    resources.write_whole_srgba_texture_data(&texture, slot.data.as_ref());
-                    bind_group.set_texture_entry(slot.index, texture.create_view(&wgpu::TextureViewDescriptor::default()));
-                }
-            });
+    impl GpuCodeExecutionContext {
+        #[must_use]
+        pub(crate) fn get(&self) -> Rc<GpuCodeExecutor> {
+            Rc::new(GpuCodeExecutor::new())
         }
 
-        let mut encoder = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        #[must_use]
+        pub(crate) fn new() -> Self {
+            Self {}
+        }
+    }
+
+    impl TestContext for GpuCodeExecutionContext {
+        fn setup() -> GpuCodeExecutionContext {
+            println!("Current thread ID: {:?}", thread::current().id());
+            GpuCodeExecutionContext::new()
+        }
+
+        fn teardown(self) {
+        }
+    }
+
+    pub(crate) struct GpuCodeExecutor {
+        gpu_context: Rc<Context>,
+        resources: Resources,
+    }
+
+    impl GpuCodeExecutor {
+        #[must_use]
+        pub(crate) fn new() -> Self {
+            let context = create_headless_wgpu_context();
+            Self { gpu_context: context.clone(), resources: Resources::new(context) }
+        }
+
+        #[must_use]
+        pub(crate) fn execute_code<TInput, TOutput>(&self, input: &[TInput], gpu_code: String, config: ExecutionConfig) -> Vec<TOutput>
+        where
+            TInput: Zeroable + Pod,
+            TOutput: Zeroable + Pod
         {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-            pipeline.set_into_pass(&mut pass);
-            let workgroup_count = input.len().div_ceil(64);
-            pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
+            let device = self.gpu_context.device();
+
+            let module = self.resources.create_shader_module("test GPU function execution", &gpu_code);
+            let code = PipelineCode::new(module, seahash::hash(gpu_code.as_bytes()), "some_gpu_code".to_string());
+
+            let input_buffer = self.resources.create_storage_buffer_write_only("input", bytemuck::cast_slice(input));
+            let buffer_size = FrameBufferSize::new(input.len() as u32, 1);
+            let mut output_buffer = DuplexLayer::<TOutput>::new(device, buffer_size, SupportUpdateFromCpu::Yes, "output");
+
+            let mut pipeline_factory = PipelinesFactory::new(self.gpu_context.clone(), COMMON_PRESENTATION_FORMAT, None);
+
+            let mut pipeline = ComputePipeline::new(pipeline_factory.create_compute_pipeline(config.entry_point, &code));
+            pipeline.setup_bind_group(config.test_data_binding_group, Some("test data"), device, |bind_group| {
+                bind_group.set_storage_entry(0, input_buffer.clone());
+                bind_group.set_storage_entry(1, output_buffer.gpu_copy());
+            });
+
+            let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
+            let dummy_buffer = self.resources.create_buffer("dummy_buffer", universal_usage, &vec![0_u8; 256]);
+            let dummy_sampler = self.resources.create_sampler("dummy_sampler");
+            let dummy_texture = self.resources.create_texture("dummy_texture", 1, BitmapSize::new(1, 1));
+            let dummy_texture_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            for (_, group) in config.bind_groups {
+                pipeline.setup_bind_group(group.index, None, device, |bind_group| {
+                    for slot in group.storage_slots.dummy_slots {
+                        bind_group.set_storage_entry(slot, dummy_buffer.clone());
+                    }
+                    for slot in group.storage_slots.slots {
+                        let buffer = self.resources.create_buffer("custom_buffer", universal_usage, &slot.data);
+                        bind_group.set_storage_entry(slot.index, buffer.clone());
+                    }
+
+                    for slot in group.sampler_slots.dummy_slots {
+                        bind_group.set_sampler_entry(slot, dummy_sampler.clone());
+                    }
+                    for slot in group.sampler_slots.slots {
+                        bind_group.set_sampler_entry(slot.index, self.resources.create_sampler("custom_sampler"));
+                    }
+
+                    for slot in group.texture_slots.dummy_slots {
+                        bind_group.set_texture_entry(slot, dummy_texture_view.clone());
+                    }
+                    for slot in group.texture_slots.slots {
+                        let texture = self.resources.create_texture("dummy_texture", 1, BitmapSize::new(slot.size.x as usize, slot.size.y as usize));
+                        self.resources.write_whole_srgba_texture_data(&texture, slot.data.as_ref());
+                        bind_group.set_texture_entry(slot.index, texture.create_view(&wgpu::TextureViewDescriptor::default()));
+                    }
+                });
+            }
+
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+            {
+                let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+                pipeline.set_into_pass(&mut pass);
+                let workgroup_count = input.len().div_ceil(64);
+                pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
+            }
+            output_buffer.prepare_cpu_read(&mut encoder);
+            self.gpu_context.queue().submit(Some(encoder.finish()));
+
+            let copy_wait = output_buffer.read_cpu_copy();
+            self.gpu_context.wait(None);
+            pollster::block_on(copy_wait);
+
+            output_buffer.cpu_copy().clone()
         }
-        output_buffer.prepare_cpu_read(&mut encoder);
-        context.queue().submit(Some(encoder.finish()));
-
-        let copy_wait = output_buffer.read_cpu_copy();
-        context.wait(None);
-        pollster::block_on(copy_wait);
-
-        output_buffer.cpu_copy().clone()
     }
 
     #[must_use]

@@ -1,4 +1,4 @@
-﻿use crate::material::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 use crate::serialization::serializable_for_gpu::GpuSerializable;
 
 pub(crate) trait RayTraceable: GpuSerializable {

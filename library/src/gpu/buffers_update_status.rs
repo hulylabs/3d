@@ -1,4 +1,4 @@
-﻿use crate::gpu::resizable_buffer::ResizeStatus;
+use crate::gpu::resizable_buffer::ResizeStatus;
 use crate::gpu::versioned_buffer::BufferUpdateStatus;
 
 pub(super) struct BuffersUpdateStatus {

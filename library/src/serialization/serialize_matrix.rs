@@ -1,4 +1,4 @@
-﻿use crate::geometry::transform::Affine;
+use crate::geometry::transform::Affine;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(crate) fn serialize_matrix_4x4(container: &mut GpuReadySerializationBuffer, matrix: &Affine) {

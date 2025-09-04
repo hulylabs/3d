@@ -1,4 +1,4 @@
-﻿use crate::material::bitmap_texture_index::BitmapTextureIndex;
+use crate::material::bitmap_texture_index::BitmapTextureIndex;
 use crate::material::procedural_texture_index::ProceduralTextureUid;
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]

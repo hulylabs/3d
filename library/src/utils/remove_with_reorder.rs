@@ -1,4 +1,4 @@
-﻿pub(crate) fn remove_with_reorder<T, F>(victim: &mut Vec<T>, mut should_remove: F)
+pub(crate) fn remove_with_reorder<T, F>(victim: &mut Vec<T>, mut should_remove: F)
 where
     F: FnMut(&T) -> bool,
 {

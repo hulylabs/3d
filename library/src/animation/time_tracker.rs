@@ -1,4 +1,4 @@
-﻿use crate::animation::animator::Animator;
+use crate::animation::animator::Animator;
 use crate::animation::clock_animation_act::{ClockAnimationAct, PhaseAlive};
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::version::Version;

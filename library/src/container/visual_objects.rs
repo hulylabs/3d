@@ -1,4 +1,4 @@
-﻿use crate::bvh::builder::{build_bvh, build_serialized_bvh, };
+use crate::bvh::builder::{build_bvh, build_serialized_bvh, };
 use crate::bvh::bvh_to_dot::save_bvh_as_dot_detailed;
 use crate::bvh::proxy::{PrimitiveType, SceneObjectProxy};
 use crate::container::bvh_proxies::{proxy_of_sdf, SceneObjects};

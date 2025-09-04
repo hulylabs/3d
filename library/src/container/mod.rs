@@ -1,4 +1,4 @@
-﻿pub mod visual_objects;
+pub mod visual_objects;
 pub mod mesh_warehouse;
 pub(crate) mod sdf_warehouse;
 mod monolithic;

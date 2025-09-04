@@ -1,4 +1,4 @@
-﻿use crate::shader::code::{FunctionBody, Generic, ShaderCode};
+use crate::shader::code::{FunctionBody, Generic, ShaderCode};
 use crate::shader::conventions;
 
 #[derive(Clone)]

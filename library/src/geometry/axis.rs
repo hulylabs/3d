@@ -1,4 +1,4 @@
-﻿use std::mem;
+use std::mem;
 use strum::EnumCount;
 use strum_macros::EnumCount;
 

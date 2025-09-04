@@ -1,4 +1,4 @@
-﻿use cgmath::InnerSpace;
+use cgmath::InnerSpace;
 use crate::geometry::aabb::Aabb;
 use crate::geometry::axis::Axis;
 use crate::geometry::cylinder::Cylinder;

@@ -1,4 +1,4 @@
-﻿use crate::animation::time_tracker::TimeTracker;
+use crate::animation::time_tracker::TimeTracker;
 use crate::container::mesh_warehouse::{MeshWarehouse, WarehouseSlot};
 use crate::container::visual_objects::VisualObjects;
 use crate::geometry::alias::{Point, Vector};

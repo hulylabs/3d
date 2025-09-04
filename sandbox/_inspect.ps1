@@ -1,1 +1,1 @@
-﻿cargo clippy
+cargo clippy

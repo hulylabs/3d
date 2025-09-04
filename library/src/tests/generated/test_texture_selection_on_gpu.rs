@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::material::procedural_textures::ProceduralTextures;
     use crate::material::texture_procedural_3d::TextureProcedural3D;
@@ -7,8 +7,8 @@ mod tests {
     use crate::shader::code::{FunctionBody, ShaderCode};
     use crate::shader::conventions;
     use crate::shader::formatting_utils::format_scalar;
-    use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
-    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
+    use crate::tests::scaffolding::gpu_code_execution::tests::{ExecutionConfig, GpuCodeExecutor};
+    use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
     #[must_use]
     fn make_spy_texture(marker_value: f64) -> TextureProcedural3D {
@@ -47,7 +47,8 @@ mod tests {
         let function_execution = make_executable(&template,
     create_argument_formatter!("i32({argument}.w), vec3f({argument}.x, -3.0, -3.0), vec3f(-5.0, {argument}.y, -5.0), -7.0, vec3f(0.0), vec3f(0.0)"));
 
-        let actual_colors = execute_code::<PodVector, PodVector>(&input_points, function_execution, ExecutionConfig::default());
+        let executor = GpuCodeExecutor::new();
+        let actual_colors = executor.execute_code::<PodVector, PodVector>(&input_points, function_execution, ExecutionConfig::default());
         
         assert_eq!(&actual_colors, &expected_colors);
     }

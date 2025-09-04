@@ -1,4 +1,4 @@
-﻿use crate::animation::time_tracker::TimeTracker;
+use crate::animation::time_tracker::TimeTracker;
 use crate::bvh::node::BvhNode;
 use crate::container::visual_objects::{DataKind, VisualObjects};
 use crate::gpu::bind_group_builder::BindGroupBuilder;

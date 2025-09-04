@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 pub(crate) mod tests {
     use serde::Serialize;
     use serde_json::Value;

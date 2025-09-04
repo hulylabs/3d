@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::bvh::builder::build_serialized_bvh;
     use crate::container::bvh_proxies::proxy_of_sdf;
@@ -14,14 +14,14 @@ mod tests {
     use crate::objects::sdf_class_index::SdfClassIndex;
     use crate::objects::sdf_instance::SdfInstance;
     use crate::scene::camera::Camera;
-    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::tests::gpu_code_execution::tests::{create_checkerboard_texture_data, execute_code, DataBindGroupSlot, ExecutionConfig, SamplerBindGroupSlot, TextureBindGroupSlot};
-    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
+    use crate::tests::scaffolding::gpu_code_execution::tests::{create_checkerboard_texture_data, DataBindGroupSlot, ExecutionConfig, GpuCodeExecutionContext, SamplerBindGroupSlot, TextureBindGroupSlot};
+    use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};
     use crate::utils::object_uid::ObjectUid;
     use crate::utils::tests::assert_utils::tests::assert_eq;
     use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
@@ -30,10 +30,11 @@ mod tests {
     use cgmath::{Array, ElementWise, EuclideanSpace, InnerSpace, Vector2};
     use std::f32::consts::SQRT_2;
     use std::time::Instant;
+    use test_context::test_context;
 
     const TEST_DATA_IO_BINDING_GROUP: u32 = 3;
     
-    const DUMMY_IMPLEMENTATIONS: &str = include_str!("../../assets/shaders/dummy_implementations.wgsl");
+    const DUMMY_IMPLEMENTATIONS: &str = include_str!("dummy_implementations.wgsl");
 
     const DUMMY_TEXTURE_SELECTION: &str = "\
         fn procedural_texture_select(index: i32, position: vec3f, normal: vec3f, time: f32, dp_dx: vec3f, dp_dy: vec3f) -> vec3f {\
@@ -57,8 +58,9 @@ mod tests {
         }
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_pixel_half_size() {
+    fn test_pixel_half_size(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("Differentials", "vec4f", "pixel_half_size_t")
             .with_custom_type(
                 TypeDeclaration::new("Differentials", "ddx_and_ddy", "vec4f")
@@ -96,13 +98,14 @@ mod tests {
             PodVector {x: expected_pixel_half_size.x, y: expected_pixel_half_size.y, z: 3.0, w: 7.0,},
         ];
 
-        let actual_output = execute_code::<Differentials, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<Differentials, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq!(actual_output, expected_output);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_read_atlas_no_differentials() {
+    fn test_read_atlas_no_differentials(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("AtlasReadRequest", "vec4f", "read_atlas_t")
             .with_custom_type(
                 TypeDeclaration::new("AtlasReadRequest", "local_space_position", "vec4f")
@@ -240,7 +243,7 @@ mod tests {
             },
 
             AtlasReadRequest{
-                // left top corner of the 2x3 'B' region
+                //left top corner of the 2x3 'B' region
                 local_space_position: PodVector::new(0.25,1.0 - (1.0/3.0)/2.0,0.0),
                 atlas_region_mapping: AtlasMapping {
                     top_left_corner_and_size: b_region,
@@ -316,13 +319,14 @@ mod tests {
             PodVector {x: 0.0, y: 0.0, z: 0.0, w: 0.0,},
         ];
 
-        let actual_output = execute_code::<AtlasReadRequest, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<AtlasReadRequest, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_inside_aabb() {
+    fn test_inside_aabb(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("AabbAndPoint", "f32", "inside_aabb_t")
             .with_custom_type(
                 TypeDeclaration::new("AabbAndPoint", "aabb_min", "vec3f")
@@ -379,14 +383,412 @@ mod tests {
             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         ];
 
-        let actual_output = execute_code::<AabbAndPoint, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<AabbAndPoint, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
 
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_hit_aabb() {
+    fn test_ray_to_pixel(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("PixelSetup", "Ray", "ray_to_pixel")
+            .with_custom_type(
+                TypeDeclaration::new("PixelSetup", "fov_and_camera_origin", "vec4f")
+                    .with_field("pixel", "Pixel")
+                    .with_field("sub_pixel_x", "f32")
+                    .with_field("sub_pixel_y", "f32")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template,
+            create_argument_formatter!("Camera({argument}.fov_and_camera_origin.x, {argument}.fov_and_camera_origin.yzw), {argument}.pixel, {argument}.sub_pixel_x, {argument}.sub_pixel_y"));
+
+        let camera = Camera::new_perspective_camera(3.0, Point::new(3.0, -7.0, 5.0));
+        let frame_buffer_size = FrameBufferSize::new(2, 2);
+        let uniforms = Uniforms::new(frame_buffer_size, camera, 3, Instant::now().elapsed());
+
+        let mut execution_config = ExecutionConfig::new();
+        execution_config
+            .common_test_config()
+            .set_storage_binding_group(0, vec![], vec![
+                DataBindGroupSlot::new(0, uniforms.serialize().backend()),
+            ])
+            .set_dummy_binding_group(1, vec![], vec![], vec![])
+            .set_dummy_binding_group(2, vec![], vec![], vec![])
+            ;
+
+        #[repr(C)]
+        #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct PixelSetup {
+            fov_and_origin: PodVector,
+            pixel_and_sub_pixel: PodVector,
+        }
+
+        // TODO: this duplicates a line from the tracer shader
+        let fov_factor = 1.0 / (60.0 * (std::f32::consts::PI / 180.0) / 2.0).tan();
+        let origin = Point::new(0.0, 0.0, 3.0);
+
+        let test_input: Vec<PixelSetup> = vec![
+            PixelSetup { fov_and_origin: PodVector::new_full(fov_factor, origin.x as f32, origin.y as f32, origin.z as f32),
+                pixel_and_sub_pixel: PodVector::new_full(0.0, 0.0, 0.1, 0.9),
+            },
+            PixelSetup { fov_and_origin: PodVector::new_full(fov_factor, origin.x as f32, origin.y as f32, origin.z as f32),
+                pixel_and_sub_pixel: PodVector::new_full(1.0, 0.0, 0.4, 0.6),
+            },
+            PixelSetup { fov_and_origin: PodVector::new_full(fov_factor, origin.x as f32, origin.y as f32, origin.z as f32),
+                pixel_and_sub_pixel: PodVector::new_full(0.0, 1.0, 0.6, 0.4),
+            },
+            PixelSetup { fov_and_origin: PodVector::new_full(fov_factor, origin.x as f32, origin.y as f32, origin.z as f32),
+                pixel_and_sub_pixel: PodVector::new_full(1.0, 1.0, 0.9, 0.1),
+            },
+        ];
+
+        let pod_origin = PodVector::new_full(origin.x as f32, origin.y as f32, origin.z as f32, 0.0f32);
+        let expected_output: Vec<PositionAndDirection> = vec![
+            PositionAndDirection {
+                position: pod_origin, direction: PodVector::new(0.6309147, -0.76439905, -0.13281836) ,
+            },
+            PositionAndDirection {
+                position: pod_origin, direction: PodVector::new(0.40278503, -0.7445488, 0.53236383),
+            },
+            PositionAndDirection {
+                position: pod_origin, direction: PodVector::new(0.32156247, -0.94559544, -0.04946544),
+            },
+            PositionAndDirection {
+                position: pod_origin, direction: PodVector::new(0.044365983, -0.811256, 0.58300555),
+            },
+        ];
+
+        let actual_output = fixture.get().execute_code::<PixelSetup, PositionAndDirection >(&test_input, function_execution, execution_config);
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_transform_ray_parameter(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("RayParameterTransformation", "f32", "transform_ray_parameter")
+            .with_custom_type(
+                TypeDeclaration::new("RayParameterTransformation", "matrix", "mat3x4f")
+                    .with_field("ray_origin", "vec3f")
+                    .with_field("ray_direction", "vec3f")
+                    .with_field("parameter_and_transformed_origin", "vec4f")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template,
+            create_argument_formatter!("{argument}.matrix, Ray({argument}.ray_origin, {argument}.ray_direction), {argument}.parameter_and_transformed_origin.x, {argument}.parameter_and_transformed_origin.yzw"));
+
+        #[repr(C)]
+        #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct RayParameterTransformation {
+            matrix_columns: [PodVector; 3],
+            ray_origin: PodVector,
+            ray_direction: PodVector,
+            parameter_and_transformed_origin: PodVector,
+        }
+
+        let common_matrix = [
+            PodVector { x: 2.0, y: 0.0, z: 0.0, w: 2.0, },
+            PodVector { x: 0.0, y: 1.0, z: 0.0, w: 4.0, },
+            PodVector { x: 1.0, y: 0.0, z: 1.0, w: 6.0, },
+        ];
+        let test_input: Vec<RayParameterTransformation> = vec![
+            RayParameterTransformation {
+                matrix_columns: common_matrix,
+                ray_origin: PodVector {x: -3.0, y: -7.0, z: -5.0, w: 1.0,},
+                ray_direction: PodVector {x: 1.0, y: 1.0, z: 1.0, w: 0.0,},
+                parameter_and_transformed_origin: PodVector {x: 4.0, y: -4.0, z: -3.0, w: 1.0,},
+            },
+            RayParameterTransformation {
+                matrix_columns: common_matrix,
+                ray_origin: PodVector {x: 0.0, y: 0.0, z: 0.0, w: 1.0,},
+                ray_direction: PodVector {x: 1.0, y: 0.0, z: 0.0, w: 0.0,},
+                parameter_and_transformed_origin: PodVector {x: 4.0, y: -4.0, z: -3.0, w: 1.0,},
+            },
+        ];
+
+        let expected_output: Vec<f32> = vec![
+            10.24695,
+            18.05547,
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<RayParameterTransformation, f32>(&test_input, function_execution, execution_config);
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_signed_distance_normal(fixture: &mut GpuCodeExecutionContext) {
+        let box_class = NamedSdf::new(SdfBox::new(Vector::new(2.0, 2.0, 2.0)), make_dummy_sdf_name(), );
+
+        let shader_code = generate_code_for(&box_class);
+
+        let template = ShaderFunction::new("vec3f", "vec3f", "sample_signed_distance_t")
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_TEXTURE_SELECTION)
+            .with_additional_shader_code(shader_code)
+            .with_additional_shader_code(
+                r#"fn sample_signed_distance_t(position: vec3f) -> vec3f {
+                    let sdf = sdf[0];
+                    return signed_distance_normal(sdf, position, 0.0);
+                }"#
+            );
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
+
+        let instance_transformation = Affine::from_nonuniform_scale(1.0, 2.0, 3.0);
+        let sdf_buffer = make_single_serialized_sdf_instance(&box_class, &instance_transformation);
+        let mut execution_config = ExecutionConfig::new();
+        execution_config
+            .common_test_config()
+            .set_dummy_binding_group(1, vec![], vec![], vec![])
+            .set_dummy_binding_group(0, vec![], vec![], vec![])
+            .set_storage_binding_group(2, vec![], vec![
+                DataBindGroupSlot::new(1, sdf_buffer.instances.backend()),
+            ]);
+
+        let test_input = [
+            PodVector::new(2.0, 0.0, 0.0),
+            PodVector::new(2.1, 0.0, 0.0),
+            PodVector::new(-2.0, 0.0, 0.0),
+            PodVector::new(-2.1, 0.0, 0.0),
+
+            PodVector::new(0.0, 4.0, 0.0),
+            PodVector::new(0.0, 4.1, 0.0),
+            PodVector::new(0.0, -4.0, 0.0),
+            PodVector::new(0.0, -4.1, 0.0),
+
+            PodVector::new(0.0, 0.0, 6.0),
+            PodVector::new(0.0, 0.0, 6.1),
+            PodVector::new(0.0, 0.0, -6.0),
+            PodVector::new(0.0, 0.0, -6.1),
+        ];
+
+        // xyz: shifted position, w: signed distance
+        let expected_output: Vec<PodVector> = vec![
+            PodVector::new(1.0, 0.0, 0.0),
+            PodVector::new(1.0, 0.0, 0.0),
+            PodVector::new(-1.0, 0.0, 0.0),
+            PodVector::new(-1.0, 0.0, 0.0),
+
+            PodVector::new(0.0, 1.0, 0.0),
+            PodVector::new(0.0, 1.0, 0.0),
+            PodVector::new(0.0, -1.0, 0.0),
+            PodVector::new(0.0, -1.0, 0.0),
+
+            PodVector::new(0.0, 0.0, 1.0),
+            PodVector::new(0.0, 0.0, 1.0),
+            PodVector::new(0.0, 0.0, -1.0),
+            PodVector::new(0.0, 0.0, -1.0),
+        ];
+
+        let actual_output = fixture.get().execute_code::<PodVector, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+
+        assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), 1e-3);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_transform_point(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("MatrixAndPoint", "vec3f", "transform_point")
+            .with_custom_type(
+                TypeDeclaration::new("MatrixAndPoint", "matrix", "mat3x4f")
+                    .with_field("point", "vec3f")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.matrix, {argument}.point"));
+
+        #[repr(C)]
+        #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct MatrixAndPoint {
+            matrix_columns: [PodVector; 3],
+            point: PodVector,
+        }
+
+        let test_input: Vec<MatrixAndPoint> = vec![
+            MatrixAndPoint {
+                matrix_columns: [
+                    PodVector {x: 0.0, y: 1.0, z: 0.0, w:  3.0,},
+                    PodVector {x: 0.0, y: 0.0, z: 1.0, w:  7.0,},
+                    PodVector {x: 1.0, y: 0.0, z: 0.0, w:  5.0,},
+                ],
+                point: PodVector {x: 1.0, y: 2.0, z:  3.0, w:  1.0,},
+            },
+            MatrixAndPoint {
+                matrix_columns: [
+                    PodVector {x: 0.0, y: 1.0, z: 1.0, w:  7.0,},
+                    PodVector {x: 1.0, y: 0.0, z: 1.0, w:  3.0,},
+                    PodVector {x: 1.0, y: 1.0, z: 0.0, w:  5.0,},
+                ],
+                point: PodVector {x: 1.0, y: 2.0, z:  3.0, w:  1.0,},
+            },
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<MatrixAndPoint, PodVector>(&test_input, function_execution, execution_config);
+
+        let expected_output: Vec<PodVector> = vec![
+            PodVector {x: 5.0, y: 10.0, z: 6.0, w: 0.0,},
+            PodVector {x: 12.0, y: 7.0, z: 8.0, w: 0.0,},
+        ];
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_transform_transposed_vector(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("MatrixAndVector", "vec3f", "transform_transposed_vector")
+            .with_custom_type(
+                TypeDeclaration::new("MatrixAndVector", "matrix", "mat3x3f")
+                    .with_field("vector", "vec3f")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.matrix, {argument}.vector"));
+
+        #[repr(C)]
+        #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct MatrixAndVector {
+            matrix_columns: [PodVector; 3],
+            vector: PodVector,
+        }
+
+        let test_input: Vec<MatrixAndVector> = vec![
+            MatrixAndVector {
+                matrix_columns: [
+                    PodVector {x: 0.0, y: 0.0, z: 1.0, w:  3.0,},
+                    PodVector {x: 0.0, y: 1.0, z: 0.0, w:  7.0,},
+                    PodVector {x: 1.0, y: 0.0, z: 0.0, w:  5.0,},
+                ],
+                vector: PodVector {x: 1.0, y: 2.0, z:  3.0, w:  1.0,},
+            },
+            MatrixAndVector {
+                matrix_columns: [
+                    PodVector {x: 0.0, y: 1.0, z: 0.0, w:  7.0,},
+                    PodVector {x: 1.0, y: 0.0, z: 0.0, w:  3.0,},
+                    PodVector {x: 0.0, y: 0.0, z: 1.0, w:  5.0,},
+                ],
+                vector: PodVector {x: 1.0, y: 2.0, z:  3.0, w:  1.0,},
+            },
+            MatrixAndVector {
+                matrix_columns: [
+                    PodVector {x: 0.0, y: 1.0, z: 1.0, w:  7.0,},
+                    PodVector {x: 1.0, y: 0.0, z: 1.0, w:  3.0,},
+                    PodVector {x: 0.0, y: 0.0, z: 1.0, w:  5.0,},
+                ],
+                vector: PodVector {x: 1.0, y: 2.0, z:  3.0, w:  1.0,},
+            },
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<MatrixAndVector, PodVector>(&test_input, function_execution, execution_config);
+
+        let expected_output: Vec<PodVector> = vec![
+            PodVector {x: 3.0, y: 2.0, z: 1.0, w: 0.0,},
+            PodVector {x: 2.0, y: 1.0, z: 3.0, w: 0.0,},
+            PodVector {x: 2.0, y: 1.0, z: 6.0, w: 0.0,},
+        ];
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_to_mat3x3(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("mat3x4f", "mat3x3f", "to_mat3x3")
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
+
+        let test_input: Vec<PodVector> = vec![
+            PodVector {x: 1.0, y: 2.0,  z:   3.0, w:  4.0,},
+            PodVector {x: 5.0, y: 6.0,  z:   7.0, w:  8.0,},
+            PodVector {x: 9.0, y: 10.0, z:  11.0, w: 12.0,},
+        ];
+
+        let expected_output: Vec<PodVector> = vec![
+            PodVector {x: 1.0, y:  2.0, z:  3.0, w: 0.0,},
+            PodVector {x: 5.0, y:  6.0, z:  7.0, w: 0.0,},
+            PodVector {x: 9.0, y: 10.0, z: 11.0, w: 0.0,},
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<PodVector, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_random_double(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("vec4f", "f32", "random_double_t")
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
+            .with_additional_shader_code(
+                r#"fn random_double_t(min: f32, max: f32, iterations_count: f32, take_min: f32) -> f32 {
+                    var result = random_double(min, max);
+                    for (var i = 0.0; i < iterations_count; i = i + 1.0) {
+                        if (take_min == 0.0) {
+                            result = min(result, random_double(min, max));
+                        } else {
+                            result = max(result, random_double(min, max));
+                        }
+                    }
+                    return result;
+                }"#
+            );
+
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.x, {argument}.y, {argument}.z, {argument}.w"));
+
+        let test_input: Vec<PodVector> = vec![
+            PodVector {x: 0.0, y: 1.0,      z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: 0.0, y: 1.0,      z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+
+            PodVector {x: 0.0, y: 100.0,    z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: 0.0, y: 100.0,    z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+
+            PodVector {x: -113.0, y: 117.0, z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: -113.0, y: 117.0, z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+
+            PodVector {x: 3.7, y: 5.1,      z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: 3.7, y: 5.1,      z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+
+            PodVector {x: -3.7, y: 5.1,     z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: -3.7, y: 5.1,     z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+
+            PodVector {x: -300.7, y: -50.1, z: 100.0 /*iterations count*/, w: 0.0 /* - take min*/,},
+            PodVector {x: -300.7, y: -50.1, z: 100.0 /*iterations count*/, w: 1.0 /* - take max*/,},
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<PodVector, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+
+        for i in 0..test_input.len() {
+            assert!(actual_output[i] >= test_input[i].x && actual_output[i] < test_input[i].y, "random_double failed for input: {:?}", test_input[i]);
+        }
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_hit_aabb(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("AabbAndRay", "vec4f", "hit_aabb_t")
             .with_custom_type(
                 TypeDeclaration::new("AabbAndRay", "box_min", "vec3f")
@@ -443,13 +845,14 @@ mod tests {
         ];
 
         let execution_config = config_empty_bindings();
-        let actual_output = execute_code::<AabbAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<AabbAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_hit_triangle() {
+    fn test_hit_triangle(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("TriangleAndRay", "vec4f", "hit_triangle_t")
             .with_custom_type(
                 TypeDeclaration::new("TriangleAndRay", "a", "vec3f")
@@ -513,13 +916,14 @@ mod tests {
             PodVector {x: -2.0, y: 0.5, z: 0.5, w: 1.0,},
         ];
 
-        let actual_output = execute_code::<TriangleAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<TriangleAndRay, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_shadow() {
+    fn test_shadow(fixture: &mut GpuCodeExecutionContext) {
         let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
 
         let shader_code = generate_code_for(&identity_box_class);
@@ -583,14 +987,15 @@ mod tests {
             1.0,
         ];
 
-        let actual_output = execute_code::<ShadowInput, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<ShadowInput, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_perfect_reflection_evaluation() {
-        /* The main objective here is to test the 'evaluate_reflection' function with the
+    fn test_perfect_reflection_evaluation(fixture: &mut GpuCodeExecutionContext) {
+        /* The main goal here is to test the 'evaluate_reflection' function with the
         zero roughness passed to it.*/
         
         let template = ShaderFunction::new("PositionAndDirection", "vec4f", "evaluate_reflection_t")
@@ -623,13 +1028,14 @@ mod tests {
             PodVector {x:  SQRT_2, y:  -SQRT_2, z:  0.0, w:  0.0,},
         ];
         
-        let actual_output = execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<PositionAndDirection, PodVector>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
 
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_sample_signed_distance() {
+    fn test_sample_signed_distance(fixture: &mut GpuCodeExecutionContext) {
         let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
 
         let shader_code = generate_code_for(&identity_box_class);
@@ -680,13 +1086,12 @@ mod tests {
              0.0,
         ];
         
-        let actual_output = execute_code::<PositionAndDirection, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
+        let actual_output = fixture.get().execute_code::<PositionAndDirection, f32>(bytemuck::cast_slice(&test_input), function_execution, execution_config);
         
         assert_eq(bytemuck::cast_slice(&actual_output), bytemuck::cast_slice(&expected_output), COMMON_GPU_EVALUATIONS_EPSILON);
     }
 
     impl ExecutionConfig {
-        #[must_use]
         fn common_test_config(&mut self) -> &mut Self {
             self
                 .set_test_data_binding_group(TEST_DATA_IO_BINDING_GROUP)
@@ -717,7 +1122,6 @@ mod tests {
             .common_test_config()
             .set_dummy_binding_group(1, vec![], vec![], vec![])
             .set_storage_binding_group(0, vec![], vec![
-                // the only value we need (in uniforms) is sdf instances count which is 1
                 DataBindGroupSlot::new(0, uniforms.serialize().backend()),
             ])
         ;

@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::scene::camera::Camera;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use std::time::Duration;

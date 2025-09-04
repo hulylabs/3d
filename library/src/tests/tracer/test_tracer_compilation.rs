@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_context;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
@@ -9,7 +9,7 @@ mod tests {
         let context = create_headless_wgpu_context();
         let resources = Resources::new(context);
         
-        const DUMMY_IMPLEMENTATIONS: &str = include_str!("../../assets/shaders/dummy_implementations.wgsl");
+        const DUMMY_IMPLEMENTATIONS: &str = include_str!("dummy_implementations.wgsl");
         let whole_shader_code = format!("{}\n{}", WHOLE_TRACER_GPU_CODE, DUMMY_IMPLEMENTATIONS);
         
         let _ = resources.create_shader_module("whole gpu code", whole_shader_code.as_str());

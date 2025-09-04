@@ -1,4 +1,4 @@
-﻿pub mod alias;
+pub mod alias;
 pub mod axis;
 pub mod transform;
 pub mod aabb;

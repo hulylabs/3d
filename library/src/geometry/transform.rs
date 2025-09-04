@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use cgmath::{InnerSpace, Matrix, Matrix4, SquareMatrix, Transform};
 
 pub type Affine = Matrix4<f64>;

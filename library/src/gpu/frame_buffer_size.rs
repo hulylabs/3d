@@ -1,4 +1,4 @@
-﻿use cgmath::Vector2;
+use cgmath::Vector2;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) struct FrameBufferSize {

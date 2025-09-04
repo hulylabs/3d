@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
 use crate::serialization::serialize_matrix::serialize_matrix_4x4;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector3, Zero};

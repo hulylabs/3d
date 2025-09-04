@@ -1,4 +1,4 @@
-﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
 use palette::Srgb;
 use strum_macros::{EnumCount, EnumIter};

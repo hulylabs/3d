@@ -1,28 +1,8 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::axis::Axis;
     use crate::geometry::epsilon::DEFAULT_EPSILON_F32;
-    use crate::sdf::composition::sdf_union::SdfUnion;
-    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
-    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::framework::sdf_base::Sdf;
-    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
-    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
-    use crate::sdf::object::sdf_box::SdfBox;
-    use crate::sdf::object::sdf_sphere::SdfSphere;
-    use crate::sdf::transformation::sdf_translation::SdfTranslation;
-    use crate::serialization::pod_vector::PodVector;
-    use crate::shader::function_name::FunctionName;
-    use crate::tests::gpu_code_execution::tests::{execute_code, ExecutionConfig};
-    use crate::tests::sdf_sample_cases::tests::SdfSampleCases;
-    use crate::tests::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
-    use crate::utils::tests::assert_utils::tests::assert_eq;
-    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
-    use cgmath::{Deg, InnerSpace};
-    use more_asserts::{assert_ge, assert_gt};
-    use rstest::rstest;
-    use std::rc::Rc;
     use crate::palette::sdf::sdf_box_frame::SdfBoxFrame;
     use crate::palette::sdf::sdf_capped_cylinder_along_axis::SdfCappedCylinderAlongAxis;
     use crate::palette::sdf::sdf_capped_torus_xy::SdfCappedTorusXy;
@@ -39,10 +19,31 @@ mod tests {
     use crate::palette::sdf::sdf_torus_xz::SdfTorusXz;
     use crate::palette::sdf::sdf_triangular_prism::SdfTriangularPrism;
     use crate::palette::sdf::sdf_vesica_segment::SdfVesicaSegment;
+    use crate::sdf::composition::sdf_union::SdfUnion;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_base::Sdf;
     use crate::sdf::framework::sdf_code_generator::SdfCodeGenerator;
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
+    use crate::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
+    use crate::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
+    use crate::sdf::object::sdf_box::SdfBox;
+    use crate::sdf::object::sdf_sphere::SdfSphere;
+    use crate::sdf::transformation::sdf_translation::SdfTranslation;
+    use crate::serialization::pod_vector::PodVector;
+    use crate::shader::function_name::FunctionName;
+    use crate::tests::scaffolding::gpu_code_execution::tests::{ExecutionConfig, GpuCodeExecutionContext, GpuCodeExecutor};
+    use crate::tests::scaffolding::sdf_sample_cases::tests::SdfSampleCases;
+    use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
+    use crate::utils::tests::assert_utils::tests::assert_eq;
+    use crate::utils::tests::common_values::tests::COMMON_GPU_EVALUATIONS_EPSILON;
+    use cgmath::{Deg, InnerSpace};
+    use more_asserts::{assert_ge, assert_gt};
+    use std::rc::Rc;
+    use test_context::test_context;
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_sdf_union_spheres() {
+    fn test_sdf_union_spheres(fixture: &mut GpuCodeExecutionContext) {
         let system_under_test = SdfUnion::new(
             SdfTranslation::new(Vector::new(0.0,  7.0, 0.0), SdfSphere::new(2.0)),
             SdfTranslation::new(Vector::new(0.0, -7.0, 0.0), SdfSphere::new(2.0)),
@@ -60,14 +61,18 @@ mod tests {
         test_cases.add_case(0.0, -7.0, 0.0, -2.0_f32);
         test_cases.add_case(0.0, -9.0, 0.0,  0.0_f32);
 
-        test_sdf_evaluation(system_under_test, "spheres_union", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "spheres_union", &test_cases);
     }
 
-    #[rstest]
-    #[case(Axis::X)]
-    #[case(Axis::Y)]
-    #[case(Axis::Z)]
-    fn test_identity_bending(#[case] axis: Axis) {
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_identity_bending(fixture: &mut GpuCodeExecutionContext) {
+        test_identity_bending_along_axis(fixture, Axis::X);
+        test_identity_bending_along_axis(fixture, Axis::Y);
+        test_identity_bending_along_axis(fixture, Axis::Z);
+    }
+
+    fn test_identity_bending_along_axis(fixture: &mut GpuCodeExecutionContext, axis: Axis) {
         let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
         let system_under_test = SdfBenderAlongAxis::new(subject, axis, Axis::X, 1.0, 1.0);
 
@@ -76,14 +81,18 @@ mod tests {
         test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
         test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
 
-        test_sdf_evaluation(system_under_test, "bend_sphere", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "bend_sphere", &test_cases);
     }
 
-    #[rstest]
-    #[case(Axis::X)]
-    #[case(Axis::Y)]
-    #[case(Axis::Z)]
-    fn test_identity_twister(#[case] axis: Axis) {
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
+    fn test_identity_twister(fixture: &mut GpuCodeExecutionContext) {
+        test_identity_twister_along_axis(fixture, Axis::X);
+        test_identity_twister_along_axis(fixture, Axis::Y);
+        test_identity_twister_along_axis(fixture, Axis::Z);
+    }
+
+    fn test_identity_twister_along_axis(fixture: &mut GpuCodeExecutionContext, axis: Axis) {
         let subject = SdfTranslation::new(Vector::new(1.0, 3.0, 5.0), SdfSphere::new(3.0));
         let system_under_test = SdfTwisterAlongAxis::new(subject, axis, 1.0, 1.0);
 
@@ -92,11 +101,12 @@ mod tests {
         test_cases.add_case(1.0 , 6.0 , 5.0 , 0.0_f32);
         test_cases.add_case(9.0 ,  3.0 , 5.0, 5.0_f32);
 
-        test_sdf_evaluation(system_under_test, "twist_sphere", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "twist_sphere", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_sdf_sphere() {
+    fn test_sdf_sphere(fixture: &mut GpuCodeExecutionContext) {
         let system_under_test = SdfSphere::new(17.0);
 
         let mut test_cases = SdfSampleCases::<f32>::new();
@@ -104,11 +114,12 @@ mod tests {
         test_cases.add_case(0.0 , 17.0 , 0.0 , 0.0_f32);
         test_cases.add_case(0.0 ,  0.0 , 23.0, 6.0_f32);
 
-        test_sdf_evaluation(system_under_test, "sphere", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "sphere", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_sdf_box() {
+    fn test_sdf_box(fixture: &mut GpuCodeExecutionContext) {
         let system_under_test = SdfBox::new(Vector::new(1.0, 2.0, 3.0));
 
         let mut test_cases = SdfSampleCases::<f32>::new();
@@ -127,11 +138,12 @@ mod tests {
         test_cases.add_case( 1.0,  2.2,  3.0,  0.2_f32);
         test_cases.add_case( 1.0,  2.0,  5.0,  2.0_f32);
         
-        test_sdf_evaluation(system_under_test, "box", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "box", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_sdf_round_box() {
+    fn test_sdf_round_box(fixture: &mut GpuCodeExecutionContext) {
         let radius = 0.2;
         let system_under_test = SdfRoundBox::new(Vector::new(1.0, 2.0, 3.0), radius);
 
@@ -144,11 +156,12 @@ mod tests {
         test_cases.add_case(0.0, 0.0,2.7,-0.3_f32       );
         test_cases.add_case(1.0, 2.0,3.0, 0.14641021_f32);
 
-        test_sdf_evaluation(system_under_test, "box", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "box", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn tes_box_frame() {
+    fn tes_box_frame(fixture: &mut GpuCodeExecutionContext) {
         let system_under_test =
             SdfTranslation::new(Vector::new(-1.0, -1.0, -1.0), SdfBoxFrame::new(Vector::new(1.0, 2.0, 3.0), 0.1));
 
@@ -156,11 +169,12 @@ mod tests {
         test_cases.add_case(-1.0 , -1.0 , -1.0, 1.9697715_f32);
         test_cases.add_case( 0.0 ,  1.0 ,  2.0, 0.0_f32);
 
-        test_sdf_evaluation(system_under_test, "box_frame", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "box_frame", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_torus_xz() {
+    fn test_torus_xz(fixture: &mut GpuCodeExecutionContext) {
         let minor_radius = 5.0;
         let major_radius = 7.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfTorusXz::new(major_radius, minor_radius));
@@ -172,11 +186,12 @@ mod tests {
         test_cases.add_case(1.0, 2.0,  9.0, -4.0_f32);
         test_cases.add_case(3.0, 2.0,  3.0,  0.0_f32);
 
-        test_sdf_evaluation(system_under_test, "torus", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "torus", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_capped_torus_xy() {
+    fn test_capped_torus_xy(fixture: &mut GpuCodeExecutionContext) {
         let minor_radius = 1.0;
         let major_radius = 2.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfCappedTorusXy::new(Deg(180.0), major_radius, minor_radius));
@@ -188,11 +203,12 @@ mod tests {
         test_cases.add_case(1.0, 3.0, 3.0,  0.0_f32);
         test_cases.add_case(1.0, 4.0, 3.0, -1.0_f32);
 
-        test_sdf_evaluation(system_under_test, "capped_torus", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "capped_torus", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_link() {
+    fn test_link(fixture: &mut GpuCodeExecutionContext) {
         let outer_radius = 1.0;
         let inner_radius = 2.0;
         let half_length = 4.0;
@@ -201,11 +217,12 @@ mod tests {
         let mut test_cases = SdfSampleCases::<f32>::new();
         test_cases.add_case(1.0,2.0, 3.0, 1.0_f32);
 
-        test_sdf_evaluation(system_under_test, "link", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "link", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_cone() {
+    fn test_cone(fixture: &mut GpuCodeExecutionContext) {
         let height = 5.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfCone::new(Deg(45.0), height));
 
@@ -215,11 +232,12 @@ mod tests {
         test_cases.add_case(1.0, 7.0, 3.0, 5.0_f32);
         test_cases.add_case(1.0, 8.0, 3.0, 6.0_f32);
 
-        test_sdf_evaluation(system_under_test, "cone", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "cone", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_hex_prism() {
+    fn test_hex_prism(fixture: &mut GpuCodeExecutionContext) {
         let width = 7.0;
         let height = 5.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfHexPrism::new(width, height));
@@ -229,11 +247,12 @@ mod tests {
         test_cases.add_case(8.0, 3.0 ,3.0, -0.43782234_f32);
         test_cases.add_case(1.0, 12.0,3.0,  3.0_f32       );
 
-        test_sdf_evaluation(system_under_test, "hex_prism", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "hex_prism", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_triangular_prism() {
+    fn test_triangular_prism(fixture: &mut GpuCodeExecutionContext) {
         let width = 3.0;
         let height = 5.0;
         let system_under_test = SdfTranslation::new(Vector::new(3.0, 2.0, 1.0), SdfTriangularPrism::new(width, height));
@@ -244,12 +263,13 @@ mod tests {
         test_cases.add_case(3.0, 3.0, 1.0, -1.0_f32     );
         test_cases.add_case(4.0, 2.0, 1.0, -0.633975_f32);
 
-        test_sdf_evaluation(system_under_test, "hex_prism", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "hex_prism", &test_cases);
     }
-    
-    
+
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_capsule() {
+    fn test_capsule(fixture: &mut GpuCodeExecutionContext) {
         let start = Point::new(0.0, 0.0, -1.0);
         let end = Point::new(0.0, 0.0, 1.0);
         let radius = 5.0;
@@ -260,11 +280,12 @@ mod tests {
         test_cases.add_case(3.0, 5.0, 13.0,  0.0_f32);
         test_cases.add_case(3.0, 5.0, 1.0 ,  0.0_f32);
 
-        test_sdf_evaluation(system_under_test, "capsule", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "capsule", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_capped_cylinder_y() {
+    fn test_capped_cylinder_y(fixture: &mut GpuCodeExecutionContext) {
         let half_height = 19.0;
         let radius = 5.0;
         let system_under_test = SdfTranslation::new(Vector::new(3.0, 5.0, 7.0), SdfCappedCylinderAlongAxis::new(Axis::Y, half_height, radius));
@@ -275,11 +296,12 @@ mod tests {
         test_cases.add_case(3.0,  24.0 ,7.0,  0.0_f32);
         test_cases.add_case(3.0, -14.0 ,7.0,  0.0_f32);
         
-        test_sdf_evaluation(system_under_test, "capped_cylinder_y", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "capped_cylinder_y", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_solid_angle() {
+    fn test_solid_angle(fixture: &mut GpuCodeExecutionContext) {
         let radius = 5.0;
         let system_under_test = SdfTranslation::new(Vector::new(3.0, 5.0, 7.0), SdfSolidAngle::new(Deg(45.0), radius));
 
@@ -287,11 +309,12 @@ mod tests {
         test_cases.add_case(3.0, 5.0, 7.0, 0.0_f32          );
         test_cases.add_case(3.0, 6.0, 7.0, -std::f32::consts::FRAC_1_SQRT_2);
         
-        test_sdf_evaluation(system_under_test, "solid_angle", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "solid_angle", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_cut_hollow_sphere() {
+    fn test_cut_hollow_sphere(fixture: &mut GpuCodeExecutionContext) {
         let radius = 13.0;
         let cut_height = 6.0;
         let thickness = 1.0;
@@ -302,11 +325,12 @@ mod tests {
         test_cases.add_case(1.0, 2.0, 16.0, -1.0_f32,);
         test_cases.add_case(1.0, 2.0, 17.0,  0.0_f32,);
     
-        test_sdf_evaluation(system_under_test, "cut_hollow_sphere", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "cut_hollow_sphere", &test_cases);
     }
 
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_round_cone() {
+    fn test_round_cone(fixture: &mut GpuCodeExecutionContext) {
         let height = 7.0;
         let radius_major = 2.0;
         let radius_minor = 1.0;
@@ -319,11 +343,12 @@ mod tests {
         test_cases.add_case(1.0, 9.0 , 3.0, -1.0_f32       );
         test_cases.add_case(1.0, 10.0, 3.0,  0.0_f32       );
         
-        test_sdf_evaluation(system_under_test, "round_cone", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "round_cone", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_vesica_segment() {
+    fn test_vesica_segment(fixture: &mut GpuCodeExecutionContext) {
         let width = 7.0;
         let start = Point::new(3.0, 0.0, 0.0);
         let end = Point::new(0.0, 7.0, 0.0);
@@ -334,11 +359,12 @@ mod tests {
         test_cases.add_case(3.0, 0.0, 0.0,  0.808540_f32,);
         test_cases.add_case(0.0, 7.0, 0.0, -1.974256_f32,);
         
-        test_sdf_evaluation(system_under_test, "vesica_segment", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "vesica_segment", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_octahedron() {
+    fn test_octahedron(fixture: &mut GpuCodeExecutionContext) {
         let size = 1.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfOctahedron::new(size));
 
@@ -349,11 +375,12 @@ mod tests {
         test_cases.add_case(3.0, 2.0, 3.0,  1.0_f32,);
         test_cases.add_case(1.0, 2.0, 6.0,  2.0_f32,);
     
-        test_sdf_evaluation(system_under_test, "octahedron", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "octahedron", &test_cases);
     }
-    
+
+    #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_pyramid() {
+    fn test_pyramid(fixture: &mut GpuCodeExecutionContext) {
         let size = 13.0;
         let system_under_test = SdfTranslation::new(Vector::new(1.0, 2.0, 3.0), SdfPyramid::new(size));
 
@@ -361,10 +388,10 @@ mod tests {
         test_cases.add_case(1.0  , 2.0  , 3.0, 0.0);
         test_cases.add_case(1.0  , 15.0  , 3.0, 0.0);
 
-        test_sdf_evaluation(system_under_test, "pyramid", &test_cases);
+        test_sdf_evaluation(fixture.get(), system_under_test, "pyramid", &test_cases);
     }
 
-    fn test_sdf_evaluation(sdf: Rc<dyn Sdf>, name: &str, test_cases: &SdfSampleCases<f32>) {
+    fn test_sdf_evaluation(executor: Rc<GpuCodeExecutor>, sdf: Rc<dyn Sdf>, name: &str, test_cases: &SdfSampleCases<f32>) {
         let named = NamedSdf::new(sdf, UniqueSdfClassName::new(name.to_string()));
 
         let mut registrator = SdfRegistrator::new();
@@ -376,13 +403,13 @@ mod tests {
         let function_to_call = generator.generate_unique_code_for(&named, &mut sdf_shader_code);
         generator.generate_shared_code(&mut sdf_shader_code);
 
-        let actual_distances = execute_function(&test_cases.sample_positions(), &function_to_call, &sdf_shader_code);
+        let actual_distances = execute_function(executor.clone(), &test_cases.sample_positions(), &function_to_call, &sdf_shader_code);
         assert_eq(&actual_distances, test_cases.expected_outcomes(), COMMON_GPU_EVALUATIONS_EPSILON);
 
-        check_sdf_values_around_aabb(&named, &sdf_shader_code, &function_to_call);
+        check_sdf_values_around_aabb(executor.clone(), &named, &sdf_shader_code, &function_to_call);
     }
 
-    fn check_sdf_values_around_aabb(named: &NamedSdf, sdf_shader_code: &String, function_to_call: &FunctionName) {
+    fn check_sdf_values_around_aabb(executor: Rc<GpuCodeExecutor>, named: &NamedSdf, sdf_shader_code: &String, function_to_call: &FunctionName) {
         let aabb = named.sdf().aabb();
         let mut test_data = SdfSampleCases::<RelativeOutcome>::new();
         
@@ -415,7 +442,7 @@ mod tests {
             test_data.add_case_point(corner_point + offset, RelativeOutcome::Outside);
         }
 
-        let actual_distances = execute_function(test_data.sample_positions(), &function_to_call, &sdf_shader_code);
+        let actual_distances = execute_function(executor, test_data.sample_positions(), &function_to_call, &sdf_shader_code);
         for i in 0..actual_distances.len() {
             match test_data.expected_outcomes()[i] {
                 RelativeOutcome::BorderOrOutside => {
@@ -434,12 +461,12 @@ mod tests {
     }
     
     #[must_use]
-    fn execute_function(input: &[PodVector], function_name: &FunctionName, function_code: &String) -> Vec<f32> {
+    fn execute_function(executor: Rc<GpuCodeExecutor>, input: &[PodVector], function_name: &FunctionName, function_code: &String) -> Vec<f32> {
         let template = ShaderFunction::new("vec4f", "f32", function_name.0.as_str())
             .with_additional_shader_code(function_code.as_str());
         
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz, 0.0"));
 
-        execute_code(input, function_execution, ExecutionConfig::default())
+        executor.execute_code(input, function_execution, ExecutionConfig::default())
     }
 }

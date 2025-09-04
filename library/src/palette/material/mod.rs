@@ -1,1 +1,1 @@
-﻿pub mod procedural_texture_checkerboard;
+pub mod procedural_texture_checkerboard;

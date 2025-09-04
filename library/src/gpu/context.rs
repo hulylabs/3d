@@ -1,4 +1,4 @@
-﻿use wgpu::{AdapterInfo, PollStatus, SubmissionIndex};
+use wgpu::{AdapterInfo, PollStatus, SubmissionIndex};
 use wgpu::wgt::PollType;
 
 pub(crate) struct Context {
