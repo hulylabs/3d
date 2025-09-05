@@ -119,7 +119,7 @@ impl FrameBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use wgpu::CommandEncoderDescriptor;
 
     #[must_use]
@@ -129,7 +129,7 @@ mod tests {
     
     #[test]
     fn test_construction() {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         
         let system_under_test = FrameBuffer::new(context.device(), test_buffer_size());
         
@@ -154,7 +154,7 @@ mod tests {
 
     #[must_use]
     fn test_aux_buffers_reading() -> FrameBuffer {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
 
         let mut system_under_test = FrameBuffer::new(context.device(), test_buffer_size());
 

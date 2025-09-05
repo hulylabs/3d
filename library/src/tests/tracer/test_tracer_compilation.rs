@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use crate::gpu::render::WHOLE_TRACER_GPU_CODE;
     use crate::gpu::resources::Resources;
 
     #[test]
     fn test_compilation() {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         let resources = Resources::new(context);
         
         const DUMMY_IMPLEMENTATIONS: &str = include_str!("dummy_implementations.wgsl");

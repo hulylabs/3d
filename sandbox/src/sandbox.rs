@@ -247,7 +247,7 @@ impl Sandbox {
         let tech_world_procedural_textures = TechWorldProceduralTextures::new(&mut procedural_textures_registrator);
 
         let texture_atlas_page_size = BitmapSize::new(512, 512);
-        let mut scene = VisualObjects::new(texture_atlas_page_size, Some(sdf_registrator), Some(procedural_textures_registrator));
+        let mut scene = VisualObjects::new(Some(texture_atlas_page_size), Some(sdf_registrator), Some(procedural_textures_registrator));
 
         let tech_world_bitmap_textures = TechWorldBitmapTextures::new(scene.mutable_texture_atlas_page_composer())?;
         let tech_materials = TechWorldMaterials::new(&mut scene, tech_world_procedural_textures, tech_world_bitmap_textures);

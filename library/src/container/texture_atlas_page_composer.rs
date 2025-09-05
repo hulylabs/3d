@@ -10,9 +10,9 @@ use cgmath::Vector2;
 use etagere::{AllocId, AtlasAllocator, Size};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+use crate::utils::file_system::ensure_folders_exist;
 
 pub type AtlasRegionUid = AllocId;
 
@@ -105,10 +105,8 @@ impl TextureAtlasPageComposer {
         self.page_size
     }
 
-    pub fn save_page_into<FilePath: AsRef<Path>>(&self, file_path: FilePath) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(parent_dir) = file_path.as_ref().parent() {
-            fs::create_dir_all(parent_dir)?;
-        }
+    pub fn save_page_into(&self, file_path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+        ensure_folders_exist(&file_path)?;
         save_bitmap_to_png(&self.atlas_page_buffer, self.page_size, file_path.as_ref())
     }
 }

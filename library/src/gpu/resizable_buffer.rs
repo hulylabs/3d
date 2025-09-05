@@ -72,7 +72,7 @@ impl ResizableBuffer {
 mod tests {
     use rstest::rstest;
     use crate::gpu::context::Context;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use super::*;
 
     #[must_use]
@@ -84,7 +84,7 @@ mod tests {
     
     #[must_use]
     fn make_system_under_test() -> (ResizableBuffer, Resources, Rc<Context>) {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         let resources = Resources::new(context.clone());
         let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 

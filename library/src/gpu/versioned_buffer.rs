@@ -100,7 +100,7 @@ impl VersionedBuffer {
 mod tests {
     use test_context::{test_context, TestContext};
     use crate::gpu::context::Context;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use super::*;
 
     impl BufferUpdateStatus {
@@ -126,7 +126,7 @@ mod tests {
 
     impl TestContext for Fixture {
         fn setup() -> Fixture {
-            let context = create_headless_wgpu_context();
+            let context = create_headless_wgpu_vulkan_context();
             let resources = Resources::new(context.clone());
             let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 

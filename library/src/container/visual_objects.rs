@@ -59,15 +59,16 @@ pub(crate) enum DataKind {
 
 impl VisualObjects {
     #[must_use]
-    pub fn new(texture_atlas_page_size: BitmapSize, sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
+    pub fn new(texture_atlas_page_size: Option<BitmapSize>, sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
         let materials = MaterialsWarehouse::new(procedural_textures);
         let texture_atlas_regions = materials.texture_atlas_regions();
+        let atlas_page_composer = TextureAtlasPageComposer::new(texture_atlas_page_size.unwrap_or(BitmapSize::new(1, 1)), texture_atlas_regions);
         Self {
             per_object_kind_statistics: vec![Statistics::default(); DataKind::COUNT],
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials,
-            texture_atlas_page_composer: TextureAtlasPageComposer::new(texture_atlas_page_size, texture_atlas_regions),
+            texture_atlas_page_composer: atlas_page_composer,
             sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
@@ -385,7 +386,6 @@ mod tests {
     use std::rc::Rc;
     use strum::{EnumCount, IntoEnumIterator};
     use tempfile::NamedTempFile;
-    use crate::utils::bitmap_utils::BitmapSize;
 
     #[must_use]
     fn make_test_mesh() -> (MeshWarehouse, WarehouseSlot) {
@@ -406,7 +406,7 @@ mod tests {
 
     #[must_use]
     fn make_empty_container() -> VisualObjects {
-        VisualObjects::new(BitmapSize::new(1,1), None, None)
+        VisualObjects::new(None, None, None)
     }
 
     #[must_use]
@@ -420,7 +420,7 @@ mod tests {
         let sdf_class_name = UniqueSdfClassName::new("i".to_string());
         sdf_registrator.add(&NamedSdf::new(SdfSphere::new(1.0), sdf_class_name.clone()));
 
-        (VisualObjects::new(BitmapSize::new(1,1), Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
+        (VisualObjects::new(None, Some(sdf_registrator), Some(textures)), texture_uid, sdf_class_name)
     }
 
     #[must_use]
@@ -463,7 +463,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(None, Some(sdf_classes), None)));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
+        let mut system_under_test = VisualObjects::new(None, Some(sdf_classes), None);
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -727,7 +727,7 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = VisualObjects::new(BitmapSize::new(1,1), Some(sdf_classes), None);
+        let mut container = VisualObjects::new(None, Some(sdf_classes), None);
 
         let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();

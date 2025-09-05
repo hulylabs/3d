@@ -2,7 +2,7 @@
 pub mod tests {
     use crate::gpu::compute_pipeline::ComputePipeline;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use crate::gpu::output::duplex_layer::DuplexLayer;
     use crate::gpu::output::frame_buffer_layer::SupportUpdateFromCpu;
     use crate::gpu::pipeline_code::PipelineCode;
@@ -189,7 +189,7 @@ pub mod tests {
     impl GpuCodeExecutor {
         #[must_use]
         pub(crate) fn new() -> Self {
-            let context = create_headless_wgpu_context();
+            let context = create_headless_wgpu_vulkan_context();
             Self { gpu_context: context.clone(), resources: Resources::new(context) }
         }
 
