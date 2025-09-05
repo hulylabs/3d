@@ -110,7 +110,7 @@ impl Engine {
     pub async fn new(window: Arc<Window>, scene: VisualObjects, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::DEBUG,
+            // flags: wgpu::InstanceFlags::DEBUG,
             ..Default::default()
         });
 

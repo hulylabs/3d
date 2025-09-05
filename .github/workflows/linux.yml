@@ -65,7 +65,17 @@ jobs:
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
             cargo test -p library --release --verbose
+          else
+            cargo test -p library --verbose
           fi
+
+      - name: Upload test output artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.build-type }}
+          path: library/tests/out/
+          if-no-files-found: ignore
 
       - name: Install cargo-tarpaulin
         if: matrix.build-type == 'debug'
