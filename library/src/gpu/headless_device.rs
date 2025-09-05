@@ -1,5 +1,6 @@
 #[cfg(test)]
 pub(crate) mod tests {
+    use crate::backend_vulkan_or_primary;
     use crate::gpu::adapter_features::AdapterFeatures;
     use crate::gpu::context::Context;
     use std::rc::Rc;
@@ -20,13 +21,13 @@ pub(crate) mod tests {
 
     That’s why we use exactly one explicitly chosen instance for all tests.
     */
-    static VULKAN_INSTANCE: OnceLock<Instance> = OnceLock::new();
+    static THE_INSTANCE_FOR_TESTS: OnceLock<Instance> = OnceLock::new();
 
     #[must_use]
-    pub(crate) fn get_vulkan_instance() -> &'static Instance {
-        VULKAN_INSTANCE.get_or_init(|| {
+    pub(crate) fn get_wgpu_single_instance() -> &'static Instance {
+        THE_INSTANCE_FOR_TESTS.get_or_init(|| {
             Instance::new(&wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::VULKAN,
+                backends: backend_vulkan_or_primary(),
                 ..Default::default()
             })
         })
@@ -34,7 +35,7 @@ pub(crate) mod tests {
 
     #[must_use]
     pub(crate) fn create_headless_wgpu_vulkan_context() -> Rc<Context> {
-        Rc::new(pollster::block_on(create_headless_wgpu_device_async(get_vulkan_instance())))
+        Rc::new(pollster::block_on(create_headless_wgpu_device_async(get_wgpu_single_instance())))
     }
 
     #[must_use]
