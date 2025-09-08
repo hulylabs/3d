@@ -118,14 +118,14 @@ impl GpuSerializable for MaterialProperties {
             self.albedo.blue,
         );
         container.write_padded_quartet_f32(
-            self.specular.red,
-            self.specular.green,
-            self.specular.blue,
-        );
-        container.write_quartet_f32(
             self.emission.red,
             self.emission.green,
             self.emission.blue,
+        );
+        container.write_quartet_f32(
+            self.specular.red,
+            self.specular.green,
+            self.specular.blue,
             self.specular_strength as f32,
         );
         container.write_quartet(|writer| {
@@ -188,20 +188,20 @@ mod tests {
 
         let serialized: &[u32] = cast_slice(&container.backend());
 
-        assert_eq!(f32::from_bits(serialized[ 0]), expected_albedo.red);
-        assert_eq!(f32::from_bits(serialized[ 1]), expected_albedo.green);
-        assert_eq!(f32::from_bits(serialized[ 2]), expected_albedo.blue);
-        assert_eq!(f32::from_bits(serialized[ 3]), DEFAULT_PAD_VALUE);
+        assert_eq!(f32::from_bits(serialized[ 0]),  expected_albedo.red);
+        assert_eq!(f32::from_bits(serialized[ 1]),  expected_albedo.green);
+        assert_eq!(f32::from_bits(serialized[ 2]),  expected_albedo.blue);
+        assert_eq!(f32::from_bits(serialized[ 3]),  DEFAULT_PAD_VALUE);
 
-        assert_eq!(f32::from_bits(serialized[ 4]), expected_specular.red);
-        assert_eq!(f32::from_bits(serialized[ 5]), expected_specular.green);
-        assert_eq!(f32::from_bits(serialized[ 6]), expected_specular.blue);
-        assert_eq!(f32::from_bits(serialized[ 7]), DEFAULT_PAD_VALUE);
+        assert_eq!(f32::from_bits(serialized[4]),  expected_emission.red);
+        assert_eq!(f32::from_bits(serialized[5]),  expected_emission.green);
+        assert_eq!(f32::from_bits(serialized[6]),  expected_emission.blue);
+        assert_eq!(f32::from_bits(serialized[7]),  DEFAULT_PAD_VALUE);
 
-        assert_eq!(f32::from_bits(serialized[ 8]),  expected_emission.red);
-        assert_eq!(f32::from_bits(serialized[ 9]),  expected_emission.green);
-        assert_eq!(f32::from_bits(serialized[10]), expected_emission.blue);
-        assert_eq!(f32::from_bits(serialized[11]), expected_specular_strength as f32);
+        assert_eq!(f32::from_bits(serialized[ 8]),  expected_specular.red);
+        assert_eq!(f32::from_bits(serialized[ 9]),  expected_specular.green);
+        assert_eq!(f32::from_bits(serialized[10]),  expected_specular.blue);
+        assert_eq!(f32::from_bits(serialized[11]),  expected_specular_strength as f32);
 
         assert_eq!(f32::from_bits(serialized[12]), expected_roughness as f32);
         assert_eq!(f32::from_bits(serialized[13]), expected_refractive_index as f32);

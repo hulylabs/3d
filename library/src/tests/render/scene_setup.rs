@@ -32,8 +32,9 @@ pub(crate) mod tests {
     const TEST_FRAME_BUFFER_SIZE: FrameBufferSize = FrameBufferSize::new(TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT);
 
     const TEST_ANTI_ALIASING_LEVEL: u32 = 3;
-    const TEST_REFRACTIVE_INDEX: f64 = 1.5;
-    
+    const TEST_REFRACTIVE_INDEX: f64 = 1.8;
+    const TEST_SPECULAR_STRENGTH: f64 = 0.5;
+
     #[must_use]
     fn do_we_have_cli_flag_on(flag: &str) -> bool {
         let arguments: Vec<String> = env::args().collect();
@@ -116,41 +117,56 @@ pub(crate) mod tests {
 
         let mut scene = VisualObjects::new(None, Some(registrator), None);
 
-        let magenta_emissive_material = scene.materials_mutable().add(&MaterialProperties::new()
+        let emissive_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_emission(light_color.red, light_color.green, light_color.blue));
 
         let white_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(1.0, 1.0, 1.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
         let gray_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(0.5, 0.5, 0.5)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
         let yellow_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(1.0, 1.0, 0.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_class(material_customization)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
         let magenta_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(1.0, 0.0, 1.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_class(material_customization)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
         let cyan_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(0.0, 1.0, 1.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(4.0)
             .with_class(material_customization)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
         let bright_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(4.0, 3.0, 2.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_class(material_customization)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
 
         scene.add_sdf(
-            &(Affine::from_translation(Vector::new(-1.0, -1.0, 1.0)) * Affine::from_scale(0.5)),
+            &(Affine::from_translation(Vector::new(-1.0, -1.0, 0.9)) * Affine::from_scale(0.5)),
             1.0, &identity_sphere_sdf, magenta_material);
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(-1.0, -1.0, -0.2)) * Affine::from_scale(0.4)),
+            1.0, &identity_box_sdf, white_material);
 
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-1.0, 1.0, 0.0)) * Affine::from_scale(0.2)),
@@ -173,7 +189,7 @@ pub(crate) mod tests {
             1.0, &capsule_sdf, bright_material);
 
         scene.add_parallelogram(Point::new(-2.0, -2.0, -1.0), Vector::new(4.0, 0.0, 0.0), Vector::new(0.0, 4.0, 0.0), white_material);
-        scene.add_parallelogram(Point::new(-1.0, -2.0, -1.0), Vector::new(0.0, 0.0, 1.0), Vector::new(2.0, 0.0, 0.0), magenta_emissive_material);
+        scene.add_parallelogram(Point::new(-1.0, -2.0, -1.0), Vector::new(0.0, 0.0, 1.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
 
         let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, TEST_ANTI_ALIASING_LEVEL);
         let mut system_under_test

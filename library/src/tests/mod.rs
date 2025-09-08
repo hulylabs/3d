@@ -3,3 +3,4 @@ mod tracer;
 mod scaffolding;
 mod generated;
 mod render;
+mod data;

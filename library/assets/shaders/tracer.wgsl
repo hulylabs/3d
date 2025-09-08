@@ -53,7 +53,7 @@ const MAX_SDF_RAY_MARCH_STEPS = 120;
 @group(1) @binding( 2) var<storage, read_write> normal_buffer: array<vec4f>;
 @group(1) @binding( 3) var<storage, read_write> albedo_buffer: array<vec4f>;
 
-@group(2) @binding( 0) var<storage, read> quad_objs: array<Parallelogram>;
+@group(2) @binding( 0) var<storage, read> parallelograms: array<Parallelogram>;
 @group(2) @binding( 1) var<storage, read> sdf: array<Sdf>;
 @group(2) @binding( 2) var<storage, read> triangles: array<Triangle>;
 @group(2) @binding( 3) var<storage, read> materials: array<Material>;
@@ -97,8 +97,8 @@ struct Ray {
 
 struct Material {
 	albedo: vec3f,
-	specular: vec3f,
 	emission: vec3f,
+	specular: vec3f,
 	specular_strength: f32, // chance that a ray hitting would reflect specularly
 	roughness: f32, // diffuse strength
 	refractive_index_eta: f32, // refractive index
@@ -416,10 +416,10 @@ fn hit_aabb(box_min: vec3f, box_max: vec3f, tmin: f32, tmax: f32, ray_origin: ve
 
 fn get_lights() {
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
-		let emission = materials[quad_objs[i].material_id].emission;
+		let emission = materials[parallelograms[i].material_id].emission.rgb;
 
-		if(emission.x > 0.0) {
-			lights = quad_objs[i];
+		if(any(emission != vec3f(0.0))) {
+			lights = parallelograms[i];
 			break;
 		}
 	}
@@ -472,7 +472,7 @@ fn pixel_outside_frame_buffer(pixel_index: u32) -> bool {
     let ray = ray_and_differentials(camera, pixel, 0.5, 0.5);
 	let surface_intersection = trace_first_intersection(ray);
     object_id_buffer[pixel_index] = surface_intersection.object_uid;
-    albedo_buffer[pixel_index] = vec4f(surface_intersection.albedo, 1.0f);
+    albedo_buffer[pixel_index] = vec4f(surface_intersection.albedo.rgb, 1.0f);
     normal_buffer[pixel_index] = vec4f(surface_intersection.normal, 0.0f);
 }
 
@@ -645,7 +645,7 @@ fn trace_first_intersection(incident : RayAndDifferentials) -> FirstHitSurface {
     var hit_local: HitPlace = HitPlace(vec3f(0.0f), vec3f(0.0f));
 
     for(var i = u32(0); i < uniforms.parallelograms_count; i++){
-        let parallelogram = quad_objs[i];
+        let parallelogram = parallelograms[i];
         if(hit_quad(parallelogram, RAY_PARAMETER_MIN, closest_so_far, ray)) {
             hit_uid = parallelogram.object_uid;
             hit_material_id = parallelogram.material_id;
@@ -707,7 +707,7 @@ fn snap_to_grid(victim: vec3f, grid_step: f32) -> vec3f {
 
 @must_use
 fn fetch_albedo(hit: HitPlace, ray_direction: vec3f, ray_parameter: f32, material: Material, differentials: RayDifferentials) -> vec3f {
-    var result = material.albedo;
+    var result = material.albedo.rgb;
     if (material.albedo_texture_uid < 0) {
         /*
         Grid snapping reduces visual flickering caused by floating-point precision issues
@@ -804,7 +804,7 @@ fn hit_scene(ray: Ray, max_ray_patameter: f32) -> bool {
 	var hit_anything = false;
 
 	for(var i = u32(0); i < uniforms.parallelograms_count; i++) {
-		if(hit_quad(quad_objs[i], RAY_PARAMETER_MIN, closest_so_far, ray)) {
+		if(hit_quad(parallelograms[i], RAY_PARAMETER_MIN, closest_so_far, ray)) {
 			hit_anything = true;
 			closest_so_far = hitRec.t;
 		}
@@ -857,7 +857,7 @@ fn ray_color_monte_carlo(incident : RayAndDifferentials) -> vec3f {
 
         // TODO: differentials should be recalculated for each bounce; using same data for rays other than first ray (from eye) is incorrect
         let albedo_color = fetch_albedo(hitRec.local, current_ray.direction, hitRec.t, hitMaterial, incident.differentials);
-		var emission_color = hitMaterial.emission;
+		var emission_color = hitMaterial.emission.rgb;
 		if(!hitRec.front_face) {
 			emission_color = vec3f(0.0);
 		}
@@ -1288,7 +1288,7 @@ fn evaluate_dielectric_surface_color(camera_origin: vec3f, hit: HitRecord, hit_m
     let diffuse_fall_off = max(0.0, dot(hit.global.normal, to_light_direction));
     let to_camera_direction = normalize(camera_origin - hit.global.position);
     let reflected_light = reflect(-to_light_direction, hit.global.normal);
-    let specular_fall_off = max(0.0, dot(reflected_light, to_camera_direction)) * diffuse_fall_off;
+    let specular_fall_off = pow(max(0.0, dot(reflected_light, to_camera_direction)), 4.0) * diffuse_fall_off;
 
     //let shadow = evaluate_soft_shadow(hit.global.position, to_light_direction, light_size, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
     let shadow = evaluate_hard_shadow(hit.global.position, to_light_direction, DETERMINISTIC_SHADOW_START_BIAS, to_light_distance);
@@ -1299,9 +1299,9 @@ fn evaluate_dielectric_surface_color(camera_origin: vec3f, hit: HitRecord, hit_m
     let diffuse = diffuse_fall_off * hit_albedo * occlusion;
     let specular = specular_fall_off * hit_material.specular;
     let ambient = BACKGROUND_COLOR * hit_albedo * occlusion;
-    let emissive = hit_material.emission;
+    let emissive = hit_material.emission.rgb;
 
-    let light_color = materials[lights.material_id].emission;
+    let light_color = materials[lights.material_id].emission.rgb;
     let reflected = mix(diffuse, specular, hit_material.specular_strength);
 
     return reflected * light_color * shadow_lightened + ambient + emissive;
@@ -1341,7 +1341,7 @@ fn rand_from_seed(seed: f32) -> f32  {
 @must_use // 'to_light' expected to be normalized
 fn evaluate_hard_shadow(position: vec3f, to_light: vec3f, min_ray_offset: f32, max_ray_offset: f32) -> f32 {
     if (hit_scene(Ray(position + to_light * min_ray_offset, to_light), max_ray_offset)) {
-        if (any(hitMaterial.emission > vec3f(0.0))) {
+        if (any(hitMaterial.emission.rgb > vec3f(0.0))) {
             return 1.0;
         }
         return 0.0;

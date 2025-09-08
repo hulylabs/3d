@@ -126,7 +126,7 @@ pub(crate) mod tests {
             self
         }
 
-        pub(crate) fn with_additional_shader_code(mut self, code: impl Into<String>) -> Self {
+        pub(crate) fn with_additional_shader_code(mut self, code: impl ToString) -> Self {
             self.add_additional_shader_code(code);
             self
         }
@@ -140,8 +140,8 @@ pub(crate) mod tests {
             self.custom_types.push(type_declaration);
         }
 
-        pub(crate) fn add_additional_shader_code(&mut self, code: impl Into<String>) {
-            self.additional_code.push(code.into());
+        pub(crate) fn add_additional_shader_code(&mut self, code: impl ToString) {
+            self.additional_code.push(code.to_string());
         }
     }
     

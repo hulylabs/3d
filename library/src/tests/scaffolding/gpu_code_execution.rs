@@ -14,7 +14,6 @@ pub mod tests {
     use more_asserts::assert_gt;
     use std::collections::{HashMap, HashSet};
     use std::rc::Rc;
-    use std::thread;
     use test_context::TestContext;
     use wgpu::BufferUsages;
     use crate::gpu::context::Context;
@@ -173,7 +172,6 @@ pub mod tests {
 
     impl TestContext for GpuCodeExecutionContext {
         fn setup() -> GpuCodeExecutionContext {
-            println!("Current thread ID: {:?}", thread::current().id());
             GpuCodeExecutionContext::new()
         }
 

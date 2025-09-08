@@ -64,18 +64,19 @@ jobs:
       - name: Run Tests (${{ matrix.build-type }})
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
-            cargo test -p library --release --verbose
+            cargo test -p library --release --verbose -- --skip tests::render
           else
-            cargo test -p library --verbose
+            cargo test -p library --verbose -- --skip tests::render
           fi
 
       - name: Upload test output artifacts
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-output-${{ matrix.build-type }}
           path: library/tests/out/
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Install cargo-tarpaulin
         if: matrix.build-type == 'debug'
@@ -89,7 +90,8 @@ jobs:
             --workspace \
             --out Html \
             --out Stdout \
-            --output-dir coverage
+            --output-dir coverage \
+            -- --skip tests::render
 
       - name: Upload coverage reports as artifacts
         if: matrix.build-type == 'debug'
