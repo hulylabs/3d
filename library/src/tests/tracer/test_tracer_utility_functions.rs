@@ -9,7 +9,7 @@ mod tests {
     use crate::sdf::framework::named_sdf::NamedSdf;
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::serialization::pod_vector::PodVector;
-    use crate::tests::scaffolding::configuration::tests::{config_empty_bindings, config_sdf_sampling, config_sdf_shadow_sampling, generate_code_for, make_dummy_sdf_name, make_single_serialized_sdf_instance, to_pod};
+    use crate::tests::scaffolding::gpu_state_configuration::tests::{config_empty_bindings, config_sdf_sampling, config_sdf_shadow_sampling, generate_code_for, make_dummy_sdf_name, make_single_serialized_sdf_instance, to_pod};
     use crate::tests::scaffolding::dummy_implementations::tests::{DUMMY_IMPLEMENTATIONS, DUMMY_TEXTURE_SELECTION, TEST_DATA_IO_BINDING_GROUP};
     use crate::tests::scaffolding::gpu_code_execution::tests::{create_checkerboard_texture_data, DataBindGroupSlot, ExecutionConfig, GpuCodeExecutionContext, SamplerBindGroupSlot, TextureBindGroupSlot};
     use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction, TypeDeclaration};

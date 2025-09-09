@@ -1,18 +1,16 @@
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::{env, fs};
-    use std::ops::Deref;
-    use std::path::{Path, PathBuf};
-    use cgmath::Deg;
-    use palette::Srgb;
+    use crate::container::texture_helpers::load_bitmap;
     use crate::container::visual_objects::VisualObjects;
     use crate::geometry::alias::{Point, Vector};
     use crate::geometry::transform::Affine;
     use crate::gpu::color_buffer_evaluation::RenderStrategyId;
+    use crate::gpu::context::Context;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
+    use crate::gpu::render::tests::{data_folder_path, out_folder_path, save_colors_to_png, shoot_rays_and_transfer_data_to_cpu, test_folder_path};
     use crate::gpu::render::{FrameBufferSettings, Renderer};
-    use crate::gpu::render::tests::{out_folder_path, save_colors_to_png, shoot_rays_and_transfer_data_to_cpu, test_folder_path};
+    use crate::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
     use crate::material::material_properties::{MaterialClass, MaterialProperties};
     use crate::palette::sdf::sdf_box_frame::SdfBoxFrame;
     use crate::palette::sdf::sdf_capsule::SdfCapsule;
@@ -23,9 +21,15 @@ pub(crate) mod tests {
     use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::object::sdf_box::SdfBox;
     use crate::sdf::object::sdf_sphere::SdfSphere;
+    use crate::tests::render::images_comparison::tests::{add_suffix_to_filename, copy_to_reference, make_new_reference_mode};
     use crate::tests::render::utils::tests::compare_png_images;
-    use crate::utils::file_system::ensure_folders_exist;
+    use crate::utils::bitmap_utils::BitmapSize;
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
+    use cgmath::{Deg, Vector4};
+    use palette::Srgb;
+    use std::ops::Deref;
+    use std::path::PathBuf;
+    use std::rc::Rc;
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 512;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 512;
@@ -34,60 +38,9 @@ pub(crate) mod tests {
     const TEST_ANTI_ALIASING_LEVEL: u32 = 3;
     const TEST_REFRACTIVE_INDEX: f64 = 1.8;
     const TEST_SPECULAR_STRENGTH: f64 = 0.5;
-
-    #[must_use]
-    fn do_we_have_cli_flag_on(flag: &str) -> bool {
-        let arguments: Vec<String> = env::args().collect();
-        let flag_variants = [
-            flag,
-            &format!("--{}", flag),
-            &format!("-{}", flag),
-        ];
-
-        arguments.iter().any(|argument| flag_variants.contains(&argument.as_str()))
-    }
-
-    #[must_use]
-    fn make_new_reference_mode() -> bool {
-        do_we_have_cli_flag_on("make_new_reference")
-    }
-
-    fn copy_to_reference<FilePath: AsRef<Path>>(
-        source_path: FilePath,
-        destination_path: FilePath,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        ensure_folders_exist(&destination_path)?;
-        fs::copy(&source_path, &destination_path)?;
-        Ok(())
-    }
-
-    #[must_use]
-    fn add_suffix_to_filename(path: &PathBuf, suffix: &str) -> PathBuf {
-        let mut new_path = path.clone();
-
-        if let Some(stem) = path.file_stem() {
-            let new_filename = if let Some(ext) = path.extension() {
-                format!("{}{}.{}", stem.to_string_lossy(), suffix, ext.to_string_lossy())
-            } else {
-                format!("{}{}", stem.to_string_lossy(), suffix)
-            };
-            new_path.set_file_name(new_filename);
-        }
-
-        new_path
-    }
-
-    #[test]
-    fn test_add_suffix_to_filename() {
-        let actual_path = add_suffix_to_filename(&PathBuf::from("test.png"), "_test");
-        assert_eq!(actual_path.to_string_lossy(), "test_test.png");
-
-        let actual_path = add_suffix_to_filename(&PathBuf::from("foo").join("test.png"), "_test");
-        assert_eq!(actual_path.to_string_lossy(), PathBuf::from("foo").join("test_test.png").to_string_lossy());
-    }
     
-    pub(crate) fn compare_test_scene_to_reference(
-        sender_strategy: RenderStrategyId,
+    pub(crate) fn compare_test_objects_scene_render_to_reference(
+        render_strategy: RenderStrategyId,
         light_color: Srgb,
         material_customization: MaterialClass,
         test_case_name: &PathBuf,
@@ -149,7 +102,7 @@ pub(crate) mod tests {
         let cyan_material = scene.materials_mutable().add(&MaterialProperties::new()
             .with_albedo(0.0, 1.0, 1.0)
             .with_specular(1.0, 1.0, 1.0)
-            .with_specular_strength(4.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
             .with_class(material_customization)
             .with_refractive_index_eta(TEST_REFRACTIVE_INDEX)
         );
@@ -191,15 +144,132 @@ pub(crate) mod tests {
         scene.add_parallelogram(Point::new(-2.0, -2.0, -1.0), Vector::new(4.0, 0.0, 0.0), Vector::new(0.0, 4.0, 0.0), white_material);
         scene.add_parallelogram(Point::new(-1.0, -2.0, -1.0), Vector::new(0.0, 0.0, 1.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
 
+        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, scene);
+    }
+
+    pub(crate) fn compare_test_textures_scene_render_to_reference(
+        render_strategy: RenderStrategyId,
+        light_color: Srgb,
+        test_case_name: &PathBuf,
+    ) {
+        let context = create_headless_wgpu_vulkan_context();
+
+        let look_at = Point::new(0.0, 0.0, 0.0);
+        let mut camera = Camera::new_perspective_camera(3.0, look_at);
+        camera.move_horizontally(-0.2);
+        camera.move_vertically(-0.2);
+
+        let mut registrator = SdfRegistrator::default();
+
+        let identity_box_sdf = UniqueSdfClassName::new("box_specimen".to_string());
+        registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), identity_box_sdf.clone()));
+        let identity_sphere_sdf = UniqueSdfClassName::new("sphere_specimen".to_string());
+        registrator.add(&NamedSdf::new(SdfSphere::new(1.0), identity_sphere_sdf.clone()));
+        let torus_xz_sdf = UniqueSdfClassName::new("torus_xz_specimen".to_string());
+        registrator.add(&NamedSdf::new(SdfTorusXz::new(0.1, 0.05), torus_xz_sdf.clone()));
+
+        let mut scene = VisualObjects::new(Some(BitmapSize::new(256, 512)), Some(registrator), None);
+
+        let texture_atlas_page_composer = scene.mutable_texture_atlas_page_composer();
+        let checkerboard_texture = load_bitmap(data_folder_path().join("bitmap_checkerboard_small.png"), texture_atlas_page_composer)
+            .expect("failed to load bitmap_checkerboard_small.png");
+        let logo_texture = load_bitmap(data_folder_path().join("bitmap_huly_2.png"), texture_atlas_page_composer)
+            .expect("failed to load bitmap_huly_2.png");
+        let grid_texture = load_bitmap(data_folder_path().join("bitmap_rect_grid.png"), texture_atlas_page_composer)
+            .expect("failed to load bitmap_rect_grid.png");
+
+        let emissive_material = scene.materials_mutable().add(&MaterialProperties::new()
+            .with_emission(light_color.red, light_color.green, light_color.blue));
+
+        let mut white_material_properties = MaterialProperties::new()
+            .with_albedo(1.0, 1.0, 1.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
+            .with_refractive_index_eta(TEST_REFRACTIVE_INDEX);
+        {
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(1.1, 0.0, 0.0, 0.0))
+                .local_position_to_texture_v(Vector4::new(0.0, 1.1, 0.0, 0.0))
+                .wrap_mode([WrapMode::Repeat, WrapMode::Repeat])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(checkerboard_texture, builder, &mut white_material_properties)
+                .expect("failed to make 'bitmap_checkerboard_small' atlas page mapping");
+        }
+        let white_material = scene.materials_mutable().add(&white_material_properties);
+
+        let mut yellow_material_properties = MaterialProperties::new()
+            .with_albedo(1.0, 1.0, 0.0)
+            .with_specular(1.0, 1.0, 1.0)
+            .with_specular_strength(TEST_SPECULAR_STRENGTH)
+            .with_refractive_index_eta(TEST_REFRACTIVE_INDEX);
+        {
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(0.5, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -0.9, 0.0, 0.5))
+                .wrap_mode([WrapMode::Clamp, WrapMode::Clamp])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(logo_texture, builder, &mut yellow_material_properties)
+                .expect("failed to make 'bitmap_huly_2' atlas page mapping");
+        }
+        let yellow_material = scene.materials_mutable().add(&yellow_material_properties);
+
+        let mut magenta_material_properties = MaterialProperties::new()
+            .with_albedo(1.0, 0.0, 1.0)
+            .with_refractive_index_eta(TEST_REFRACTIVE_INDEX);
+        {
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(2.0, 0.0, 0.0, 0.0))
+                .local_position_to_texture_v(Vector4::new(0.0, 2.0, 0.0, 0.0))
+                .wrap_mode([WrapMode::Repeat, WrapMode::Discard])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(checkerboard_texture, builder, &mut magenta_material_properties)
+                .expect("failed to make 'bitmap_checkerboard_small' atlas page mapping");
+        }
+        let magenta_material = scene.materials_mutable().add(&magenta_material_properties);
+
+        let mut cyan_material_properties = MaterialProperties::new()
+            .with_albedo(0.0, 1.0, 1.0)
+            .with_refractive_index_eta(TEST_REFRACTIVE_INDEX);
+        {
+            let builder = AtlasRegionMappingBuilder::new()
+                .local_position_to_texture_u(Vector4::new(4.0, 0.0, 0.0, 0.5))
+                .local_position_to_texture_v(Vector4::new(0.0, -8.0, 0.0, 0.5))
+                .wrap_mode([WrapMode::Clamp, WrapMode::Repeat])
+                ;
+            scene.mutable_texture_atlas_page_composer()
+                .map_into(grid_texture, builder, &mut cyan_material_properties)
+                .expect("failed to make 'bitmap_rect_grid' atlas page mapping");
+        }
+        let cyan_material = scene.materials_mutable().add(&cyan_material_properties);
+
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(-0.8, -0.8, 0.0)) * Affine::from_scale(0.5)),
+            1.0, &identity_sphere_sdf, yellow_material);
+        scene.add_sdf(
+            &(Affine::from_translation(Vector::new(0.8, -0.8, -0.2)) * Affine::from_scale(0.4)),
+            1.0, &identity_box_sdf, magenta_material);
+        scene.add_sdf(
+            &( Affine::from_translation(Vector::new(0.8, 0.8, 0.0)) * Affine::from_angle_x(Deg(90.0)) * Affine::from_scale(2.0) ),
+            1.0, &torus_xz_sdf, cyan_material);
+
+        scene.add_parallelogram(Point::new(-2.0, -2.0, -1.0), Vector::new(4.0, 0.0, 0.0), Vector::new(0.0, 4.0, 0.0), white_material);
+        scene.add_parallelogram(Point::new(-1.0, 0.0, 1.0), Vector::new(0.0, 0.2, 0.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
+
+        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, scene);
+    }
+
+    fn render_and_compare_with_reference(render_strategy: RenderStrategyId, test_case_name: &PathBuf, context: Rc<Context>, camera: Camera, scene: VisualObjects) {
         let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, TEST_ANTI_ALIASING_LEVEL);
         let mut system_under_test
-            = Renderer::new(context.clone(), scene, camera, frame_buffer_settings, sender_strategy, None)
-            .expect("render instantiation has failed");
+            = Renderer::new(context.clone(), scene, camera, frame_buffer_settings, render_strategy, None)
+                .expect("render instantiation has failed");
 
         shoot_rays_and_transfer_data_to_cpu(context.deref(), &mut system_under_test);
 
         let actual_render_path = out_folder_path().join(test_case_name.clone());
-
         save_colors_to_png(&mut system_under_test, TEST_FRAME_BUFFER_SIZE, actual_render_path.clone());
 
         let expected_render_path = test_folder_path().join("reference").join(test_case_name);

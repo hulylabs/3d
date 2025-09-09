@@ -4,7 +4,7 @@ mod tests {
     use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
     use crate::serialization::pod_vector::PodVector;
     use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};
-    use crate::tests::scaffolding::configuration::tests::config_empty_bindings;
+    use crate::tests::scaffolding::gpu_state_configuration::tests::config_empty_bindings;
     use crate::tests::scaffolding::gpu_code_execution::tests::{DataBindGroupSlot, GpuCodeExecutionContext};
     use crate::tests::scaffolding::shader_entry_generator::tests::{create_argument_formatter, make_executable, ShaderFunction};
 
@@ -46,7 +46,7 @@ mod tests {
         #[test]
         fn test_material_packing_for_gpu_albedo(fixture: &mut GpuCodeExecutionContext) {
             let template = make_shader_function("albedo", FieldKind::Vector);
-            check_material_data_probe(fixture, &template, PodVector::new_full(1.0, 2.0, 3.0, -7.0));
+            check_material_data_probe(fixture, &template, PodVector::new_full(7.0, 2.0, 3.0, -7.0));
         }
 
         #[test_context(GpuCodeExecutionContext)]
@@ -60,7 +60,7 @@ mod tests {
         #[test]
         fn test_material_packing_for_gpu_specular_strength(fixture: &mut GpuCodeExecutionContext) {
             let template = make_shader_function("specular_strength", FieldKind::Scalar);
-            check_material_data_probe(fixture, &template, PodVector::new_full(7.0, 0.0, 0.0, -7.0));
+            check_material_data_probe(fixture, &template, PodVector::new_full(1.0, 0.0, 0.0, -7.0));
         }
 
         #[test_context(GpuCodeExecutionContext)]
@@ -96,9 +96,9 @@ mod tests {
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
 
         let probe = MaterialProperties::new()
-            .with_albedo(1.0, 2.0, 3.0)
+            .with_albedo(7.0, 2.0, 3.0)
             .with_specular(4.0, 5.0, 6.0)
-            .with_specular_strength(7.0)
+            .with_specular_strength(1.0)
             .with_emission(8.0, 9.0, 10.0)
             .with_refractive_index_eta(11.0)
             .with_roughness(12.0)

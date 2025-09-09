@@ -803,6 +803,11 @@ pub(crate) mod tests {
     }
 
     #[must_use]
+    pub(crate) fn data_folder_path() -> PathBuf {
+        test_folder_path().join("data")
+    }
+
+    #[must_use]
     fn make_render(scene: VisualObjects, camera: Camera, strategy: RenderStrategyId, antialiasing_level: u32, context: Rc<Context>) -> Renderer {
         let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, antialiasing_level);
         Renderer::new(context.clone(), scene, camera, frame_buffer_settings, strategy, None)

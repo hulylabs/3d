@@ -7,3 +7,4 @@ mod statistics;
 mod triangulated;
 pub(crate) mod bvh_proxies;
 pub mod texture_atlas_page_composer;
+pub mod texture_helpers;
