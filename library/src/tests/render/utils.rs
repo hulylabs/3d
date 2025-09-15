@@ -1,40 +1,92 @@
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::path::Path;
-    use image::{ImageBuffer, Rgb, RgbImage};
     use crate::utils::file_system::ensure_folders_exist;
+    use image::{ImageBuffer, Rgb, RgbImage};
+    use std::fmt::{Display, Formatter};
+    use std::path::Path;
 
     #[must_use]
     pub(crate) fn make_png_file_name(test_case_name: &str) -> String {
         format!("{}.png", test_case_name)
     }
 
+    pub(crate) struct ComparisonResult {
+        min_diff_distance: f32,
+        max_diff_distance: f32,
+        different_pixels_count: usize,
+        dimensions_are_same: bool,
+    }
+
+    impl ComparisonResult {
+        #[must_use]
+        fn new(dimensions_are_same: bool) -> Self {
+            Self { min_diff_distance: 0.0, max_diff_distance: 0.0, different_pixels_count: 0, dimensions_are_same, }
+        }
+
+        #[must_use]
+        fn diff_is_zero(&self) -> bool {
+            self.min_diff_distance <= 0.0 && self.max_diff_distance <= 0.0
+        }
+
+        fn register(&mut self, left: &Rgb<u8>, right: &Rgb<u8>) {
+            let length: f32 = Self::diff_length(left, right);
+            self.min_diff_distance = length.min(self.min_diff_distance);
+            self.max_diff_distance = length.min(self.max_diff_distance);
+            if 0.0 < length {
+                self.different_pixels_count += 1;
+            }
+        }
+
+        #[must_use]
+        pub(crate) fn are_same(&self) -> bool {
+            self.dimensions_are_same && self.diff_is_zero()
+        }
+
+        #[must_use]
+        fn diff_length(left: &Rgb<u8>, right: &Rgb<u8>) -> f32 {
+            let difference_r = left[0] as f32 - right[0] as f32;
+            let difference_g = left[1] as f32 - right[1] as f32;
+            let difference_b = left[2] as f32 - right[2] as f32;
+            (difference_r * difference_r + difference_g * difference_g + difference_b * difference_b).sqrt()
+        }
+    }
+
+    impl Display for ComparisonResult {
+        fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+            if self.dimensions_are_same {
+                formatter.write_str(format!("different pixels count: {}, min distance: {}, max distance: {}",
+                    self.different_pixels_count, self.min_diff_distance, self.max_diff_distance).as_str())
+            } else {
+                formatter.write_str("dimensions are different")
+            }
+        }
+    }
+
     pub(crate) fn compare_png_images<P: AsRef<Path>>(
         left_image_path: P,
         right_image_path: P,
         diff_output_path: P,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
+    ) -> Result<ComparisonResult, Box<dyn std::error::Error>> {
         let left = image::open(&left_image_path)?.to_rgb8();
         let right = image::open(&right_image_path)?.to_rgb8();
 
         if left.dimensions() != right.dimensions() {
             println!("images have different dimensions: {:?} vs {:?}", left.dimensions(), right.dimensions()
             );
-            return Ok(false);
+            return Ok(ComparisonResult::new(false));
         }
 
         let (width, height) = left.dimensions();
+        let mut comparison_result = ComparisonResult::new(true);
 
-        let mut are_identical = true;
         for (left_pixel, right_pixel) in left.pixels().zip(right.pixels()) {
             if left_pixel != right_pixel {
-                are_identical = false;
-                break;
+                comparison_result.register(left_pixel, right_pixel);
             }
         }
 
-        if are_identical {
-            return Ok(true);
+        if comparison_result.diff_is_zero() {
+            return Ok(comparison_result);
         }
 
         let mut diff_image: RgbImage = ImageBuffer::new(width, height);
@@ -61,6 +113,6 @@ pub(crate) mod tests {
         ensure_folders_exist(&diff_output_path)?;
         diff_image.save(&diff_output_path)?;
         println!("difference image saved to: {:?}", diff_output_path.as_ref());
-        Ok(false)
+        Ok(comparison_result)
     }
 }

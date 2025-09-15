@@ -86,17 +86,17 @@ mod tests {
             #[test]
             fn test_glass_objects_with_perspective_camera_yellow_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 1.0, 0.0), MaterialClass::Glass,
-                                                               &folder().join(make_png_file_name("glass_objects_perspective_camera_yellow_light")));
+                    &folder().join(make_png_file_name("glass_objects_perspective_camera_yellow_light")));
             }
             #[test]
             fn test_glass_objects_with_perspective_camera_cyan_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(0.0, 1.0, 1.0), MaterialClass::Glass,
-                                                               &folder().join(make_png_file_name("glass_objects_perspective_camera_cyan_light")));
+                    &folder().join(make_png_file_name("glass_objects_perspective_camera_cyan_light")));
             }
             #[test]
             fn test_glass_objects_with_perspective_camera_white_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 1.0, 1.0), MaterialClass::Glass,
-                                                               &folder().join(make_png_file_name("glass_objects_perspective_camera_white_light")));
+                    &folder().join(make_png_file_name("glass_objects_perspective_camera_white_light")));
             }
         }
 

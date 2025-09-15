@@ -51,7 +51,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 "fn pixel_half_size_t(request: Differentials) -> vec4f \
-                { return vec4f(pixel_half_size(texture_atlas_page, request.ddx_and_ddy.xy, request.ddx_and_ddy.zw), 3.0, 7.0); }"
+                { return vec4f(pixel_half_size_0(texture_atlas_page, request.ddx_and_ddy.xy, request.ddx_and_ddy.zw), 3.0, 7.0); }"
             );
 
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
@@ -90,15 +90,15 @@ mod tests {
         let template = ShaderFunction::new("AtlasReadRequest", "vec4f", "read_atlas_t")
             .with_custom_type(
                 TypeDeclaration::new("AtlasReadRequest", "local_space_position", "vec4f")
-                    .with_field("atlas_region_mapping", "AtlasMapping")
-                    .with_field("derivatives", "RayDerivatives")
+                    .with_field("atlas_region_mapping", "AtlasMapping_0")
+                    .with_field("derivatives", "RayDerivatives_0")
             )
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 "fn read_atlas_t(request: AtlasReadRequest) -> vec4f \
-                { return read_atlas(request.local_space_position.xyz, request.atlas_region_mapping, request.derivatives); }"
+                { return read_atlas_0(request.local_space_position.xyz, request.atlas_region_mapping, request.derivatives); }"
             );
 
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
@@ -319,7 +319,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 "fn inside_aabb_t(data: AabbAndPoint) -> f32 \
-                { if (inside_aabb(data.aabb_min, data.aabb_max, data.point)) { return 1.0; } else { return 0.0; } }"
+                { if (inside_aabb_0(data.aabb_min, data.aabb_max, data.point)) { return 1.0; } else { return 0.0; } }"
             );
 
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
@@ -372,10 +372,10 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_ray_to_pixel(fixture: &mut GpuCodeExecutionContext) {
-        let template = ShaderFunction::new("PixelSetup", "Ray", "ray_to_pixel")
+        let template = ShaderFunction::new("PixelSetup", "Ray_0", "ray_to_pixel_0")
             .with_custom_type(
                 TypeDeclaration::new("PixelSetup", "fov_and_camera_origin", "vec4f")
-                    .with_field("pixel", "Pixel")
+                    .with_field("pixel", "Pixel_0")
                     .with_field("sub_pixel_x", "f32")
                     .with_field("sub_pixel_y", "f32")
             )
@@ -384,7 +384,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
 
         let function_execution = make_executable(&template,
-            create_argument_formatter!("Camera({argument}.fov_and_camera_origin.x, {argument}.fov_and_camera_origin.yzw), {argument}.pixel, {argument}.sub_pixel_x, {argument}.sub_pixel_y"));
+            create_argument_formatter!("Camera_0({argument}.fov_and_camera_origin.x, {argument}.fov_and_camera_origin.yzw), {argument}.pixel, {argument}.sub_pixel_x, {argument}.sub_pixel_y"));
 
         let camera = Camera::new_perspective_camera(3.0, Point::new(3.0, -7.0, 5.0));
         let frame_buffer_size = FrameBufferSize::new(2, 2);
@@ -450,7 +450,7 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_transform_ray_parameter(fixture: &mut GpuCodeExecutionContext) {
-        let template = ShaderFunction::new("RayParameterTransformation", "f32", "transform_ray_parameter")
+        let template = ShaderFunction::new("RayParameterTransformation", "f32", "transform_ray_parameter_0")
             .with_custom_type(
                 TypeDeclaration::new("RayParameterTransformation", "matrix", "mat3x4f")
                     .with_field("ray_origin", "vec3f")
@@ -462,7 +462,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
 
         let function_execution = make_executable(&template,
-            create_argument_formatter!("{argument}.matrix, Ray({argument}.ray_origin, {argument}.ray_direction), {argument}.parameter_and_transformed_origin.x, {argument}.parameter_and_transformed_origin.yzw"));
+            create_argument_formatter!("{argument}.matrix, Ray_0({argument}.ray_origin, {argument}.ray_direction), {argument}.parameter_and_transformed_origin.x, {argument}.parameter_and_transformed_origin.yzw"));
 
         #[repr(C)]
         #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
@@ -518,8 +518,8 @@ mod tests {
             .with_additional_shader_code(shader_code)
             .with_additional_shader_code(
                 r#"fn sample_signed_distance_t(position: vec3f) -> vec3f {
-                    let sdf = sdf[0];
-                    return signed_distance_normal(sdf, position, 0.0);
+                    let sdf = Sdf_0(sdf[0].location_col_0_0, sdf[0].location_col_1_0, sdf[0].location_col_2_0, sdf[0].inverse_location_col_0_0, sdf[0].inverse_location_col_1_0, sdf[0].inverse_location_col_2_0, sdf[0].ray_marching_step_scale_0, sdf[0].class_index_0, sdf[0].material_id_2, sdf[0].object_uid_2);
+                    return signed_distance_normal_0(sdf, position, 0.0);
                 }"#
             );
 
@@ -578,8 +578,52 @@ mod tests {
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
+    fn test_evaluate_pixel_index(fixture: &mut GpuCodeExecutionContext) {
+        let template = ShaderFunction::new("GroupsDimensions", "u32", "evaluate_pixel_index_0")
+            .with_custom_type(
+                TypeDeclaration::new("GroupsDimensions", "global_invocation_id", "vec3f")
+                    .with_field("thread_grid_size", "vec3f")
+            )
+            .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
+            .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
+            .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
+
+        let function_execution = make_executable(&template, create_argument_formatter!("vec3<u32>({argument}.global_invocation_id.xyz), vec3<u32>({argument}.thread_grid_size.xyz)"));
+
+        #[repr(C)]
+        #[derive(PartialEq, Copy, Clone, Pod, Debug, Default, Zeroable)]
+        struct GroupsDimensions {
+            global_invocation_id: PodVector,
+            thread_grid_size: PodVector,
+        }
+
+        const WORKGROUP_QUAD_SIZE: f32 = 8.0;
+        let thread_grid_size = PodVector { x: 4.0 * WORKGROUP_QUAD_SIZE, y: 5.0 * WORKGROUP_QUAD_SIZE, z: 6.0, w: -1.0, };
+
+        let test_input: Vec<GroupsDimensions> = vec![
+            GroupsDimensions { global_invocation_id: PodVector{ x: 1.0, y: 2.0, z: 3.0, w: -1.0, }, thread_grid_size, },
+            GroupsDimensions { global_invocation_id: PodVector{ x: 1.0, y: 2.0, z: 0.0, w: -1.0, }, thread_grid_size, },
+            GroupsDimensions { global_invocation_id: PodVector{ x: 1.0, y: 0.0, z: 0.0, w: -1.0, }, thread_grid_size, },
+            GroupsDimensions { global_invocation_id: PodVector{ x: 0.0, y: 0.0, z: 0.0, w: -1.0, }, thread_grid_size, },
+        ];
+
+        let execution_config = config_empty_bindings();
+        let actual_output = fixture.get().execute_code::<GroupsDimensions, u32>(&test_input, function_execution, execution_config);
+
+        let expected_output: Vec<u32> = vec![
+            3905,
+            65,
+            1,
+            0,
+        ];
+
+        assert_eq!(actual_output, expected_output);
+    }
+
+    #[test_context(GpuCodeExecutionContext)]
+    #[test]
     fn test_transform_point(fixture: &mut GpuCodeExecutionContext) {
-        let template = ShaderFunction::new("MatrixAndPoint", "vec3f", "transform_point")
+        let template = ShaderFunction::new("MatrixAndPoint", "vec3f", "transform_point_0")
             .with_custom_type(
                 TypeDeclaration::new("MatrixAndPoint", "matrix", "mat3x4f")
                     .with_field("point", "vec3f")
@@ -630,7 +674,7 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_transform_transposed_vector(fixture: &mut GpuCodeExecutionContext) {
-        let template = ShaderFunction::new("MatrixAndVector", "vec3f", "transform_transposed_vector")
+        let template = ShaderFunction::new("MatrixAndVector", "vec3f", "transform_transposed_vector_0")
             .with_custom_type(
                 TypeDeclaration::new("MatrixAndVector", "matrix", "mat3x3f")
                     .with_field("vector", "vec3f")
@@ -690,7 +734,7 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_to_mat3x3(fixture: &mut GpuCodeExecutionContext) {
-        let template = ShaderFunction::new("mat3x4f", "mat3x3f", "to_mat3x3")
+        let template = ShaderFunction::new("mat3x4f", "mat3x3f", "to_mat3x3_0")
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS);
@@ -717,13 +761,16 @@ mod tests {
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn test_random_double(fixture: &mut GpuCodeExecutionContext) {
+    fn test_rand_0_1(fixture: &mut GpuCodeExecutionContext) {
         let template = ShaderFunction::new("vec4f", "f32", "random_double_t")
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
-                r#"fn random_double_t(min: f32, max: f32, iterations_count: f32, take_min: f32) -> f32 {
+                r#"fn random_double(min : f32, max : f32) -> f32 {
+                    return min + (max - min) * rand_0_1_0();
+                }
+                fn random_double_t(min: f32, max: f32, iterations_count: f32, take_min: f32) -> f32 {
                     var result = random_double(min, max);
                     for (var i = 0.0; i < iterations_count; i = i + 1.0) {
                         if (take_min == 0.0) {
@@ -783,8 +830,8 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 r#"fn hit_aabb_t(data: AabbAndRay) -> vec4f 
-                { let result = hit_aabb(data.box_min, data.box_max, data.tmin, data.tmax, data.ray_origin, data.ray_direction_inverted);
-                  if (result.hit) { return vec4f(1.0, result.ray_parameter, 0.0, 0.0); } else { return vec4f(0.0, 0.0, 0.0, 0.0); } }"#
+                { let result = hit_aabb_0(data.box_min, data.box_max, data.tmin, data.tmax, data.ray_origin, data.ray_direction_inverted);
+                  if (result.hit_0) { return vec4f(1.0, result.ray_parameter_0, 0.0, 0.0); } else { return vec4f(0.0, 0.0, 0.0, 0.0); } }"#
             );
 
         let function_execution = make_executable(&template, create_argument_formatter!("{argument}"));
@@ -847,14 +894,14 @@ mod tests {
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
-                r#"fn hit_triangle_t(triangle: Triangle, ray: Ray) -> vec4f 
-                { if (hit_triangle(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.global.position, 1.0); } return vec4f(0.0); }"#
+                r#"fn hit_triangle_t(triangle: Triangle_0, ray: Ray_0) -> vec4f
+                { if (hit_triangle_0(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.global_0.position_0, 1.0); } return vec4f(0.0); }"#
             );
 
         let function_execution = make_executable(&template,
         create_argument_formatter!(
-            "Triangle({argument}.a, {argument}.b, {argument}.c, vec3f(0), vec3f(0), 13, vec3f(0), u32(3)), \
-            Ray({argument}.ray_origin, vec3f({argument}.ray_x, {argument}.ray_y, {argument}.ray_z))")
+            "Triangle_0({argument}.a, {argument}.b, {argument}.c, vec3f(0), vec3f(0), 13, vec3f(0), u32(3)), \
+            Ray_0({argument}.ray_origin, vec3f({argument}.ray_x, {argument}.ray_y, {argument}.ray_z))")
         );
 
         let execution_config = config_empty_bindings();
@@ -903,12 +950,13 @@ mod tests {
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
+    #[ignore = "Soft shadows are switched off by default, so the code is removed by the Slang compiler; to run this test one needs to switch the shadow style in the shader."]
     fn test_shadow(fixture: &mut GpuCodeExecutionContext) {
         let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
 
         let shader_code = generate_code_for(&identity_box_class);
         
-        let template = ShaderFunction::new("ShadowInput", "f32", "evaluate_soft_shadow")
+        let template = ShaderFunction::new("ShadowInput", "f32", "evaluate_soft_shadow_0")
             .with_custom_type(
                 TypeDeclaration::new("ShadowInput", "position", "vec4f")
                     .with_field("to_light", "vec4f")
@@ -985,7 +1033,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
             r#"fn evaluate_reflection_t(incident: vec3f, normal: vec3f) -> vec4f 
-                { return vec4f(evaluate_reflection(incident, normal, vec3f(0.0), 0.0), 0.0); }"#
+                { return vec4f(evaluate_reflection_0(incident, normal, vec3f(0.0), 0.0), 0.0); }"#
             );
 
         let function_execution = make_executable(&template, 
@@ -1020,7 +1068,7 @@ mod tests {
 
         let shader_code = generate_code_for(&identity_box_class);
         
-        let template = ShaderFunction::new("PositionAndDirection", "f32", "sample_signed_distance")
+        let template = ShaderFunction::new("PositionAndDirection", "f32", "sample_signed_distance_0")
             .with_position_and_direction_type()
             .with_binding_group(TEST_DATA_IO_BINDING_GROUP)
             .with_additional_shader_code(WHOLE_TRACER_GPU_CODE)

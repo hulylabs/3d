@@ -73,9 +73,11 @@ struct Uniforms {
 	frame_buffer_size: vec2u,
 	frame_buffer_area: u32,
 	frame_buffer_aspect: f32, // width / height
+
 	inverted_frame_buffer_size: vec2f,
 	frame_number: f32,
 	empty_slot: f32,
+
 	view_matrix: mat4x4f,
 	/* Consider a view ray defined by an origin (e.g., the eye position for a perspective camera)
     and a direction that intersects the view plane at a world-space pixel position.

@@ -29,7 +29,6 @@ use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
 use crate::utils::version::Version;
-use cgmath::Vector2;
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -88,10 +87,6 @@ impl FrameBufferSettings {
 }
 
 impl Renderer {
-    const WORK_GROUP_SIZE_X: u32 = 8;
-    const WORK_GROUP_SIZE_Y: u32 = 8;
-    const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
-    
     const BVH_INFLATION_RATE: f64 = 0.2;
     
     pub(crate) fn new(
@@ -708,10 +703,10 @@ impl Renderer {
                 label: Some(label),
                 timestamp_writes: None,
             });
-
-            let work_groups_needed = self.uniforms.frame_buffer_size().work_groups_count(Self::WORK_GROUP_SIZE);
+                
             compute_pipeline.set_into_pass(&mut pass);
-            pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, 1);}
+            let work_groups_needed = self.uniforms.work_groups_count();
+            pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, work_groups_needed.z);}
             
             customize(&mut encoder);
         }
@@ -740,7 +735,7 @@ impl Renderer {
     }
 }
 
-pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../assets/shaders/tracer.wgsl");
+pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../shader/tracer.wgsl");
 
 struct Buffers {
     uniforms: Rc<wgpu::Buffer>,
@@ -773,7 +768,6 @@ pub(crate) mod tests {
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use cgmath::{AbsDiffEq, SquareMatrix};
     use image::{ImageBuffer, Rgba};
-    use rstest::rstest;
     use std::fs;
     use std::path::Path;
 
@@ -813,11 +807,18 @@ pub(crate) mod tests {
         Renderer::new(context.clone(), scene, camera, frame_buffer_settings, strategy, None)
             .expect("render instantiation has failed")
     }
-    
-    #[rstest]
-    #[case(RenderStrategyId::MonteCarlo)]
-    #[case(RenderStrategyId::Deterministic)]
-    fn test_empty_scene_rendering(#[case] strategy: RenderStrategyId) {
+
+    #[test]
+    fn test_empty_scene_rendering_deterministic() {
+        test_empty_scene_rendering(RenderStrategyId::Deterministic);
+    }
+
+    #[test]
+    fn test_empty_scene_rendering_monte_carlo() {
+        test_empty_scene_rendering(RenderStrategyId::MonteCarlo);
+    }
+
+    fn test_empty_scene_rendering(strategy: RenderStrategyId) {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         let scene = VisualObjects::new(None, None, None);
         let context = create_headless_wgpu_vulkan_context();
@@ -896,7 +897,8 @@ pub(crate) mod tests {
 
     pub(crate) fn issue_frame_buffer_transfer_if_needed(context: &Context, render: &Renderer) {
         if cfg!(not(feature = "denoiser")) {
-            let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            let label = Some("raw color buffer copy gpu -> cpu");
+            let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label });
             render.prepare_pixel_color_copy_from_gpu(&mut pass);
             context.queue().submit(Some(pass.finish()));
         }

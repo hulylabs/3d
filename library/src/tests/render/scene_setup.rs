@@ -280,9 +280,9 @@ pub(crate) mod tests {
                 .expect("failed to copy new reference file");
             println!("new reference file created: {:?}", expected_render_path);
         } else {
-            let equal = compare_png_images(actual_render_path, expected_render_path, diff_path)
+            let compare_result = compare_png_images(actual_render_path, expected_render_path, diff_path)
                 .expect("render output comparison failed");
-            assert!(equal, "render output differs from the reference");
+            assert!(compare_result.are_same(), "render output differs from the reference: {compare_result}");
         }
     }
 }
