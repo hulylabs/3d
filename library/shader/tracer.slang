@@ -1,18 +1,16 @@
 #language slang 2026
 
-// >>> BEGIN: DUMMY STUBS
-func procedural_texture_select(index: int32_t, position: float3, normal: float3, time: float, dp_dx: float3, dp_dy: float3) -> float3 {
-    __intrinsic_asm "procedural_texture_select";
-}
+import "signatures";
+import "ray";
+import "output_on_screen";
+import "tracing_output";
+import "uniforms";
 
-func sdf_select(index: int32_t, position: float3, time: float) -> float {
-    __intrinsic_asm "sdf_select";
-}
+[shader("vertex")]
+extern public VSOutput vs(uint in_vertex_index : SV_VertexID);
 
-func sdf_apply_animation(index: int32_t, position: float3, time: float) -> float3 {
-    __intrinsic_asm "sdf_apply_animation";
-}
-// >>> END: DUMMY STUBS
+[shader("fragment")]
+extern public float4 fs(VSOutput input) : SV_Target0;
 
 static const float PI = 3.1415926535897932385;
 
@@ -59,52 +57,10 @@ static const bool MONTE_CARLO_STRATIFY_SAMLING = false;
 static const bool MONTE_CARLO_IMPORTANCE_SAMPLING = true;
 static const int MAX_SDF_RAY_MARCH_STEPS = 120;
 
-[vk::binding(0, 0)]
-cbuffer uniforms {
-    uint2 frame_buffer_size;
-    uint frame_buffer_area;
-    float frame_buffer_aspect; // width / height
-    
-    float2 inverted_frame_buffer_size;
-    float frame_number;
-    float empty_slot__1;
-    
-    float4 view_matrix_col_0;
-    float4 view_matrix_col_1;
-    float4 view_matrix_col_2;
-    float4 view_matrix_col_3;
-    /* Consider a view ray defined by an origin (e.g., the eye position for a perspective camera)
-    and a direction that intersects the view plane at a world-space pixel position.
-    This matrix, when multiplied by the world-space pixel position, returns the ray's origin.
-    For a perspective camera, the origin is always the eye position â€" the same for all pixels.
-    For an orthographic camera, the origin lies on the camera plane and varies per pixel. */
-    float4 view_ray_origin_matrix_col_0;
-    float4 view_ray_origin_matrix_col_1;
-    float4 view_ray_origin_matrix_col_2;
-    float4 view_ray_origin_matrix_col_3;
-
-    uint parallelograms_count;
-    uint bvh_length;
-    uint pixel_side_subdivision; // anti-aliasing level: bigger value -> slower render -> less jagged edges
-    float global_time_seconds;
-
-    uint3 thread_grid_size;
-    float empty_slot__2;
-};
-
 [vk::binding(1, 0)]
 SamplerState atlases_sampler;
 [vk::binding(2, 0)]
 Texture2D<float4> texture_atlas_page;
-
-[vk::binding(0, 1)]
-RWStructuredBuffer<float4> pixel_color_buffer;
-[vk::binding(1, 1)]
-RWStructuredBuffer<uint> object_id_buffer;
-[vk::binding(2, 1)]
-RWStructuredBuffer<float4> normal_buffer;
-[vk::binding(3, 1)]
-RWStructuredBuffer<float4> albedo_buffer;
 
 [vk::binding(0, 2)]
 StructuredBuffer<Parallelogram> parallelograms;
@@ -129,11 +85,6 @@ static HitRecord hitRec;
 static Material hitMaterial;
 static ScatterRecord scatterRec;
 static Parallelogram lights;
-
-struct Ray {
-    float3 origin;
-    float3 direction;
-};
 
 struct Material {
     float3 albedo;
@@ -224,10 +175,6 @@ struct ScatterRecord {
     Ray skip_pdf_ray;
 };
 
-float3 at(Ray ray, float t) {
-    return ray.origin + t * ray.direction;
-}
-
 // PCG prng
 // https://www.shadertoy.com/view/XlGcRh
 float rand_0_1() {
@@ -284,7 +231,7 @@ float3 transform_transposed_vector(float3x3 transformation, float3 vector) {
 }
 
 float transform_ray_parameter(float3x4 transformation, Ray ray, float parameter, float3 transformed_origin) {
-    float3 point = transform_point(transformation, at(ray, parameter));
+    float3 point = transform_point(transformation, ray.at(parameter));
     return length(point - transformed_origin);
 }
 
@@ -307,7 +254,7 @@ bool hit_sdf(Sdf sdf, float time, Ray ray, float tmin, float tmax) {
             break;
         }
 
-        float3 candidate = at(local_ray, local_t);
+        float3 candidate = local_ray.at(local_t);
         float signed_distance = sample_sdf(sdf, candidate, time);
         float t_scaled = 0.0001 * local_t;
 
@@ -358,7 +305,7 @@ bool hit_quad(Parallelogram quad, float tmin, float tmax, Ray ray) {
     }
 
     // determine if hit point lies within quarilateral
-    float3 intersection = at(ray, t);
+    float3 intersection = ray.at(t);
     float3 planar_hitpt_vector = intersection - quad.Q;
     float alpha = dot(quad.w, cross(planar_hitpt_vector, quad.v));
     float beta = dot(quad.w, cross(quad.u, planar_hitpt_vector));
@@ -1181,7 +1128,7 @@ float light_pdf(Ray ray, Parallelogram quad) {
         return MIN_FLOAT;
     }
 
-    float3 intersection = at(ray, t);
+    float3 intersection = ray.at(t);
     float3 planar_hitpt_vector = intersection - quad.Q;
     float alpha = dot(quad.w, cross(planar_hitpt_vector, quad.v));
     float beta = dot(quad.w, cross(quad.u, planar_hitpt_vector));
@@ -1207,69 +1154,8 @@ float light_pdf(Ray ray, Parallelogram quad) {
 // final image output (aka resolve): tone mapping + gamma correction
 //===================================================================
 
-static const float2 full_screen_quad_positions[6] = {
-    float2(-1.0, -1.0),
-    float2 (1.0, -1.0),
-    float2(-1.0,  1.0),
 
-    float2(-1.0,  1.0),
-    float2( 1.0, -1.0),
-    float2( 1.0,  1.0),
-};
 
-// ACES approximation for tone mapping
-// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/:
-float3 aces_approx(float3 v) {
-    float3 v1 = v * 0.6f; // TODO: WTF?
-    static const float a = 2.51f;
-    static const float b = 0.03f;
-    static const float c = 2.43f;
-    static const float d = 0.59f;
-    static const float e = 0.14f;
-    return clamp((v1*(a*v1+b))/(v1*(c*v1+d)+e), float3(0.0f), float3(1.0f));
-}
-
-struct VSOutput {
-    float4 position : SV_Position;
-};
-
-[shader("vertex")]
-VSOutput vs(uint in_vertex_index : SV_VertexID) {
-    VSOutput output;
-    output.position = float4(full_screen_quad_positions[in_vertex_index], 0.0, 1.0);
-    return output;
-}
-
-uint pixel_global_index(float2 pixel_position) {
-    return uint(pixel_position.y) * uniforms.frame_buffer_size.x + uint(pixel_position.x);
-}
-
-/*
-Gradient noise from Jorge Jimenez's presentation:
-Next Generation Post Processing in Call of Duty: Advanced Warfare
-http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
-
-Good post on usage: https://blog.frost.kiwi/GLSL-noise-and-radial-gradient/
-*/
-float gradient_noise(float2 uv) {
-    return frac(52.9829189 * frac(dot(uv, float2(0.06711056, 0.00583715))));
-}
-
-float3 pseudo_dither(float3 color, float2 pixel_coordinate) {
-    return color + (1.0 / 255.0) * gradient_noise(pixel_coordinate) - (0.5 / 255.0);
-}
-
-[shader("fragment")]
-float4 fs(VSOutput input) : SV_Target0 {
-    uint i = pixel_global_index(input.position.xy);
-    float3 color = pixel_color_buffer[i].xyz / uniforms.frame_number;
-
-    color = aces_approx(color.xyz);
-    color = pow(color.xyz, float3(1.0 / 2.2));
-    color = pseudo_dither(color, input.position.xy);
-
-    return float4(color, 1.0);
-}
 
 //===================================================================
 // deterministic ray tracing

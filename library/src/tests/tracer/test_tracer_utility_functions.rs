@@ -895,7 +895,7 @@ mod tests {
             .with_additional_shader_code(DUMMY_IMPLEMENTATIONS)
             .with_additional_shader_code(
                 r#"fn hit_triangle_t(triangle: Triangle_0, ray: Ray_0) -> vec4f
-                { if (hit_triangle_0(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.global_0.position_0, 1.0); } return vec4f(0.0); }"#
+                { if (hit_triangle_0(triangle, 0.0, 1000.0, ray)) { return vec4f(hitRec.global_0.position_2, 1.0); } return vec4f(0.0); }"#
             );
 
         let function_execution = make_executable(&template,

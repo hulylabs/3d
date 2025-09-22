@@ -735,7 +735,7 @@ impl Renderer {
     }
 }
 
-pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../shader/tracer.wgsl");
+pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../shader/_tracer.wgsl");
 
 struct Buffers {
     uniforms: Rc<wgpu::Buffer>,

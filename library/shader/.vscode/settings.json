@@ -1,3 +1,11 @@
 {
-  "slang.slangdLocation": "./slang/slang-2025.16.1-windows-x86_64/bin"
+  "[macos]": {
+    "slang.slangdLocation": "./slang/slang-2025.16.1-macos-aarch64/bin"
+  },
+  "[windows]": {
+    "slang.slangdLocation": "./slang/slang-2025.16.1-windows-x86_64/bin"
+  },
+  "[slang]": {
+    "editor.suggest.snippetsPreventQuickSuggestions": false
+  }
 }

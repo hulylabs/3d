@@ -15,15 +15,16 @@ if (-not (Test-Path $slangcPath)) {
     exit 1
 }
 
-$outputFileName = "tracer.wgsl"
+$compiledShaderFileName = "_tracer.wgsl"
+$reflectionFileName = "_reflection.json"
 
 Write-Host "Using Slang compiler from: $slangcPath"
-& $slangcPath tracer.slang -target wgsl -o $outputFileName -reflection-json reflection.json -warnings-as-errors all -matrix-layout-column-major -no-mangle
+& $slangcPath tracer.slang -target wgsl -o $compiledShaderFileName -reflection-json $reflectionFileName -warnings-as-errors all -matrix-layout-column-major -no-mangle
 
-if (Test-Path $outputFileName) {
-    Write-Host "Removing alignment attributes from $outputFileName..."
+if (Test-Path $compiledShaderFileName) {
+    Write-Host "Removing alignment attributes from $compiledShaderFileName..."
     
-    $content = Get-Content $outputFileName -Raw
+    $content = Get-Content $compiledShaderFileName -Raw
     
     $content = $content.Replace('@align(16) ', '')
     $content = $content.Replace('@align(8) ', '')
@@ -35,5 +36,5 @@ if (Test-Path $outputFileName) {
     # Normalize line endings to LF
     $content = $content.Replace("`r`n", "`n").Replace("`r", "`n")
     
-    Set-Content $outputFileName $content -NoNewline
+    Set-Content $compiledShaderFileName $content -NoNewline
 }
