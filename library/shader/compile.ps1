@@ -32,5 +32,8 @@ if (Test-Path $outputFileName) {
     $content = $content.Replace('@align(8)', '')
     $content = $content.Replace('@align(4)', '')
     
+    # Normalize line endings to LF
+    $content = $content.Replace("`r`n", "`n").Replace("`r", "`n")
+    
     Set-Content $outputFileName $content -NoNewline
 }

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-
     mod deterministic_render {
         use crate::gpu::color_buffer_evaluation::RenderStrategyId;
         use std::path::PathBuf;
