@@ -23,63 +23,63 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_frame_buffer_size(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("frame_buffer_size", FieldKind::Vector2, DATA_SOURCE);
+        let template = make_shader_function("frame_buffer_size_0", FieldKind::Vector2, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(100.0, 4.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_frame_buffer_area(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("frame_buffer_area", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("frame_buffer_area_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(400.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_frame_buffer_aspect(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("frame_buffer_aspect", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("frame_buffer_aspect_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(100.0/4.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_inverted_frame_buffer_size(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("inverted_frame_buffer_size", FieldKind::Vector2, DATA_SOURCE);
+        let template = make_shader_function("inverted_frame_buffer_size_0", FieldKind::Vector2, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(1.0/100.0, 1.0/4.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_frame_number(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("frame_number", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("frame_number_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(0.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_matrix_x(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_matrix_col_0", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_matrix_col_0_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().camera_space_to_world().x;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_matrix_y(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_matrix_col_1", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_matrix_col_1_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().camera_space_to_world().y;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_matrix_z(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_matrix_col_2", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_matrix_col_2_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().camera_space_to_world().z;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_matrix_w(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_matrix_col_3", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_matrix_col_3_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().camera_space_to_world().w;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
@@ -87,28 +87,28 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_ray_origin_matrix_x(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_ray_origin_matrix_col_0", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_ray_origin_matrix_col_0_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().view_ray_origin().x;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_ray_origin_matrix_y(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_ray_origin_matrix_col_1", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_ray_origin_matrix_col_1_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().view_ray_origin().y;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_ray_origin_matrix_z(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_ray_origin_matrix_col_2", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_ray_origin_matrix_col_2_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().view_ray_origin().z;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_for_view_ray_origin_matrix_w(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("view_ray_origin_matrix_col_3", FieldKind::Vector4, DATA_SOURCE);
+        let template = make_shader_function("view_ray_origin_matrix_col_3_0", FieldKind::Vector4, DATA_SOURCE);
         let expected = stub_camera().view_ray_origin().w;
         check_uniforms_data_probe(fixture, &template, to_pod(expected));
     }
@@ -116,42 +116,42 @@ mod tests {
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_parallelograms_count(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("parallelograms_count", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("parallelograms_count_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(6.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_bvh_length(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("bvh_length", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("bvh_length_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(5.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_global_time_seconds(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("global_time_seconds", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("global_time_seconds_0", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(9.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_thread_grid_size_x(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("thread_grid_size.x", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("thread_grid_size_0.x", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(104.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_thread_grid_size_y(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("thread_grid_size.y", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("thread_grid_size_0.y", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(8.0, 0.0, 0.0, -7.0));
     }
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
     fn test_uniforms_packing_thread_grid_size_z(fixture: &mut GpuCodeExecutionContext) {
-        let template = make_shader_function("thread_grid_size.z", FieldKind::Scalar, DATA_SOURCE);
+        let template = make_shader_function("thread_grid_size_0.z", FieldKind::Scalar, DATA_SOURCE);
         check_uniforms_data_probe(fixture, &template, PodVector::new_full(1.0, 0.0, 0.0, -7.0));
     }
 

@@ -10,3 +10,4 @@ Cargo.lock
 .idea/workspace.xml
 /.caches
 /debug_output
+library/shader/_run_tests.exe

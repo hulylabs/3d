@@ -712,6 +712,7 @@
                 "kind": "constantBuffer",
                 "elementType": {
                     "kind": "struct",
+                    "name": "Uniforms",
                     "fields": [
                         {
                             "name": "frame_buffer_size",
@@ -925,6 +926,7 @@
                 "elementVarLayout": {
                     "type": {
                         "kind": "struct",
+                        "name": "Uniforms",
                         "fields": [
                             {
                                 "name": "frame_buffer_size",

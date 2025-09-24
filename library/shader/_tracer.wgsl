@@ -1,28 +1,28 @@
-struct SLANG_ParameterGroup_uniforms_std140_0
+struct Uniforms_std140_0
 {
-    frame_buffer_size : vec2<u32>,
-    frame_buffer_area : u32,
-    frame_buffer_aspect : f32,
-    inverted_frame_buffer_size : vec2<f32>,
-    frame_number : f32,
-    empty_slot__1 : f32,
-    view_matrix_col_0 : vec4<f32>,
-    view_matrix_col_1 : vec4<f32>,
-    view_matrix_col_2 : vec4<f32>,
-    view_matrix_col_3 : vec4<f32>,
-    view_ray_origin_matrix_col_0 : vec4<f32>,
-    view_ray_origin_matrix_col_1 : vec4<f32>,
-    view_ray_origin_matrix_col_2 : vec4<f32>,
-    view_ray_origin_matrix_col_3 : vec4<f32>,
-    parallelograms_count : u32,
-    bvh_length : u32,
-    pixel_side_subdivision : u32,
-    global_time_seconds : f32,
-    thread_grid_size : vec3<u32>,
-    empty_slot__2 : f32,
+    frame_buffer_size_0 : vec2<u32>,
+    frame_buffer_area_0 : u32,
+    frame_buffer_aspect_0 : f32,
+    inverted_frame_buffer_size_0 : vec2<f32>,
+    frame_number_0 : f32,
+    empty_slot_1_0 : f32,
+    view_matrix_col_0_0 : vec4<f32>,
+    view_matrix_col_1_0 : vec4<f32>,
+    view_matrix_col_2_0 : vec4<f32>,
+    view_matrix_col_3_0 : vec4<f32>,
+    view_ray_origin_matrix_col_0_0 : vec4<f32>,
+    view_ray_origin_matrix_col_1_0 : vec4<f32>,
+    view_ray_origin_matrix_col_2_0 : vec4<f32>,
+    view_ray_origin_matrix_col_3_0 : vec4<f32>,
+    parallelograms_count_0 : u32,
+    bvh_length_0 : u32,
+    pixel_side_subdivision_0 : u32,
+    global_time_seconds_0 : f32,
+    thread_grid_size_0 : vec3<u32>,
+    empty_slot_2_0 : f32,
 };
 
-@binding(0) @group(0) var<uniform> uniforms : SLANG_ParameterGroup_uniforms_std140_0;
+@binding(0) @group(0) var<uniform> uniforms : Uniforms_std140_0;
 @binding(0) @group(1) var<storage, read_write> pixel_color_buffer : array<vec4<f32>>;
 
 struct Parallelogram_std430_0
@@ -136,9 +136,9 @@ fn vs(@builtin(vertex_index) in_vertex_index_0 : u32) -> VSOutput_0
     return output_0;
 }
 
-fn pixel_global_index_0( pixel_position_0 : vec2<f32>) -> u32
+fn pixel_global_index_0( pixel_position_0 : vec2<f32>,  frame_buffer_width_0 : u32) -> u32
 {
-    return u32(pixel_position_0.y) * uniforms.frame_buffer_size.x + u32(pixel_position_0.x);
+    return u32(pixel_position_0.y) * frame_buffer_width_0 + u32(pixel_position_0.x);
 }
 
 fn aces_approx_0( v_1 : vec3<f32>) -> vec3<f32>
@@ -167,19 +167,19 @@ fn fs(@builtin(position) position_1 : vec4<f32>) -> pixelOutput_0
 {
     randState = u32(0);
     var _S1 : vec2<f32> = position_1.xy;
-    var _S2 : pixelOutput_0 = pixelOutput_0( vec4<f32>(pseudo_dither_0(pow(aces_approx_0((pixel_color_buffer[pixel_global_index_0(_S1)].xyz / vec3<f32>(uniforms.frame_number)).xyz).xyz, vec3<f32>(0.45454543828964233f)), _S1), 1.0f) );
+    var _S2 : pixelOutput_0 = pixelOutput_0( vec4<f32>(pseudo_dither_0(pow(aces_approx_0((pixel_color_buffer[pixel_global_index_0(_S1, uniforms.frame_buffer_size_0.x)].xyz / vec3<f32>(uniforms.frame_number_0)).xyz).xyz, vec3<f32>(0.45454543828964233f)), _S1), 1.0f) );
     return _S2;
 }
 
-fn evaluate_pixel_index_0( global_invocation_id_0 : vec3<u32>,  thread_grid_size_0 : vec3<u32>) -> u32
+fn evaluate_pixel_index_0( global_invocation_id_0 : vec3<u32>,  thread_grid_size_1 : vec3<u32>) -> u32
 {
-    var _S3 : u32 = thread_grid_size_0.x;
-    return global_invocation_id_0.z * (_S3 * thread_grid_size_0.y) + global_invocation_id_0.y * _S3 + global_invocation_id_0.x;
+    var _S3 : u32 = thread_grid_size_1.x;
+    return global_invocation_id_0.z * (_S3 * thread_grid_size_1.y) + global_invocation_id_0.y * _S3 + global_invocation_id_0.x;
 }
 
 fn pixel_outside_frame_buffer_0( pixel_index_0 : u32) -> bool
 {
-    return pixel_index_0 >= (uniforms.frame_buffer_area);
+    return pixel_index_0 >= (uniforms.frame_buffer_area_0);
 }
 
 struct Pixel_0
@@ -189,7 +189,7 @@ struct Pixel_0
 
 fn setup_pixel_coordinates_0( pixel_index_1 : u32) -> Pixel_0
 {
-    var _S4 : u32 = uniforms.frame_buffer_size.x;
+    var _S4 : u32 = uniforms.frame_buffer_size_0.x;
     var x_0 : u32 = pixel_index_1 % _S4;
     var y_0 : u32 = pixel_index_1 / _S4;
     var result_0 : Pixel_0;
@@ -205,7 +205,7 @@ struct Camera_0
 
 fn setup_camera_0() -> Camera_0
 {
-    var origin_1 : vec3<f32> = uniforms.view_matrix_col_3.xyz;
+    var origin_1 : vec3<f32> = uniforms.view_matrix_col_3_0.xyz;
     var result_1 : Camera_0;
     result_1.fov_factor_0 = 1.0f / tan(0.52359879016876221f);
     result_1.origin_0 = origin_1;
@@ -220,8 +220,8 @@ struct Ray_0
 
 fn get_camera_ray_0( camera_0 : Camera_0,  s_0 : f32,  t_0 : f32) -> Ray_0
 {
-    var pixel_world_space_0 : vec4<f32> = vec4<f32>(camera_0.origin_0 + (((mat4x4<f32>(uniforms.view_matrix_col_0, uniforms.view_matrix_col_1, uniforms.view_matrix_col_2, uniforms.view_matrix_col_3)) * (vec4<f32>(vec3<f32>(s_0, t_0, - camera_0.fov_factor_0), 0.0f)))).xyz, 1.0f);
-    var ray_origin_world_space_0 : vec3<f32> = (((mat4x4<f32>(uniforms.view_ray_origin_matrix_col_0, uniforms.view_ray_origin_matrix_col_1, uniforms.view_ray_origin_matrix_col_2, uniforms.view_ray_origin_matrix_col_3)) * (pixel_world_space_0))).xyz;
+    var pixel_world_space_0 : vec4<f32> = vec4<f32>(camera_0.origin_0 + (((mat4x4<f32>(uniforms.view_matrix_col_0_0, uniforms.view_matrix_col_1_0, uniforms.view_matrix_col_2_0, uniforms.view_matrix_col_3_0)) * (vec4<f32>(vec3<f32>(s_0, t_0, - camera_0.fov_factor_0), 0.0f)))).xyz, 1.0f);
+    var ray_origin_world_space_0 : vec3<f32> = (((mat4x4<f32>(uniforms.view_ray_origin_matrix_col_0_0, uniforms.view_ray_origin_matrix_col_1_0, uniforms.view_ray_origin_matrix_col_2_0, uniforms.view_ray_origin_matrix_col_3_0)) * (pixel_world_space_0))).xyz;
     var direction_1 : vec3<f32> = normalize(pixel_world_space_0.xyz - ray_origin_world_space_0);
     var result_2 : Ray_0;
     result_2.origin_2 = ray_origin_world_space_0;
@@ -231,7 +231,7 @@ fn get_camera_ray_0( camera_0 : Camera_0,  s_0 : f32,  t_0 : f32) -> Ray_0
 
 fn ray_to_pixel_0( camera_1 : Camera_0,  pixel_0 : Pixel_0,  sub_pixel_x_0 : f32,  sub_pixel_y_0 : f32) -> Ray_0
 {
-    return get_camera_ray_0(camera_1, uniforms.frame_buffer_aspect * (2.0f * ((pixel_0.coordinates_0.x + sub_pixel_x_0) * uniforms.inverted_frame_buffer_size.x) - 1.0f), -1.0f * (2.0f * ((pixel_0.coordinates_0.y + sub_pixel_y_0) * uniforms.inverted_frame_buffer_size.y) - 1.0f));
+    return get_camera_ray_0(camera_1, uniforms.frame_buffer_aspect_0 * (2.0f * ((pixel_0.coordinates_0.x + sub_pixel_x_0) * uniforms.inverted_frame_buffer_size_0.x) - 1.0f), -1.0f * (2.0f * ((pixel_0.coordinates_0.y + sub_pixel_y_0) * uniforms.inverted_frame_buffer_size_0.y) - 1.0f));
 }
 
 struct RayDifferentials_0
@@ -735,7 +735,7 @@ fn fetch_albedo_0( hit_1 : HitPlace_0,  ray_direction_1 : vec3<f32>,  ray_parame
     if((material_0.albedo_texture_uid_0) < i32(0))
     {
         var derivartives_0 : RayDerivatives_0 = ray_hit_position_derivatives_0(ray_direction_1, ray_parameter_1, hit_1.normal_1, differentials_3);
-        var _S42 : vec3<f32> = procedural_texture_select(- material_0.albedo_texture_uid_0, snap_to_grid_0(hit_1.position_2, 0.00009999999747379f), hit_1.normal_1, uniforms.global_time_seconds, derivartives_0.dp_dx_0, derivartives_0.dp_dy_0);
+        var _S42 : vec3<f32> = procedural_texture_select(- material_0.albedo_texture_uid_0, snap_to_grid_0(hit_1.position_2, 0.00009999999747379f), hit_1.normal_1, uniforms.global_time_seconds_0, derivartives_0.dp_dx_0, derivartives_0.dp_dy_0);
         result_8 = result_7 * _S42;
     }
     else
@@ -779,7 +779,7 @@ fn trace_first_intersection_0( incident_0 : RayAndDifferentials_0) -> FirstHitSu
     var i_2 : u32 = u32(0);
     for(;;)
     {
-        if(i_2 < (uniforms.parallelograms_count))
+        if(i_2 < (uniforms.parallelograms_count_0))
         {
         }
         else
@@ -814,7 +814,7 @@ fn trace_first_intersection_0( incident_0 : RayAndDifferentials_0) -> FirstHitSu
         i_2 = _S51;
     }
     var _S52 : vec3<f32> = vec3<f32>(1.0f) / incident_0.ray_0.direction_0;
-    var _S53 : i32 = i32(uniforms.bvh_length);
+    var _S53 : i32 = i32(uniforms.bvh_length_0);
     var node_index_0 : i32 = i32(0);
     for(;;)
     {
@@ -932,7 +932,7 @@ fn trace_first_intersection_0( incident_0 : RayAndDifferentials_0) -> FirstHitSu
 fn compute_surface_attributes_buffer(@builtin(global_invocation_id) global_invocation_id_1 : vec3<u32>)
 {
     randState = u32(0);
-    var pixel_index_2 : u32 = evaluate_pixel_index_0(global_invocation_id_1, uniforms.thread_grid_size);
+    var pixel_index_2 : u32 = evaluate_pixel_index_0(global_invocation_id_1, uniforms.thread_grid_size_0);
     if(pixel_outside_frame_buffer_0(pixel_index_2))
     {
         return;
@@ -952,7 +952,7 @@ fn get_lights_0()
     var i_3 : u32 = u32(0);
     for(;;)
     {
-        if(i_3 < (uniforms.parallelograms_count))
+        if(i_3 < (uniforms.parallelograms_count_0))
         {
         }
         else
@@ -1009,7 +1009,7 @@ fn hit_scene_0( ray_5 : Ray_0,  max_ray_patameter_0 : f32) -> bool
     var i_4 : u32 = u32(0);
     for(;;)
     {
-        if(i_4 < (uniforms.parallelograms_count))
+        if(i_4 < (uniforms.parallelograms_count_0))
         {
         }
         else
@@ -1034,7 +1034,7 @@ fn hit_scene_0( ray_5 : Ray_0,  max_ray_patameter_0 : f32) -> bool
         i_4 = _S79;
     }
     var _S80 : vec3<f32> = vec3<f32>(1.0f) / ray_5.direction_0;
-    var _S81 : i32 = i32(uniforms.bvh_length);
+    var _S81 : i32 = i32(uniforms.bvh_length_0);
     var node_index_1 : i32 = i32(0);
     for(;;)
     {
@@ -1529,7 +1529,7 @@ fn ray_color_monte_carlo_0( incident_1 : RayAndDifferentials_0) -> vec3<f32>
 
 fn path_trace_monte_carlo_0( camera_4 : Camera_0,  pixel_5 : Pixel_0) -> vec3<f32>
 {
-    var samples_count_0 : u32 = uniforms.pixel_side_subdivision * uniforms.pixel_side_subdivision;
+    var samples_count_0 : u32 = uniforms.pixel_side_subdivision_0 * uniforms.pixel_side_subdivision_0;
     var _S133 : vec3<f32> = vec3<f32>(0.0f);
     var i_6 : u32 = u32(0);
     var result_color_0 : vec3<f32> = _S133;
@@ -1557,14 +1557,14 @@ fn path_trace_monte_carlo_0( camera_4 : Camera_0,  pixel_5 : Pixel_0) -> vec3<f3
 fn compute_color_buffer_monte_carlo(@builtin(global_invocation_id) global_invocation_id_2 : vec3<u32>)
 {
     randState = u32(0);
-    var pixel_index_4 : u32 = evaluate_pixel_index_0(global_invocation_id_2, uniforms.thread_grid_size);
+    var pixel_index_4 : u32 = evaluate_pixel_index_0(global_invocation_id_2, uniforms.thread_grid_size_0);
     if(pixel_outside_frame_buffer_0(pixel_index_4))
     {
         return;
     }
     var camera_5 : Camera_0 = setup_camera_0();
     var pixel_6 : Pixel_0 = make_common_color_evaluation_setup_0(pixel_index_4);
-    randState = pixel_index_4 + u32(uniforms.frame_number) * u32(719393);
+    randState = pixel_index_4 + u32(uniforms.frame_number_0) * u32(719393);
     var traced_color_0 : vec3<f32> = path_trace_monte_carlo_0(camera_5, pixel_6);
     pixel_color_buffer[pixel_index_4] = vec4<f32>(pixel_color_buffer[pixel_index_4].xyz + traced_color_0, 1.0f);
     return;
@@ -1610,7 +1610,7 @@ fn sample_signed_distance_function_0( sdf_4 : Sdf_0,  position_4 : vec3<f32>,  d
 
 fn sample_signed_distance_0( position_5 : vec3<f32>,  direction_5 : vec3<f32>) -> f32
 {
-    var _S137 : i32 = i32(uniforms.bvh_length);
+    var _S137 : i32 = i32(uniforms.bvh_length_0);
     var record_0 : f32 = 1.0e+09f;
     var node_index_2 : i32 = i32(0);
     for(;;)
@@ -1805,8 +1805,8 @@ fn ray_color_deterministic_0( camera_origin_1 : vec3<f32>,  incident_3 : RayAndD
 
 fn path_trace_deterministic_0( camera_6 : Camera_0,  pixel_7 : Pixel_0) -> vec3<f32>
 {
-    var _S152 : u32 = uniforms.pixel_side_subdivision;
-    if((uniforms.pixel_side_subdivision) == u32(1))
+    var _S152 : u32 = uniforms.pixel_side_subdivision_0;
+    if((uniforms.pixel_side_subdivision_0) == u32(1))
     {
         var _S153 : vec3<f32> = ray_color_deterministic_0(camera_6.origin_0, ray_and_differentials_0(camera_6, pixel_7, 0.5f, 0.5f));
         return _S153;
@@ -1849,7 +1849,7 @@ fn path_trace_deterministic_0( camera_6 : Camera_0,  pixel_7 : Pixel_0) -> vec3<
 fn compute_color_buffer_deterministic(@builtin(global_invocation_id) global_invocation_id_3 : vec3<u32>)
 {
     randState = u32(0);
-    var pixel_index_5 : u32 = evaluate_pixel_index_0(global_invocation_id_3, uniforms.thread_grid_size);
+    var pixel_index_5 : u32 = evaluate_pixel_index_0(global_invocation_id_3, uniforms.thread_grid_size_0);
     if(pixel_outside_frame_buffer_0(pixel_index_5))
     {
         return;

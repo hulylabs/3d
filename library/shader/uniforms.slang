@@ -3,7 +3,9 @@
 module uniforms;
 
 [vk::binding(0, 0)]
-public cbuffer uniforms {
+public ConstantBuffer<Uniforms> uniforms;
+
+public struct Uniforms {
     public uint2 frame_buffer_size;
     public uint frame_buffer_area;
     public float frame_buffer_aspect; // width / height
