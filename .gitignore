@@ -11,3 +11,6 @@ Cargo.lock
 /.caches
 /debug_output
 library/shader/_run_tests.exe
+/library/font/node_modules
+library/font/package.json
+library/font/glyphs_atlas.*
