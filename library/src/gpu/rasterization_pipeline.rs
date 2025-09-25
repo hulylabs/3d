@@ -1,4 +1,4 @@
-﻿use crate::gpu::bind_group_builder::BindGroupBuilder;
+use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::binding_groups::BindingGroups;
 use wgpu::{BindGroupLayout, RenderPass};
 

@@ -1,4 +1,4 @@
-﻿pub(crate) mod texture_procedural_3d;
+pub(crate) mod texture_procedural_3d;
 pub mod texture_reference;
 pub mod material_properties;
 pub mod material_index;

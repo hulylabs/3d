@@ -1,4 +1,4 @@
-﻿use crate::geometry::fundamental_constants::COMPONENTS_IN_TEXTURE_COORDINATE;
+use crate::geometry::fundamental_constants::COMPONENTS_IN_TEXTURE_COORDINATE;
 use crate::material::texture_region::TextureRegion;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::{GpuSerializable, GpuSerializationSize};

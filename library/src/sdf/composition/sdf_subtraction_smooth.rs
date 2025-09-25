@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::sdf::framework::n_ary_operations_utils::{produce_binary_operation_body, produce_smooth_union_preparation, produce_smooth_union_return};
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::shader::formatting_utils::format_scalar;

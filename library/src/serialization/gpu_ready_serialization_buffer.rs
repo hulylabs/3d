@@ -1,4 +1,4 @@
-﻿use std::vec;
+use std::vec;
 use crate::serialization::single_object_writer::SingleObjectWriter;
 use crate::serialization::single_quartet_writer::SingleQuartetWriter;
 

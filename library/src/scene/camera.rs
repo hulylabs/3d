@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::transform::Affine;
 use crate::serialization::serialize_matrix::serialize_matrix_4x4;
 use cgmath::{Deg, EuclideanSpace, InnerSpace, SquareMatrix, Transform, Vector3, Zero};
@@ -158,12 +158,22 @@ impl Camera {
         self.world_to_camera_space = Affine::look_at_rh(eye, look_at, up);
         self.view_ray_origin = self.kind.ray_origin(eye, look_at);
     }
+    
+    #[must_use]
+    pub fn camera_space_to_world(&self) -> Affine {
+        self.world_to_camera_space.invert().unwrap()
+    }
 
+    #[must_use]
+    pub fn view_ray_origin(&self) -> &Affine {
+        &self.view_ray_origin
+    }
+    
     fn mark_updated_and_build(&mut self) {
         self.updated = true;
         self.build();
     }
-
+    
     pub fn set_zoom_speed(&mut self, per_unit: f64) {
         self.zoom_speed = per_unit;
     }

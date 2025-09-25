@@ -1,4 +1,4 @@
-﻿use crate::shader::code::{FunctionBody, Generic, ShaderCode};
+use crate::shader::code::{FunctionBody, Generic, ShaderCode};
 
 pub struct TextureProcedural2D {
     utilities: ShaderCode<Generic>,

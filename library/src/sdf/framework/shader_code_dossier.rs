@@ -1,4 +1,4 @@
-﻿use std::rc::Rc;
+use std::rc::Rc;
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::shader::function_name::FunctionName;
 

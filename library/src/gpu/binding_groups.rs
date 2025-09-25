@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use wgpu::{BindGroup, ComputePass, RenderPass};
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 

@@ -1,4 +1,4 @@
-﻿use crate::material::texture_procedural_2d::TextureProcedural2D;
+use crate::material::texture_procedural_2d::TextureProcedural2D;
 use crate::material::texture_procedural_3d::TextureProcedural3D;
 use crate::shader::code::{FunctionBody, Generic, ShaderCode};
 use crate::shader::conventions;

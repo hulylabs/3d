@@ -1,4 +1,4 @@
-﻿use cgmath::Vector2;
+use cgmath::Vector2;
 use derive_more::Display;
 use image::{ImageBuffer, Rgba};
 use more_asserts::assert_gt;

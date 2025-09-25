@@ -1,4 +1,4 @@
-﻿use std::rc::Rc;
+use std::rc::Rc;
 use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::sdf::framework::sdf_base::Sdf;
 use crate::sdf::framework::sdf_shader_code::{format_sdf_animation_application, format_sdf_animation_undo_function_opening};

@@ -1,4 +1,4 @@
-﻿use std::cell::{Ref, RefCell};
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 use crate::gpu::compute_pipeline::ComputePipeline;
 

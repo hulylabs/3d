@@ -1,1 +1,1 @@
-﻿pub mod sdf_translation;
+pub mod sdf_translation;

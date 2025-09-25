@@ -1,4 +1,4 @@
-﻿use cgmath::Vector2;
+use cgmath::{Vector2, Vector3};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) struct FrameBufferSize {
@@ -35,10 +35,11 @@ impl FrameBufferSize {
     }
     
     #[must_use]
-    pub(crate) fn work_groups_count(&self, work_group_size: Vector2<u32>) -> Vector2<u32> {
-        Vector2::new(
+    pub(crate) fn work_groups_count(&self, work_group_size: Vector2<u32>) -> Vector3<u32> {
+        Vector3::<u32>::new(
             self.width.div_ceil(work_group_size.x), 
             self.height.div_ceil(work_group_size.y),
+            1
         )
     }
 }
@@ -49,28 +50,28 @@ mod tests {
 
     #[test]
     fn test_work_groups_count_no_reminder() {
-        let expected_width = 37;
-        let expected_height = 43;
-        let width_multiplier = 3;
-        let height_multiplier = 4;
+        let expected_width: u32 = 37;
+        let expected_height: u32 = 43;
+        let width_multiplier: u32 = 3;
+        let height_multiplier: u32 = 4;
         let system_under_test = FrameBufferSize::new(expected_width * width_multiplier, expected_height * height_multiplier);
 
         let actual_count = system_under_test.work_groups_count(Vector2::new(expected_width, expected_height));
-        let expected_count = Vector2::new(width_multiplier, height_multiplier);
+        let expected_count = Vector3::new(width_multiplier, height_multiplier, 1u32);
         
         assert_eq!(actual_count, expected_count);
     }
     
     #[test]
     fn test_work_groups_count_with_reminder() {
-        let expected_width = 37;
-        let expected_height = 43;
-        let width_multiplier = 3;
-        let height_multiplier = 4;
+        let expected_width: u32 = 37;
+        let expected_height: u32 = 43;
+        let width_multiplier: u32 = 3;
+        let height_multiplier: u32 = 4;
         let system_under_test = FrameBufferSize::new(expected_width * width_multiplier + 5, expected_height * height_multiplier + 7);
 
         let actual_count = system_under_test.work_groups_count(Vector2::new(expected_width, expected_height));
-        let expected_count = Vector2::new(width_multiplier + 1, height_multiplier + 1);
+        let expected_count = Vector3::new(width_multiplier + 1, height_multiplier + 1, 1u32);
         
         assert_eq!(actual_count, expected_count);
     }

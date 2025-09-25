@@ -1,4 +1,4 @@
-﻿use crate::sdf::framework::sdf_base::Sdf;
+use crate::sdf::framework::sdf_base::Sdf;
 use std::cmp::max;
 use std::collections::HashSet;
 use std::rc::Rc;

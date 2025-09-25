@@ -1,4 +1,4 @@
-﻿use num_enum::TryFromPrimitive;
+use num_enum::TryFromPrimitive;
 use crate::denoiser::sys;
 
 #[repr(u32)]

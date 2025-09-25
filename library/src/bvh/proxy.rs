@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum PrimitiveType {

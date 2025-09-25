@@ -1,4 +1,4 @@
-﻿use cgmath::Vector2;
+use cgmath::Vector2;
 use float_cmp::approx_eq;
 use crate::geometry::alias::{Point, Vector};
 use crate::geometry::axis::Axis;

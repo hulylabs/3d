@@ -11,17 +11,17 @@ denoiser = []
 
 [dependencies]
 cgmath = "0.18.0"
-log = "0.4.27"
+log = "0.4.28"
 wgpu = "26.0.1"
 winit = "0.30.11"
 bytemuck = { version = "1.23.2", features = ["derive"] }
 pollster = "0.4"
 strum = "0.27.2"
 strum_macros = "0.27.2"
-thiserror = "2.0.14"
+thiserror = "2.0.16"
 palette = "0.7.6"
 obj-rs = { version = "0.7.4", features = ["vulkano"] }
-anyhow = "1.0.99"
+anyhow = "1.0.100"
 futures-intrusive = "0.5"
 futures = "0.3.31"
 exr = "1.73.0"
@@ -30,23 +30,22 @@ num_enum = "0.7.4"
 float-pretty-print = "0.1.1"
 derive_more = { version = "2.0.1", features = ["display"] }
 disjoint = "0.8.0"
-serde_json = "1.0.142"
-serde = { version = "1.0.219", features = ["derive"] }
-bitflags = "2.9.1"
+serde_json = "1.0.145"
+serde = { version = "1.0.226", features = ["derive"] }
+bitflags = "2.9.4"
 seahash = "4.1.0"
 more-asserts = "0.3.1"
 float-cmp = "0.10.0"
 etagere = "0.2.15"
 cast = "0.3.0"
-image = { version = "0.25.6", features = ["png"] }
+image = { version = "0.25.8", features = ["png"] }
 
 [dev-dependencies]
-tempfile = "3.20.0"
-image = "0.25.6"
+tempfile = "3.23.0"
+image = "0.25.8"
 exr = "1.73.0"
 rstest = "0.26.1"
 tinytemplate = "1.2.1"
-serde = "1.0.219"
 test-context="0.4.1"
 
 [build-dependencies]

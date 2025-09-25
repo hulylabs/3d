@@ -1,2 +1,2 @@
-﻿cargo clippy
+cargo clippy
 cargo clippy --features "denoiser"

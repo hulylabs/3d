@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::rc::Rc;
 use wgpu::{BindGroup, BindingResource, Buffer, Sampler, TextureView};
 
@@ -96,7 +96,7 @@ impl<'a> BindGroupBuilder<'a> {
 mod tests {
     use super::*;
     use crate::gpu::context::Context;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use crate::gpu::resources::Resources;
     use test_context::{test_context, TestContext};
     use wgpu::BindGroupLayoutEntry;
@@ -125,7 +125,7 @@ mod tests {
 
     impl TestContext for TestFixture {
         fn setup() -> Self {
-            let context = create_headless_wgpu_context();
+            let context = create_headless_wgpu_vulkan_context();
             let resources = Resources::new(context.clone());
 
             let bind_group_layout = context.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

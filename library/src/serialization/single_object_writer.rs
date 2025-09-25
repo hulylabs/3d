@@ -1,4 +1,4 @@
-﻿use crate::serialization::gpu_ready_serialization_buffer::QUARTET_SIZE_BYTES;
+use crate::serialization::gpu_ready_serialization_buffer::QUARTET_SIZE_BYTES;
 use crate::serialization::single_quartet_writer::SingleQuartetWriter;
 
 #[cfg(test)]

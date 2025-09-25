@@ -1,4 +1,4 @@
-﻿pub mod n_ary_operations_utils;
+pub mod n_ary_operations_utils;
 pub(crate) mod shader_function_name_extensions;
 pub(crate) mod dummy_sdf;
 pub mod sdf_shader_code;

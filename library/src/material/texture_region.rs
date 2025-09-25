@@ -1,4 +1,4 @@
-﻿use cgmath::Vector2;
+use cgmath::Vector2;
 
 #[derive(Debug, Clone)]
 pub struct TextureRegion {

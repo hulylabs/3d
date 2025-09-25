@@ -1,6 +1,7 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::scene::camera::Camera;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use cgmath::{Vector2, Vector3};
 use std::time::Duration;
 use winit::dpi::PhysicalSize;
 
@@ -17,6 +18,11 @@ pub(crate) struct Uniforms {
 }
 
 impl Uniforms {
+    // TODO: we need to take those values from the shader code
+    const WORK_GROUP_SIZE_X: u32 = 8;
+    const WORK_GROUP_SIZE_Y: u32 = 8;
+    const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
+
     #[must_use]
     pub(crate) fn new(frame_buffer_size: FrameBufferSize, camera: Camera, pixel_side_subdivision: u32, current_time: Duration) -> Self {
         Self {
@@ -42,7 +48,7 @@ impl Uniforms {
         self.frame_number += increment;
     }
 
-    pub(super) fn update_time(&mut self, current_time: Duration) {
+    pub(crate) fn update_time(&mut self, current_time: Duration) {
         self.global_time_seconds = current_time.as_secs_f32();
     }
 
@@ -54,6 +60,11 @@ impl Uniforms {
     pub(super) fn set_pixel_side_subdivision(&mut self, level: u32) {
         let level: u32 = if 0 == level { 1 } else { level };
         self.pixel_side_subdivision = level;
+    }
+
+    #[must_use]
+    pub(crate) fn work_groups_count(&self) -> Vector3<u32> {
+        self.frame_buffer_size.work_groups_count(Self::WORK_GROUP_SIZE)
     }
 
     pub(crate) fn set_parallelograms_count(&mut self, parallelograms_count: u32) {
@@ -80,7 +91,7 @@ impl Uniforms {
         &mut self.camera
     }
 
-    const SERIALIZED_QUARTET_COUNT: usize = 3 + Camera::SERIALIZED_QUARTET_COUNT;
+    const SERIALIZED_QUARTET_COUNT: usize = 4 + Camera::SERIALIZED_QUARTET_COUNT;
 
     #[must_use]
     pub(crate) fn serialize(&self) -> GpuReadySerializationBuffer {
@@ -108,6 +119,13 @@ impl Uniforms {
             writer.write_unsigned(self.pixel_side_subdivision);
             writer.write_float_32(self.global_time_seconds);
         });
+
+        let workgroup_count = self.work_groups_count();
+        result.write_quartet(|writer| {
+            writer.write_unsigned(workgroup_count.x * Self::WORK_GROUP_SIZE.x);
+            writer.write_unsigned(workgroup_count.y * Self::WORK_GROUP_SIZE.y);
+            writer.write_unsigned(workgroup_count.z);
+        });
         
         debug_assert!(result.object_fully_written());
         result
@@ -116,10 +134,10 @@ impl Uniforms {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
     use super::*;
     use crate::geometry::alias::Point;
     use cgmath::EuclideanSpace;
+    use std::time::Instant;
     use test_context::{test_context, TestContext};
 
     const DEFAULT_FRAME_WIDTH: u32 = 800;
@@ -143,6 +161,10 @@ mod tests {
     const SLOT_BVH_LENGTH: usize = 41;
     const SLOT_PIXEL_SIDE_SUBDIVISION: usize = 42;
     const SLOT_GLOBAL_TIME: usize = 43;
+
+    const SLOT_THREAD_GRID_SIZE_X: usize = 44;
+    const SLOT_THREAD_GRID_SIZE_Y: usize = 45;
+    const SLOT_THREAD_GRID_SIZE_Z: usize = 46;
 
     struct Context {
         system_under_test: Uniforms
@@ -245,5 +267,9 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_BVH_LENGTH].to_bits(), DEFAULT_BVH_LENGTH);
         assert_eq!(actual_state_floats[SLOT_PIXEL_SIDE_SUBDIVISION].to_bits(), DEFAULT_PIXEL_SIDE_SUBDIVISION);
         assert_eq!(actual_state_floats[SLOT_GLOBAL_TIME], expected_time.as_secs_f32());
+
+        assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_X].to_bits(), DEFAULT_FRAME_WIDTH.next_multiple_of(Uniforms::WORK_GROUP_SIZE_X));
+        assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_Y].to_bits(), DEFAULT_FRAME_HEIGHT.next_multiple_of(Uniforms::WORK_GROUP_SIZE_Y));
+        assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_Z].to_bits(), 1);
     }
 }

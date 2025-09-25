@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use float_pretty_print::PrettyPrintFloat;
 use std::fmt::{Display, Formatter};
 

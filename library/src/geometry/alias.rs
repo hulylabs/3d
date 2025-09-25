@@ -1,4 +1,4 @@
-﻿use cgmath::Point3;
+use cgmath::Point3;
 use cgmath::Vector3;
 
 pub type Point = Point3<f64>;

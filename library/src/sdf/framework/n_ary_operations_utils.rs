@@ -1,4 +1,4 @@
-﻿use crate::shader::variable_name::VariableName;
+use crate::shader::variable_name::VariableName;
 use crate::sdf::framework::stack::Stack;
 use crate::shader::code::{FunctionBody, ShaderCode};
 

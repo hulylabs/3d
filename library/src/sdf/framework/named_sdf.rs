@@ -1,4 +1,4 @@
-﻿use std::rc::Rc;
+use std::rc::Rc;
 use std::fmt::{Display, Formatter};
 use crate::sdf::framework::sdf_base::Sdf;
 

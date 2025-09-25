@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use wgpu::{BufferAddress, BufferUsages};
 
 pub(super) struct FrameBufferLayerParameters<'a> {
@@ -83,7 +83,7 @@ pub(super) fn create_frame_buffer_layer(device: &wgpu::Device, parameters: &Fram
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
 
     #[must_use]
     fn test_usage() -> BufferUsages {
@@ -158,7 +158,7 @@ mod tests {
             .bytes_per_channel(4)
             .channels_count(3)
             .build();
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
 
         let actual_layer = create_frame_buffer_layer(context.device(), &parameters);
 

@@ -1,0 +1,13 @@
+{
+  "Slang File Header": {
+    "prefix": "header",
+    "body": [
+      "#language slang 2026",
+      "",
+      "module ${1:moduleName};",
+      "",
+      "${0}"
+    ],
+    "description": "Insert standard header for Slang files"
+  }
+}

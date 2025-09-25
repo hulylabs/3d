@@ -1,4 +1,4 @@
-﻿use crate::gpu::frame_buffer_size::FrameBufferSize;
+use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::output::utils::{create_frame_buffer_layer, frame_buffer_layer_size_bytes, FrameBufferLayerParameters, FrameBufferLayerParametersBuilder};
 use bytemuck::{AnyBitPattern, Pod};
 use futures_intrusive::channel::shared::oneshot_channel;
@@ -21,7 +21,7 @@ pub(crate) struct FrameBufferLayer<T: Sized + AnyBitPattern + Pod> {
 }
 
 impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
-    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = " render target";
+    const LABEL_GPU_LOCATED_RENDER_TARGET: &'static str = "render target";
     const LABEL_CPU_MAPPABLE_MEDIATOR: &'static str = " cpu mappable mediator";
 
     #[must_use]
@@ -108,7 +108,7 @@ impl<T: Sized + AnyBitPattern + Pod> FrameBufferLayer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use futures_intrusive::channel::shared::oneshot_channel;
     use std::cell::RefCell;
     use wgpu::wgt::PollType;
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_construction() {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
 
         let system_under_test = FrameBufferLayer::<u32>::new(context.device(), test_buffer_size(), SupportUpdateFromCpu::No, "test layer");
 
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_read_staging() {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         let buffer_size = test_buffer_size();
         let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFromCpu::No, "test layer");
         let callback_spy_call_counter = Rc::new(RefCell::new(0_u32));
@@ -155,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_issue_copy_to_staging() {
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         let buffer_size = test_buffer_size();
         let system_under_test = FrameBufferLayer::<u32>::new(context.device(), buffer_size, SupportUpdateFromCpu::No, "test layer");
 

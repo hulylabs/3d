@@ -1,4 +1,4 @@
-﻿pub(crate) mod entry;
+pub(crate) mod entry;
 mod buffer;
 mod device;
 mod error;

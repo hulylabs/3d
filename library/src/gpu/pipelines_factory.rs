@@ -1,4 +1,4 @@
-﻿use crate::gpu::context::Context;
+use crate::gpu::context::Context;
 use crate::gpu::pipeline_code::{PipelineCode, ShaderHash};
 use bitflags::bitflags;
 use derive_more::Display;
@@ -379,7 +379,7 @@ impl ComputeRoutineEntryPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use crate::gpu::resources::Resources;
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use tempfile::{tempdir, TempDir};
@@ -426,7 +426,7 @@ mod tests {
     #[must_use]
     fn make_fixture(shader_code: &str) -> (Rc<Context>, TempDir, PipelineCode) {
         let cache_directory = tempdir().unwrap();
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
         let resources = Resources::new(context.clone());
         let shader_module = resources.create_shader_module(TEST_SHADER_LABEL, shader_code);
         let pipeline_code = PipelineCode::new(shader_module, seahash::hash(shader_code.as_bytes()), TEST_SHADER_UID.to_string());

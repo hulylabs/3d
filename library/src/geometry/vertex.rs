@@ -1,4 +1,4 @@
-﻿use crate::geometry::alias::{Point, Vector};
+use crate::geometry::alias::{Point, Vector};
 use crate::geometry::epsilon::DEFAULT_EPSILON_F64;
 use cgmath::AbsDiffEq;
 

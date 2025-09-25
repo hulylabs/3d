@@ -1,9 +1,12 @@
-﻿use cgmath::{Deg, Vector4};
+use cgmath::{Deg, Vector4};
 use library::container::mesh_warehouse::MeshWarehouse;
+use library::container::texture_atlas_page_composer::{AtlasRegionUid, TextureAtlasPageComposer};
+use library::container::texture_helpers::load_bitmap;
 use library::container::visual_objects::VisualObjects;
 use library::geometry::alias::{Point, Vector};
 use library::geometry::axis::Axis;
 use library::geometry::transform::{Affine, Transformation};
+use library::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
 use library::material::material_index::MaterialIndex;
 use library::material::material_properties::{MaterialClass, MaterialProperties};
 use library::material::procedural_texture_index::ProceduralTextureUid;
@@ -35,8 +38,8 @@ use library::sdf::composition::sdf_subtraction::SdfSubtraction;
 use library::sdf::composition::sdf_subtraction_smooth::SdfSubtractionSmooth;
 use library::sdf::composition::sdf_union::SdfUnion;
 use library::sdf::composition::sdf_union_smooth::SdfUnionSmooth;
-use library::sdf::framework::sdf_registrator::SdfRegistrator;
 use library::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+use library::sdf::framework::sdf_registrator::SdfRegistrator;
 use library::sdf::morphing::sdf_bender_along_axis::SdfBenderAlongAxis;
 use library::sdf::morphing::sdf_twister_along_axis::SdfTwisterAlongAxis;
 use library::sdf::object::sdf_box::SdfBox;
@@ -49,10 +52,6 @@ use log::error;
 use std::env;
 use std::ops::DerefMut;
 use std::path::{Path, PathBuf};
-use anyhow::anyhow;
-use library::container::texture_atlas_page_composer::{AtlasRegionUid, TextureAtlasPageComposer};
-use library::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
-use library::utils::bitmap_utils::{BitmapSize, ImmutableBitmapReference};
 
 const CONTENT_ROOT_FOLDER_NAME: &str = "assets";
 
@@ -73,13 +72,13 @@ pub(super) struct TechWorldBitmapTextures {
 
 impl TechWorldBitmapTextures {
     pub(super) fn new(composer: &mut TextureAtlasPageComposer) -> anyhow::Result<Self> {
-        let bitmap_checkerboard_small= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_small.png", composer)?;
-        let bitmap_checkerboard_large= TechWorldBitmapTextures::load_bitmap("bitmap_checkerboard_large.png", composer)?;
-        let bitmap_huly= TechWorldBitmapTextures::load_bitmap("bitmap_huly.png", composer)?;
-        let bitmap_huly_2= TechWorldBitmapTextures::load_bitmap("bitmap_huly_2.png", composer)?;
-        let bitmap_rect_grid = TechWorldBitmapTextures::load_bitmap("bitmap_rect_grid.png", composer)?;
+        let bitmap_checkerboard_small= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_checkerboard_small.png"), composer)?;
+        let bitmap_checkerboard_large= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_checkerboard_large.png"), composer)?;
+        let bitmap_huly= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_huly.png"), composer)?;
+        let bitmap_huly_2= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_huly_2.png"), composer)?;
+        let bitmap_rect_grid = load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_rect_grid.png"), composer)?;
 
-        composer.save_page_into("textures_atlas.png").expect("failed to save texture atlas page");
+        composer.save_page_into(Path::new("debug_output").join("textures_atlas.png")).expect("failed to save texture atlas page");
 
         Ok(Self {
             bitmap_checkerboard_small,
@@ -90,18 +89,10 @@ impl TechWorldBitmapTextures {
         })
     }
 
-    fn load_bitmap(file_name: &str, composer: &mut TextureAtlasPageComposer) -> anyhow::Result<AtlasRegionUid> {
+    #[must_use]
+    fn path_to_bitmap(file_name: &str) -> PathBuf {
         let image_path = Path::new(CONTENT_ROOT_FOLDER_NAME).join(file_name);
-        let image
-            = image::open(get_resource_path(&image_path))
-                .map_err(|e| anyhow!("failed to open image {}: {}", image_path.display(), e))?;
-
-        let buffer = image.to_rgba8();
-        let bitmap_size = BitmapSize::new(buffer.width() as usize, buffer.height() as usize);
-
-        composer
-            .allocate(ImmutableBitmapReference::new(buffer.as_raw(), bitmap_size))
-                .ok_or_else(|| anyhow!("failed to allocate region in texture atlas for {}", file_name))
+        get_resource_path(&image_path)
     }
 }
 

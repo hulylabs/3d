@@ -1,4 +1,4 @@
-﻿use crate::gpu::context::Context;
+use crate::gpu::context::Context;
 use crate::utils::bitmap_utils::{BitmapSize, BYTES_IN_RGBA_QUARTET};
 use more_asserts::{assert_gt, assert_le};
 use std::rc::Rc;
@@ -113,7 +113,7 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use test_context::{test_context, TestContext};
 
     struct Context {
@@ -122,7 +122,7 @@ mod tests {
 
     impl TestContext for Context {
         fn setup() -> Context {
-            Context { system_under_test: Resources{context: create_headless_wgpu_context()} }
+            Context { system_under_test: Resources{context: create_headless_wgpu_vulkan_context()} }
         }
 
         fn teardown(self) {

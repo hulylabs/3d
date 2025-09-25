@@ -1,4 +1,4 @@
-﻿use std::cell::RefCell;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use crate::shader::function_name::FunctionName;

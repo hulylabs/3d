@@ -26,6 +26,7 @@ use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 use crate::gpu::context::Context;
 use crate::gpu::frame_buffer_size::FrameBufferSize;
 use crate::gpu::render::{FrameBufferSettings, Renderer};
+use crate::gpu::scaffolding::backend_vulkan_or_primary;
 use crate::scene::camera::Camera;
 use crate::utils::min_max_time_measurer::MinMaxTimeMeasurer;
 use crate::utils::object_uid::ObjectUid;
@@ -109,8 +110,8 @@ impl Engine {
     
     pub async fn new(window: Arc<Window>, scene: VisualObjects, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            flags: wgpu::InstanceFlags::DEBUG,
+            backends: backend_vulkan_or_primary(),
+            // flags: wgpu::InstanceFlags::DEBUG,
             ..Default::default()
         });
 

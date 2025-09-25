@@ -1,4 +1,4 @@
-﻿use more_asserts::assert_gt;
+use more_asserts::assert_gt;
 use crate::material::texture_procedural_3d::TextureProcedural3D;
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::conventions;

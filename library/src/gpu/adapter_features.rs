@@ -1,4 +1,4 @@
-﻿use log::info;
+use log::info;
 use wgpu::{Adapter, AdapterInfo};
 
 pub(crate) struct AdapterFeatures {

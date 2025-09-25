@@ -1,4 +1,4 @@
-﻿use crate::geometry::transform::Affine;
+use crate::geometry::transform::Affine;
 use crate::geometry::utils::is_affine;
 use crate::objects::common_properties::Linkage;
 use crate::objects::ray_traceable::RayTraceable;

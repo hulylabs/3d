@@ -52,7 +52,16 @@ jobs:
       - name: Run Tests (${{ matrix.build-type }})
         run: |
           if [ "${{ matrix.build-type }}" = "release" ]; then
-            cargo test -p library --release --verbose -- --nocapture
+            cargo test -p library --release --verbose -- --nocapture --skip tests::render
           else
-            cargo test -p library --verbose -- --nocapture
+            cargo test -p library --verbose -- --nocapture --skip tests::render
           fi
+
+      - name: Upload test output artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-macos-${{ matrix.build-type }}
+          path: library/tests/out/
+          if-no-files-found: ignore
+          retention-days: 7

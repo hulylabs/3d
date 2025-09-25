@@ -1,4 +1,4 @@
-﻿use crate::container::scene_object::{SceneEnvironment, SceneObject};
+use crate::container::scene_object::{SceneEnvironment, SceneObject};
 use crate::geometry::transform::Affine;
 use crate::material::material_index::MaterialIndex;
 use crate::objects::common_properties::Linkage;

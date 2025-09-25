@@ -1,4 +1,4 @@
-﻿use crate::shader::variable_name::VariableName;
+use crate::shader::variable_name::VariableName;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;

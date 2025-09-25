@@ -1,4 +1,4 @@
-﻿use std::env;
+use std::env;
 use std::path::{Path, PathBuf};
 use fs_extra::dir::{copy, CopyOptions};
 

@@ -1,4 +1,4 @@
-﻿use crate::material::procedural_texture_index::ProceduralTextureUid;
+use crate::material::procedural_texture_index::ProceduralTextureUid;
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::conventions;
 use crate::shader::function_name::FunctionName;

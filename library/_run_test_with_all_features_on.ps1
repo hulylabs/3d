@@ -1,1 +1,1 @@
-﻿cargo test --features denoiser
+cargo test --features denoiser

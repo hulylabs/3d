@@ -1,4 +1,4 @@
-﻿use derive_more::Display;
+use derive_more::Display;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Display, Ord, PartialOrd)]
 #[display("{}", _0)]

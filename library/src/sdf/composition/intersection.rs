@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::sdf::framework::sdf_base::Sdf;
 use std::rc::Rc;
 

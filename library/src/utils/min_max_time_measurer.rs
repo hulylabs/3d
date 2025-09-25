@@ -1,4 +1,4 @@
-﻿use std::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 pub struct MinMaxTimeMeasurer {
     min_time: Duration,

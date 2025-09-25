@@ -1,4 +1,4 @@
-﻿use crate::geometry::aabb::Aabb;
+use crate::geometry::aabb::Aabb;
 use crate::geometry::alias::Vector;
 use crate::sdf::framework::n_ary_operations_utils::produce_parameter_transform_body;
 use crate::sdf::framework::sdf_base::Sdf;

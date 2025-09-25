@@ -1,4 +1,4 @@
-﻿use wgpu::{Sampler, Texture};
+use wgpu::{Sampler, Texture};
 use crate::gpu::bind_group_builder::BindGroupBuilder;
 use crate::gpu::resources::Resources;
 use crate::utils::bitmap_utils::BitmapSize;

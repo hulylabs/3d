@@ -1,4 +1,4 @@
-﻿#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct AtlasRegionMappingUid(pub(super) usize);
 
 impl From<u32> for AtlasRegionMappingUid {

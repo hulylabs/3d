@@ -1,4 +1,4 @@
-﻿use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
+use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
 pub(crate) trait GpuSerializationSize {
     const SERIALIZED_QUARTET_COUNT: usize;

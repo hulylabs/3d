@@ -1,4 +1,4 @@
-﻿pub(crate) mod common_properties;
+pub(crate) mod common_properties;
 pub(crate) mod parallelogram;
 pub(crate) mod triangle;
 pub(crate) mod triangle_mesh;

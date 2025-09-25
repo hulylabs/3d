@@ -1,4 +1,4 @@
-﻿pub mod visual_objects;
+pub mod visual_objects;
 pub mod mesh_warehouse;
 pub(crate) mod sdf_warehouse;
 mod monolithic;
@@ -7,3 +7,4 @@ mod statistics;
 mod triangulated;
 pub(crate) mod bvh_proxies;
 pub mod texture_atlas_page_composer;
+pub mod texture_helpers;

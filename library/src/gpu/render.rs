@@ -1,7 +1,8 @@
-﻿use crate::animation::time_tracker::TimeTracker;
+use crate::animation::time_tracker::TimeTracker;
 use crate::bvh::node::BvhNode;
 use crate::container::visual_objects::{DataKind, VisualObjects};
 use crate::gpu::bind_group_builder::BindGroupBuilder;
+use crate::gpu::bitmap_textures::BitmapTextures;
 use crate::gpu::buffers_update_status::BuffersUpdateStatus;
 use crate::gpu::color_buffer_evaluation::{ColorBufferEvaluationStrategy, RenderStrategyId};
 use crate::gpu::compute_pipeline::ComputePipeline;
@@ -16,6 +17,8 @@ use crate::gpu::resizable_buffer::ResizableBuffer;
 use crate::gpu::resources::Resources;
 use crate::gpu::uniforms::Uniforms;
 use crate::gpu::versioned_buffer::{BufferUpdateStatus, VersionedBuffer};
+use crate::material::atlas_region_mapping::AtlasRegionMapping;
+use crate::material::material_properties::MaterialProperties;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_instance::SdfInstance;
 use crate::objects::triangle::Triangle;
@@ -25,7 +28,7 @@ use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationB
 use crate::serialization::pod_vector::PodVector;
 use crate::serialization::serializable_for_gpu::GpuSerializationSize;
 use crate::utils::object_uid::ObjectUid;
-use cgmath::Vector2;
+use crate::utils::version::Version;
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
@@ -33,10 +36,6 @@ use std::rc::Rc;
 use std::time::Instant;
 use wgpu::{BufferAddress, CommandEncoder, StoreOp, SubmissionIndex};
 use winit::dpi::PhysicalSize;
-use crate::gpu::bitmap_textures::BitmapTextures;
-use crate::material::atlas_region_mapping::AtlasRegionMapping;
-use crate::material::material_properties::MaterialProperties;
-use crate::utils::version::Version;
 
 #[cfg(feature = "denoiser")]
 mod denoiser {
@@ -88,10 +87,6 @@ impl FrameBufferSettings {
 }
 
 impl Renderer {
-    const WORK_GROUP_SIZE_X: u32 = 8;
-    const WORK_GROUP_SIZE_Y: u32 = 8;
-    const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
-    
     const BVH_INFLATION_RATE: f64 = 0.2;
     
     pub(crate) fn new(
@@ -708,10 +703,10 @@ impl Renderer {
                 label: Some(label),
                 timestamp_writes: None,
             });
-
-            let work_groups_needed = self.uniforms.frame_buffer_size().work_groups_count(Self::WORK_GROUP_SIZE);
+                
             compute_pipeline.set_into_pass(&mut pass);
-            pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, 1);}
+            let work_groups_needed = self.uniforms.work_groups_count();
+            pass.dispatch_workgroups(work_groups_needed.x, work_groups_needed.y, work_groups_needed.z);}
             
             customize(&mut encoder);
         }
@@ -740,7 +735,7 @@ impl Renderer {
     }
 }
 
-pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../assets/shaders/tracer.wgsl");
+pub(crate) const WHOLE_TRACER_GPU_CODE: &str = include_str!("../../shader/_tracer.wgsl");
 
 struct Buffers {
     uniforms: Rc<wgpu::Buffer>,
@@ -761,26 +756,25 @@ struct Buffers {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::geometry::alias::{Point, Vector};
-    use crate::gpu::headless_device::tests::create_headless_wgpu_context;
+    use crate::geometry::transform::Affine;
+    use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
+    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
+    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
+    use crate::sdf::object::sdf_box::SdfBox;
+    use crate::utils::tests::assert_utils::tests::assert_all_items_equal;
+    use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     use cgmath::{AbsDiffEq, SquareMatrix};
     use image::{ImageBuffer, Rgba};
     use std::fs;
     use std::path::Path;
-    use crate::geometry::transform::Affine;
+
     #[cfg(feature = "denoiser")]
     use crate::serialization::pod_vector::PodVector;
-    use crate::utils::tests::assert_utils::tests::assert_all_items_equal;
-    use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
     #[cfg(feature = "denoiser")]
     use exr::prelude::write_rgba_file;
-    use rstest::rstest;
-    use crate::sdf::framework::sdf_registrator::SdfRegistrator;
-    use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
-    use crate::sdf::object::sdf_box::SdfBox;
-    use crate::utils::bitmap_utils::BitmapSize;
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 256;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 256;
@@ -790,27 +784,48 @@ mod tests {
     const TEST_COLOR_G: f32 = 0.5;
     const TEST_COLOR_B: f32 = 1.0;
 
+    const NO_ANTIALIASING_LEVEL: u32 = 1;
+
+    #[must_use]
+    pub(crate) fn test_folder_path() -> PathBuf {
+        PathBuf::from("tests")
+    }
+
+    #[must_use]
+    pub(crate) fn out_folder_path() -> PathBuf {
+        test_folder_path().join("out")
+    }
+
+    #[must_use]
+    pub(crate) fn data_folder_path() -> PathBuf {
+        test_folder_path().join("data")
+    }
+
     #[must_use]
     fn make_render(scene: VisualObjects, camera: Camera, strategy: RenderStrategyId, antialiasing_level: u32, context: Rc<Context>) -> Renderer {
         let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, antialiasing_level);
         Renderer::new(context.clone(), scene, camera, frame_buffer_settings, strategy, None)
             .expect("render instantiation has failed")
     }
-    
-    #[rstest]
-    #[case(RenderStrategyId::MonteCarlo)]
-    #[case(RenderStrategyId::Deterministic)]
-    fn test_empty_scene_rendering(#[case] strategy: RenderStrategyId) {
+
+    #[test]
+    fn test_empty_scene_rendering_deterministic() {
+        test_empty_scene_rendering(RenderStrategyId::Deterministic);
+    }
+
+    #[test]
+    fn test_empty_scene_rendering_monte_carlo() {
+        test_empty_scene_rendering(RenderStrategyId::MonteCarlo);
+    }
+
+    fn test_empty_scene_rendering(strategy: RenderStrategyId) {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
-        let scene = VisualObjects::new(BitmapSize::new(1,1), None, None);
-        let context = create_headless_wgpu_context();
+        let scene = VisualObjects::new(None, None, None);
+        let context = create_headless_wgpu_vulkan_context();
 
-        const ANTIALIASING_LEVEL: u32 = 1;
-        let mut system_under_test = make_render(scene, camera, strategy, ANTIALIASING_LEVEL, context.clone());
+        let mut system_under_test = make_render(scene, camera, strategy, NO_ANTIALIASING_LEVEL, context.clone());
 
-        system_under_test.accumulate_more_rays();
-        issue_frame_buffer_transfer_if_needed(context.clone(), &system_under_test);
-        system_under_test.copy_noisy_pixels_to_cpu();
+        shoot_rays_and_transfer_data_to_cpu(context.deref(), &mut system_under_test);
         
         assert_empty_color_buffer(&mut system_under_test);
         assert_empty_ids_buffer(&mut system_under_test);
@@ -825,7 +840,7 @@ mod tests {
     fn test_single_parallelogram_rendering() {
         let camera = Camera::new_orthographic_camera(1.0, Point::new(0.0, 0.0, 0.0));
         
-        let mut scene = VisualObjects::new(BitmapSize::new(1,1), None, None);
+        let mut scene = VisualObjects::new(None, None, None);
         let test_material = scene.materials_mutable().add(&MaterialProperties::new().with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B));
         
         scene.add_parallelogram(
@@ -834,10 +849,9 @@ mod tests {
             Vector::new(0.0, 1.0, 0.0), 
             test_material);
 
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
 
-        const ANTIALIASING_LEVEL: u32 = 1;
-        let mut system_under_test = make_render(scene, camera, RenderStrategyId::MonteCarlo, ANTIALIASING_LEVEL, context.clone());
+        let mut system_under_test = make_render(scene, camera, RenderStrategyId::MonteCarlo, NO_ANTIALIASING_LEVEL, context.clone());
 
         system_under_test.accumulate_more_rays();
         
@@ -858,29 +872,33 @@ mod tests {
         let test_box_name = UniqueSdfClassName::new("specimen".to_string());
         registrator.add(&NamedSdf::new(SdfBox::new(Vector::new(0.5, 0.5, 0.5)), test_box_name.clone()));
         
-        let mut scene = VisualObjects::new(BitmapSize::new(1,1), Some(registrator), None);
+        let mut scene = VisualObjects::new(None, Some(registrator), None);
         let test_material = MaterialProperties::new()
             .with_albedo(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B)
             .with_emission(TEST_COLOR_R, TEST_COLOR_G, TEST_COLOR_B);
         let test_material_uid = scene.materials_mutable().add(&test_material);
         scene.add_sdf(&Affine::identity(), 1.0, &test_box_name, test_material_uid);
 
-        let context = create_headless_wgpu_context();
+        let context = create_headless_wgpu_vulkan_context();
 
-        const ANTIALIASING_LEVEL: u32 = 1;
-        let mut system_under_test = make_render(scene, camera, RenderStrategyId::Deterministic, ANTIALIASING_LEVEL, context.clone());
-        
-        system_under_test.accumulate_more_rays();
-        issue_frame_buffer_transfer_if_needed(context.clone(), &system_under_test);
-        system_under_test.copy_noisy_pixels_to_cpu();
-        
+        let mut system_under_test = make_render(scene, camera, RenderStrategyId::Deterministic, NO_ANTIALIASING_LEVEL, context.clone());
+
+        shoot_rays_and_transfer_data_to_cpu(context.deref(), &mut system_under_test);
+
         assert_parallelogram_ids_in_center(&mut system_under_test, "sdf_box");
         assert_parallelogram_colors_in_center(&mut system_under_test, "sdf_box");
     }
 
-    fn issue_frame_buffer_transfer_if_needed(context: Rc<Context>, render: &Renderer) {
+    pub(crate) fn shoot_rays_and_transfer_data_to_cpu(context: &Context, system_under_test: &mut Renderer) {
+        system_under_test.accumulate_more_rays();
+        issue_frame_buffer_transfer_if_needed(context, &system_under_test);
+        system_under_test.copy_noisy_pixels_to_cpu();
+    }
+
+    pub(crate) fn issue_frame_buffer_transfer_if_needed(context: &Context, render: &Renderer) {
         if cfg!(not(feature = "denoiser")) {
-            let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            let label = Some("raw color buffer copy gpu -> cpu");
+            let mut pass = context.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label });
             render.prepare_pixel_color_copy_from_gpu(&mut pass);
             context.queue().submit(Some(pass.finish()));
         }
@@ -888,7 +906,7 @@ mod tests {
 
     #[cfg(feature = "denoiser")]
     fn assert_parallelogram_vector_data_in_center(data: &Vec<PodVector>, parallelogram: PodVector, background: PodVector, data_name: &str) {
-        let exr_path = Path::new("tests").join(format!("out/{}.exr", data_name));
+        let exr_path = out_folder_path().join(format!("{}.exr", data_name));
 
         write_rgba_file(exr_path, TEST_FRAME_BUFFER_WIDTH as usize, TEST_FRAME_BUFFER_HEIGHT as usize,
         |x,y| {
@@ -940,7 +958,7 @@ mod tests {
     fn assert_parallelogram_ids_in_center(system_under_test: &mut Renderer, file_identity: &str) {
         let object_id_map = system_under_test.gpu.buffers.ray_tracing_frame_buffer.object_id_at_cpu();
 
-        let png_path = Path::new("tests").join(format!("out/{file_identity}_identification.png"));
+        let png_path = out_folder_path().join(format!("{file_identity}_identification.png"));
         save_u32_buffer_as_png(object_id_map, TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
         print_full_path(png_path.clone(), "object id map");
         
@@ -952,12 +970,16 @@ mod tests {
     |actual, expected, i, j| assert_eq!(actual, expected, "unexpected pixel value at ({i}, {j})"));
     }
 
-    fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer, file_identity: &str) {
+    pub(crate) fn save_colors_to_png(system_under_test: &mut Renderer, image_size: FrameBufferSize, save_file_path: impl AsRef<Path>) -> &Vec<PodVector> {
         let colors = system_under_test.gpu.buffers.ray_tracing_frame_buffer.noisy_pixel_color_at_cpu();
+        save_u32_buffer_as_png(&hdr_to_sdr(colors), image_size.width(), image_size.height(), save_file_path);
+        colors
+    }
 
-        let png_path = Path::new("tests").join(format!("out/{file_identity}_colors.png"));
-        save_u32_buffer_as_png(&hdr_to_sdr(colors), TEST_FRAME_BUFFER_WIDTH, TEST_FRAME_BUFFER_HEIGHT, png_path.clone());
-        print_full_path(png_path.clone(), "noisy colors");
+    fn assert_parallelogram_colors_in_center(system_under_test: &mut Renderer, file_identity: &str) {
+        let png_path = out_folder_path().join(format!("{file_identity}_colors.png"));
+        let colors = save_colors_to_png(system_under_test, TEST_FRAME_BUFFER_SIZE, png_path.clone());
+        print_full_path(png_path, "noisy colors");
 
         assert_eq!(colors.len(), TEST_FRAME_BUFFER_SIZE.area() as usize);
 

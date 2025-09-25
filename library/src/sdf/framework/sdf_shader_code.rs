@@ -1,4 +1,4 @@
-﻿use crate::objects::sdf_class_index::SdfClassIndex;
+use crate::objects::sdf_class_index::SdfClassIndex;
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::conventions;
 use crate::shader::function_name::FunctionName;
