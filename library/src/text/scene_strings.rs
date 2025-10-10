@@ -8,12 +8,12 @@ use crate::sdf::framework::sdf_registrator::SdfRegistrator;
 use crate::sdf::object::reservation::make_reserved_name;
 use crate::text::glyph_atlas_composer::GlyphAtlasComposer;
 use crate::text::sdf_glyph::SdfGlyph;
-use crate::text::tribal_knowledge::GLYPH_LOCAL_Z_EXTRUSION_THICKNESS;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 use cgmath::{ElementWise, Vector2, Zero};
+use more_asserts::assert_gt;
 use crate::objects::common_properties::ObjectUid;
 use crate::objects::sdf_instance::SdfPayload;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
@@ -29,12 +29,14 @@ pub struct SceneStringPrologue {
 impl SceneStringPrologue {
     const SDF_GLYPH_CLASS_NAME_SUFFIX: &'static str = "glyph";
 
-    pub fn new(atlas_bitmap_file: impl AsRef<Path>, sdf_classes: &mut SdfRegistrator) -> anyhow::Result<Self> {
+    pub fn new(atlas_bitmap_file: impl AsRef<Path>, sdf_classes: &mut SdfRegistrator, extrusion_thickness: f64) -> anyhow::Result<Self> {
+        assert_gt!(extrusion_thickness, 0.0, "'extrusion_thickness' must be greater than zero");
+
         let atlas_composer = GlyphAtlasComposer::new(atlas_bitmap_file)?;
         let glyph_sdf_name = UniqueSdfClassName::new(make_reserved_name(Self::SDF_GLYPH_CLASS_NAME_SUFFIX));
 
         if let Some(max_glyph_size) = atlas_composer.max_glyph_uv_size() {
-            let aabb = Aabb::from_size(Vector::new(max_glyph_size.x, max_glyph_size.y, GLYPH_LOCAL_Z_EXTRUSION_THICKNESS));
+            let aabb = Aabb::from_size(Vector::new(max_glyph_size.x, max_glyph_size.y, extrusion_thickness));
             sdf_classes.add_no_name_check(&NamedSdf::new(SdfGlyph::new(aabb), glyph_sdf_name.clone()));
         }
 
@@ -166,7 +168,8 @@ mod tests {
     impl TestContext for Context {
         fn setup() -> Context {
             let mut registrator = SdfRegistrator::new();
-            let prologue = SceneStringPrologue::new(data_folder_path().join("glyphs_atlas_ascii_domine.png"), &mut registrator).unwrap();
+            let font_atlas = data_folder_path().join("glyphs_atlas_ascii_domine.png");
+            let prologue = SceneStringPrologue::new(font_atlas, &mut registrator, 0.02).unwrap();
             let scene = Rc::new(RefCell::new(VisualObjects::new(None, Some(registrator), None)));
             let dummy_material = scene.borrow_mut().materials_mutable().add(&MaterialProperties::default());
             let system_under_test = SceneStrings::new(scene.clone(), prologue);

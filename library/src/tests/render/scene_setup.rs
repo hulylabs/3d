@@ -277,7 +277,9 @@ pub(crate) mod tests {
         camera.move_vertically(-0.2);
 
         let mut sdf_registrator = SdfRegistrator::default();
-        let scene_strings_prologue = SceneStringPrologue::new(data_folder_path().join("glyphs_atlas_ascii_domine.png"), &mut sdf_registrator).unwrap();
+        let font_atlas = data_folder_path().join("glyphs_atlas_ascii_domine.png");
+        let font_extrusion_thickness = 0.02;
+        let scene_strings_prologue = SceneStringPrologue::new(font_atlas, &mut sdf_registrator, font_extrusion_thickness).unwrap();
         let scene = Rc::new(RefCell::new(VisualObjects::new(None, Some(sdf_registrator), None)));
         let mut strings = SceneStrings::new(scene.clone(), scene_strings_prologue);
 

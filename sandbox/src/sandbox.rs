@@ -247,7 +247,9 @@ impl Sandbox {
         
         let mut sdf_registrator = SdfRegistrator::default();
         let mut procedural_textures_registrator = ProceduralTextures::new(None);
-        let scene_strings_prologue = SceneStringPrologue::new(path_to_bitmap("glyphs_atlas_ascii_domine.png"), &mut sdf_registrator)?;
+        let font_atlas = path_to_bitmap("glyphs_atlas_ascii_domine.png");
+        let font_extrusion_thickness = 0.02;
+        let scene_strings_prologue = SceneStringPrologue::new(font_atlas, &mut sdf_registrator, font_extrusion_thickness)?;
 
         let tech_sdf_classes = TechWorldSdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulWorldSdfClasses::new(&mut sdf_registrator);

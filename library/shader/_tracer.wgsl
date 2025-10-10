@@ -1963,13 +1963,13 @@ fn extrude_0( position_10 : vec3<f32>,  plane_sdf_0 : f32,  depth_0 : f32) -> f3
     return min(max(plane_sdf_0, _S162), 0.0f) + length(max(vec2<f32>(plane_sdf_0, _S162), vec2<f32>(0.0f)));
 }
 
-fn sdf_glyph_0( glyph_index_2 : u32,  position_11 : vec3<f32>) -> f32
+fn sdf_glyph_0( glyph_index_2 : u32,  position_11 : vec3<f32>,  z_extrusion_half_thickness_0 : f32) -> f32
 {
-    return extrude_0(position_11, sdf_glyph_xy_0(glyph_index_2, position_11.xy), 0.00999999977648258f);
+    return extrude_0(position_11, sdf_glyph_xy_0(glyph_index_2, position_11.xy), z_extrusion_half_thickness_0);
 }
 
-fn sdf_glyph_gpu_hosted_0( glyph_index_3 : u32,  position_12 : vec3<f32>) -> f32
+fn sdf_glyph_gpu_hosted_0( glyph_index_3 : u32,  position_12 : vec3<f32>,  z_extrusion_half_thickness_1 : f32) -> f32
 {
-    return sdf_glyph_0(glyph_index_3, position_12);
+    return sdf_glyph_0(glyph_index_3, position_12, z_extrusion_half_thickness_1);
 }
 

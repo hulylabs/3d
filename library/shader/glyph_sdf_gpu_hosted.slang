@@ -27,6 +27,6 @@ struct GpuBuffersGlyphStorage : IGlyphsStorage {
     }
 }
 
-export public func sdf_glyph_gpu_hosted(glyph_index: uint32_t, position: float3) -> float {
-    return sdf_glyph<GpuBuffersGlyphStorage>(glyph_index, position);
+export public func sdf_glyph_gpu_hosted(glyph_index: uint32_t, position: float3, z_extrusion_half_thickness: float) -> float {
+    return sdf_glyph<GpuBuffersGlyphStorage>(glyph_index, position, z_extrusion_half_thickness);
 }

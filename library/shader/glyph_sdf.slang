@@ -4,16 +4,13 @@ module glyph_sdf;
 
 import glyphs_storage;
 
-// Ahtung! This constant is duplicated in the Rust code for the sake of AABB evaluation.
-static const float Z_EXTRUSION_HALF_THICKNESS = 0.01;
-
 public func median(r: float, g: float, b: float) -> float{
     return max(min(r, g), min(max(r, g), b));
 }
 
-public func sdf_glyph<Configuration: IGlyphsStorage>(glyph_index: uint32_t, position: float3) -> float {
+public func sdf_glyph<Configuration : IGlyphsStorage>(glyph_index: uint32_t, position: float3, z_extrusion_half_thickness: float) -> float {
     let in_plane_distance = sdf_glyph_xy<Configuration>(glyph_index, position.xy);
-    let distance_to_extruded = extrude(position, in_plane_distance, Z_EXTRUSION_HALF_THICKNESS);
+    let distance_to_extruded = extrude(position, in_plane_distance, z_extrusion_half_thickness);
     return distance_to_extruded;
 }
 
