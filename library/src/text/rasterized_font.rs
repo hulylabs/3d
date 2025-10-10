@@ -115,7 +115,7 @@ impl Char {
         Self { value, glyph, glyph_uv_location }
     }
 
-     #[must_use]
+    #[must_use]
     pub(super) fn consume(self) -> (char, Glyph, GlyphUvLocation) {
         (self.value, self.glyph, self.glyph_uv_location)
     }

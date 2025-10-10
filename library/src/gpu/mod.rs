@@ -1,4 +1,4 @@
-﻿pub(super) mod color_buffer_evaluation;
+pub(super) mod color_buffer_evaluation;
 
 pub(crate) mod resources;
 pub(crate) mod headless_device;

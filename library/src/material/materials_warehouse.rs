@@ -1,4 +1,4 @@
-﻿use crate::material::material_index::MaterialIndex;
+use crate::material::material_index::MaterialIndex;
 use crate::material::material_properties::MaterialProperties;
 use crate::material::procedural_textures::ProceduralTextures;
 use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
