@@ -62,7 +62,7 @@ impl TextureAtlasPageComposer {
         let mut atlas = MutableBitmapReference::new(&mut self.atlas_page_buffer, self.page_size);
         write_sub_bitmap(&mut atlas, &bitmap, pixel_x, pixel_y);
 
-        // borders for the "repeat" wrapping mode (to make correct filtering of the edge texels)
+        // borders for the "repeat" wrapping mode (to ensure correct filtering of the edge texels)
 
         write_sub_bitmap_column(&mut atlas, pixel_x+bitmap.size().width(), pixel_y, &bitmap, 0);
         write_sub_bitmap_column(&mut atlas, pixel_x-1, pixel_y, &bitmap, bitmap.size().width()-1);

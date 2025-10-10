@@ -1,6 +1,6 @@
 #language slang 2026
 
-module glyph_sdf_pgu_hosted;
+module glyph_sdf_gpu_hosted;
 
 import glyphs_storage;
 import glyph_sdf;

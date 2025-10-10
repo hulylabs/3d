@@ -81,12 +81,12 @@ impl SceneStrings {
 
         let mut current_line_top = self.atlas_composer.line_baseline();
         let mut current_offset = 0.0;
-        let mut previous_char: char = 0 as char;
+        let mut previous_char: char = '\0';
         for char in text.chars() {
             if char == '\n' {
                 current_line_top -= self.atlas_composer.line_height();
                 current_offset = 0.0;
-                previous_char = 0 as char;
+                previous_char = '\0';
                 continue
             }
 

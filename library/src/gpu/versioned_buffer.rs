@@ -1,4 +1,4 @@
-﻿use std::rc::Rc;
+use std::rc::Rc;
 use bytemuck::Pod;
 use crate::utils::version::Version;
 use crate::gpu::resizable_buffer::{ResizableBuffer, ResizeStatus};

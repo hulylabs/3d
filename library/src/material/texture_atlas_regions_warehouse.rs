@@ -1,4 +1,4 @@
-﻿use crate::material::atlas_region_mapping::AtlasRegionMapping;
+use crate::material::atlas_region_mapping::AtlasRegionMapping;
 use crate::material::atlas_region_mapping_uid::AtlasRegionMappingUid;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
