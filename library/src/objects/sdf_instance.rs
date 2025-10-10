@@ -11,25 +11,29 @@ use cgmath::SquareMatrix;
 use more_asserts::assert_gt;
 use crate::material::material_index::MaterialIndex;
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash,)]
+pub struct SdfPayload(pub u32);
+
 pub(crate) struct SdfInstance {
     location: Affine,
     ray_marching_step_scale: f64,
     class: SdfClassIndex,
     links: Linkage,
+    payload: SdfPayload,
 }
 
 impl SdfInstance {
     #[must_use]
-    pub(crate) fn new(location: Affine, ray_marching_step_scale: f64, class: SdfClassIndex, links: Linkage) -> Self {
+    pub(crate) fn new(location: Affine, ray_marching_step_scale: f64, class: SdfClassIndex, links: Linkage, payload: SdfPayload) -> Self {
         assert_gt!(abs(location.determinant()), 0.0, "location should not change basis orientation, or ray marching will break");
         assert_gt!(ray_marching_step_scale, 0.0);
         assert!(is_affine(&location), "projection matrices are not supported");
-        Self { location, ray_marching_step_scale, class, links }
+        Self { location, ray_marching_step_scale, class, links, payload }
     }
 }
 
 impl GpuSerializationSize for SdfInstance {
-    const SERIALIZED_QUARTET_COUNT: usize = 7;
+    const SERIALIZED_QUARTET_COUNT: usize = 8;
 }
 
 impl GpuSerializable for SdfInstance {
@@ -44,6 +48,10 @@ impl GpuSerializable for SdfInstance {
             writer.write_signed(self.class.as_i32());
             writer.write_unsigned(self.links.material_index().0 as u32);
             writer.write_unsigned(self.links.uid().0);
+        });
+
+        container.write_quartet(|writer| {
+            writer.write_unsigned(self.payload.0);
         });
 
         debug_assert!(container.object_fully_written());
@@ -79,8 +87,9 @@ mod tests {
         let expected_material_index = MaterialIndex(4);
         let expected_object_uid = ObjectUid(7);
         let expected_ray_marching_scale = 5.0;
+        let expected_payload: u32 = 13;
         
-        let system_under_test = SdfInstance::new(expected_location, expected_ray_marching_scale, expected_class, Linkage::new(expected_object_uid, expected_material_index));
+        let system_under_test = SdfInstance::new(expected_location, expected_ray_marching_scale, expected_class, Linkage::new(expected_object_uid, expected_material_index), SdfPayload(expected_payload));
 
         let mut container = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         system_under_test.serialize_into(&mut container);
@@ -110,7 +119,14 @@ mod tests {
         values_checked += 1;
         assert_eq!(serialized[values_checked], expected_material_index.0 as u32);
         values_checked += 1;
-        assert_eq!(serialized[values_checked], expected_object_uid.0 as u32);
+        assert_eq!(serialized[values_checked], expected_object_uid.0);
+        values_checked += 1;
+
+        assert_eq!(serialized[values_checked], expected_payload);
+        values_checked += 1;
+
+        values_checked += 1;
+        values_checked += 1;
         values_checked += 1;
         
         assert_eq!(values_checked, SdfInstance::SERIALIZED_QUARTET_COUNT * ELEMENTS_IN_QUARTET);

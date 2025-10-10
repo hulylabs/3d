@@ -168,7 +168,8 @@ mod tests {
             FrameBufferSize::new(100, 4),
             stub_camera(),
             pixel_subdivision,
-            Duration::from_secs(7)
+            Duration::from_secs(7),
+            1.0,
         );
         probe.set_bvh_length(5);
         probe.set_parallelograms_count(6);

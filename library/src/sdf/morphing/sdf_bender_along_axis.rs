@@ -44,14 +44,14 @@ impl SdfBenderAlongAxis {
             let bender: mat2x2f = mat2x2f(bend_cos, -bend_sin, bend_sin, bend_cos);\n\
             let {rotated}: vec2f = bender * {position}.{rotated_pair};\n\
             let {position} = {composition};",
-            time = conventions::PARAMETER_NAME_THE_TIME,
-            position = conventions::PARAMETER_NAME_THE_POINT,
-            bend_amplitude_scale = format_scalar(self.bend_amplitude_scale),
-            bend_time_scale = format_scalar(self.bend_time_scale),
-            bend_source = axis_address(self.bend_source_axis),
-            rotated_pair = swizzle.rotated_pair(),
-            composition = swizzle.final_composition(),
-            rotated = Swizzle::ROTATED_PAIR_VARIABLE_NAME,
+                time = conventions::PARAMETER_NAME_TIME,
+                position = conventions::PARAMETER_NAME_THE_POINT,
+                bend_amplitude_scale = format_scalar(self.bend_amplitude_scale),
+                bend_time_scale = format_scalar(self.bend_time_scale),
+                bend_source = axis_address(self.bend_source_axis),
+                rotated_pair = swizzle.rotated_pair(),
+                composition = swizzle.final_composition(),
+                rotated = Swizzle::ROTATED_PAIR_VARIABLE_NAME,
         )
     }
 }

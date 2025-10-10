@@ -16,7 +16,7 @@ pub(crate) fn format_common_texture_3d_parameters() -> String {
         "{parameter_point}: vec3f, {parameter_normal}: vec3f, {parameter_time}: f32, {parameter_dp_dx}: vec3f, {parameter_dp_dy}: vec3f",
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
         parameter_normal = conventions::PARAMETER_NAME_THE_NORMAL,
-        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+        parameter_time = conventions::PARAMETER_NAME_TIME,
         parameter_dp_dx = conventions::PARAMETER_DP_DX,
         parameter_dp_dy = conventions::PARAMETER_DP_DY,
     )
@@ -31,7 +31,7 @@ pub(super) fn write_texture_3d_selection(function_to_select: &FunctionName, text
         function_name = function_to_select,
         point_parameter = conventions::PARAMETER_NAME_THE_POINT,
         normal_parameter = conventions::PARAMETER_NAME_THE_NORMAL,
-        time_parameter = conventions::PARAMETER_NAME_THE_TIME,
+        time_parameter = conventions::PARAMETER_NAME_TIME,
         dp_dx_parameter = conventions::PARAMETER_DP_DX,
         dp_dy_parameter = conventions::PARAMETER_DP_DY,
     )?;

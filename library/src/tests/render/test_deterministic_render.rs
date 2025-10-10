@@ -17,7 +17,7 @@ mod tests {
             use crate::tests::render::test_deterministic_render::tests::deterministic_render::{folder, RENDER_STRATEGY};
             use crate::tests::render::utils::tests::make_png_file_name;
             use palette::Srgb;
-        
+
             #[test]
             fn test_with_perspective_camera_magenta_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 0.0, 1.0), MaterialClass::Lambert,
@@ -46,7 +46,7 @@ mod tests {
             use crate::tests::render::test_deterministic_render::tests::deterministic_render::{folder, RENDER_STRATEGY};
             use crate::tests::render::utils::tests::make_png_file_name;
             use palette::Srgb;
-        
+
             #[test]
             fn test_with_perspective_camera_magenta_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 0.0, 1.0), MaterialClass::Mirror,
@@ -76,7 +76,7 @@ mod tests {
             use crate::tests::render::test_deterministic_render::tests::deterministic_render::{folder, RENDER_STRATEGY};
             use crate::tests::render::utils::tests::make_png_file_name;
             use palette::Srgb;
-        
+
             #[test]
             fn test_glass_objects_with_perspective_camera_magenta_light() {
                 compare_test_objects_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 0.0, 1.0), MaterialClass::Glass,
@@ -124,6 +124,18 @@ mod tests {
             fn test_textures_with_white_light() {
                 compare_test_textures_scene_render_to_reference(RENDER_STRATEGY, Srgb::new(1.0, 1.0, 1.0),
                     &folder().join(make_png_file_name("textures_with_white_light")));
+            }
+        }
+
+        mod text_objects {
+            use crate::tests::render::scene_setup::tests::compare_test_text_scene_render_to_reference;
+            use crate::tests::render::test_deterministic_render::tests::deterministic_render::{folder, RENDER_STRATEGY};
+            use crate::tests::render::utils::tests::make_png_file_name;
+
+            #[test]
+            fn test_text() {
+                compare_test_text_scene_render_to_reference(RENDER_STRATEGY,
+                    &folder().join(make_png_file_name("text")));
             }
         }
     }

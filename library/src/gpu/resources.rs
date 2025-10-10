@@ -46,8 +46,8 @@ impl Resources {
     }
 
     #[must_use]
-    pub(crate) fn create_sampler(&self, label: &str) -> Sampler {
-        self.context.device().create_sampler(&wgpu::SamplerDescriptor {
+    fn common_sampler_settings(label: &str) -> wgpu::SamplerDescriptor<'_> {
+        wgpu::SamplerDescriptor {
             label: Some(label),
             address_mode_u: wgpu::AddressMode::ClampToBorder,
             address_mode_v: wgpu::AddressMode::ClampToBorder,
@@ -60,7 +60,17 @@ impl Resources {
             compare: None,
             anisotropy_clamp: 1,
             border_color: Some(SamplerBorderColor::OpaqueBlack),
-        })
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn create_texture_atlas_sampler(&self, label: &str) -> Sampler {
+        self.context.device().create_sampler(&Self::common_sampler_settings(label))
+    }
+
+    #[must_use]
+    pub(crate) fn create_glyph_atlas_sampler(&self, label: &str) -> Sampler {
+        self.context.device().create_sampler(&Self::common_sampler_settings(label))
     }
 
     #[must_use]

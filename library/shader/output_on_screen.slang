@@ -4,10 +4,10 @@ module output_on_screen;
 
 // final image output (aka resolve): tone mapping + gamma correction
 
-import "output_on_screen_vertex";
-import "output_on_screen_pixel";
-import "uniforms";
-import "tracing_output";
+import output_on_screen_vertex;
+import output_on_screen_pixel;
+import uniforms;
+import tracing_output;
 
 public struct VSOutput {
     float4 position : SV_Position;

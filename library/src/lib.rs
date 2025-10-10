@@ -20,7 +20,9 @@ pub mod animation;
 pub mod material;
 pub mod shader;
 pub mod palette;
+pub mod text;
 
+use std::cell::RefCell;
 use crate::gpu::adapter_features::{log_adapter_info, AdapterFeatures};
 use crate::gpu::color_buffer_evaluation::RenderStrategyId;
 use crate::gpu::context::Context;
@@ -45,6 +47,7 @@ use wgpu::Trace;
 use winit::window::Window;
 use crate::container::visual_objects::VisualObjects;
 use crate::scene::hub::Hub;
+use crate::text::scene_strings::SceneStrings;
 
 const DEVICE_LABEL: &str = "Rust Tracer Library";
 
@@ -108,7 +111,7 @@ impl Engine {
         "wgpu=warn,naga=warn"
     }
     
-    pub async fn new(window: Arc<Window>, scene: VisualObjects, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
+    pub async fn new(window: Arc<Window>, scene: Rc<RefCell<VisualObjects>>, strings: Option<SceneStrings>, camera: Camera, caches_path: Option<PathBuf>) -> Result<Engine, EngineInstantiationError> {
         let wgpu_instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: backend_vulkan_or_primary(),
             // flags: wgpu::InstanceFlags::DEBUG,
@@ -169,6 +172,7 @@ impl Engine {
             = Renderer::new(
                 context.clone(),
                 scene,
+                strings,
                 camera,
                 frame_buffer_settings,
                 RenderStrategyId::Deterministic,

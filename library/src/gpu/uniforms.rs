@@ -15,6 +15,8 @@ pub(crate) struct Uniforms {
     pixel_side_subdivision: u32,
 
     global_time_seconds: f32,
+
+    glyphs_atlas_texel_to_world_scale: f64,
 }
 
 impl Uniforms {
@@ -24,7 +26,13 @@ impl Uniforms {
     const WORK_GROUP_SIZE: Vector2<u32> = Vector2::new(Self::WORK_GROUP_SIZE_X, Self::WORK_GROUP_SIZE_Y);
 
     #[must_use]
-    pub(crate) fn new(frame_buffer_size: FrameBufferSize, camera: Camera, pixel_side_subdivision: u32, current_time: Duration) -> Self {
+    pub(crate) fn new(
+        frame_buffer_size: FrameBufferSize,
+        camera: Camera,
+        pixel_side_subdivision: u32,
+        current_time: Duration,
+        glyphs_atlas_texel_to_world_scale: f64,
+    ) -> Self {
         Self {
             frame_buffer_size,
             frame_number: 0,
@@ -33,6 +41,7 @@ impl Uniforms {
             bvh_length: 0,
             pixel_side_subdivision,
             global_time_seconds: current_time.as_secs_f32(),
+            glyphs_atlas_texel_to_world_scale,
         }
     }
     
@@ -125,6 +134,7 @@ impl Uniforms {
             writer.write_unsigned(workgroup_count.x * Self::WORK_GROUP_SIZE.x);
             writer.write_unsigned(workgroup_count.y * Self::WORK_GROUP_SIZE.y);
             writer.write_unsigned(workgroup_count.z);
+            writer.write_float_64(self.glyphs_atlas_texel_to_world_scale);
         });
         
         debug_assert!(result.object_fully_written());
@@ -147,6 +157,7 @@ mod tests {
     const DEFAULT_BVH_LENGTH: u32 = 8;
     const DEFAULT_PIXEL_SIDE_SUBDIVISION: u32 = 4;
     const DEFAULT_GLOBAL_TIME_SECONDS: f32 = 5.0;
+    const DEFAULT_GLYPHS_ATLAS_TEXEL_TO_WORLD_SCALE: f64 = 6.0;
 
     const SLOT_FRAME_WIDTH: usize = 0;
     const SLOT_FRAME_HEIGHT: usize = 1;
@@ -165,6 +176,7 @@ mod tests {
     const SLOT_THREAD_GRID_SIZE_X: usize = 44;
     const SLOT_THREAD_GRID_SIZE_Y: usize = 45;
     const SLOT_THREAD_GRID_SIZE_Z: usize = 46;
+    const SLOT_GLYPHS_ATLAS_TEXEL_TO_WORLD_SCALE: usize = 47;
 
     struct Context {
         system_under_test: Uniforms
@@ -184,6 +196,8 @@ mod tests {
                 bvh_length: DEFAULT_BVH_LENGTH,
                 pixel_side_subdivision: DEFAULT_PIXEL_SIDE_SUBDIVISION,
                 global_time_seconds: DEFAULT_GLOBAL_TIME_SECONDS,
+
+                glyphs_atlas_texel_to_world_scale: DEFAULT_GLYPHS_ATLAS_TEXEL_TO_WORLD_SCALE,
             };
 
             Context {  system_under_test }
@@ -271,5 +285,6 @@ mod tests {
         assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_X].to_bits(), DEFAULT_FRAME_WIDTH.next_multiple_of(Uniforms::WORK_GROUP_SIZE_X));
         assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_Y].to_bits(), DEFAULT_FRAME_HEIGHT.next_multiple_of(Uniforms::WORK_GROUP_SIZE_Y));
         assert_eq!(actual_state_floats[SLOT_THREAD_GRID_SIZE_Z].to_bits(), 1);
+        assert_eq!(actual_state_floats[SLOT_GLYPHS_ATLAS_TEXEL_TO_WORLD_SCALE], DEFAULT_GLYPHS_ATLAS_TEXEL_TO_WORLD_SCALE as f32);
     }
 }

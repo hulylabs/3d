@@ -1,7 +1,7 @@
 {
     "parameters": [
         {
-            "name": "atlases_sampler",
+            "name": "texture_atlas_sampler",
             "binding": {"kind": "descriptorTableSlot", "index": 1},
             "type": {
                 "kind": "samplerState"
@@ -234,6 +234,14 @@
                                 "scalarType": "uint32"
                             },
                             "binding": {"kind": "uniform", "offset": 108, "size": 4, "elementStride": 0}
+                        },
+                        {
+                            "name": "payload",
+                            "type": {
+                                "kind": "scalar",
+                                "scalarType": "uint32"
+                            },
+                            "binding": {"kind": "uniform", "offset": 112, "size": 4, "elementStride": 0}
                         }
                     ]
                 }
@@ -911,7 +919,7 @@
                             "binding": {"kind": "uniform", "offset": 176, "size": 12, "elementStride": 4}
                         },
                         {
-                            "name": "empty_slot__2",
+                            "name": "glyphs_atlas_texel_to_world_scale",
                             "type": {
                                 "kind": "scalar",
                                 "scalarType": "float32"
@@ -1125,7 +1133,7 @@
                                 "binding": {"kind": "uniform", "offset": 176, "size": 12, "elementStride": 4}
                             },
                             {
-                                "name": "empty_slot__2",
+                                "name": "glyphs_atlas_texel_to_world_scale",
                                 "type": {
                                     "kind": "scalar",
                                     "scalarType": "float32"
@@ -1135,6 +1143,67 @@
                         ]
                     },
                     "binding": {"kind": "uniform", "offset": 0, "size": 192, "elementStride": 0}
+                }
+            }
+        },
+        {
+            "name": "glyphs_atlas_sampler",
+            "binding": {"kind": "descriptorTableSlot", "index": 3},
+            "type": {
+                "kind": "samplerState"
+            }
+        },
+        {
+            "name": "glyphs_atlas",
+            "binding": {"kind": "descriptorTableSlot", "index": 4},
+            "type": {
+                "kind": "resource",
+                "baseShape": "texture2D",
+                "resultType": {
+                    "kind": "vector",
+                    "elementCount": 4,
+                    "elementType": {
+                        "kind": "scalar",
+                        "scalarType": "float32"
+                    }
+                }
+            }
+        },
+        {
+            "name": "glyphs_atlas_map",
+            "binding": {"kind": "descriptorTableSlot", "index": 5},
+            "type": {
+                "kind": "resource",
+                "baseShape": "structuredBuffer",
+                "resultType": {
+                    "kind": "struct",
+                    "name": "GlyphLocation",
+                    "fields": [
+                        {
+                            "name": "top_left_corner_uv",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 2,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                }
+                            },
+                            "binding": {"kind": "uniform", "offset": 0, "size": 8, "elementStride": 4}
+                        },
+                        {
+                            "name": "size",
+                            "type": {
+                                "kind": "vector",
+                                "elementCount": 2,
+                                "elementType": {
+                                    "kind": "scalar",
+                                    "scalarType": "float32"
+                                }
+                            },
+                            "binding": {"kind": "uniform", "offset": 8, "size": 8, "elementStride": 4}
+                        }
+                    ]
                 }
             }
         }
@@ -1175,7 +1244,7 @@
             },
             "bindings": [
                 {
-                    "name": "atlases_sampler",
+                    "name": "texture_atlas_sampler",
                     "binding": {"kind": "descriptorTableSlot", "index": 1}
                 },
                 {
@@ -1233,6 +1302,18 @@
                 {
                     "name": "uniforms",
                     "binding": {"kind": "descriptorTableSlot", "index": 0}
+                },
+                {
+                    "name": "glyphs_atlas_sampler",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3}
+                },
+                {
+                    "name": "glyphs_atlas",
+                    "binding": {"kind": "descriptorTableSlot", "index": 4}
+                },
+                {
+                    "name": "glyphs_atlas_map",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5}
                 }
             ]
         },
@@ -1277,7 +1358,7 @@
             },
             "bindings": [
                 {
-                    "name": "atlases_sampler",
+                    "name": "texture_atlas_sampler",
                     "binding": {"kind": "descriptorTableSlot", "index": 1}
                 },
                 {
@@ -1335,6 +1416,18 @@
                 {
                     "name": "uniforms",
                     "binding": {"kind": "descriptorTableSlot", "index": 0}
+                },
+                {
+                    "name": "glyphs_atlas_sampler",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3}
+                },
+                {
+                    "name": "glyphs_atlas",
+                    "binding": {"kind": "descriptorTableSlot", "index": 4}
+                },
+                {
+                    "name": "glyphs_atlas_map",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5}
                 }
             ]
         },
@@ -1358,7 +1451,7 @@
             "threadGroupSize": [8, 8, 1],
             "bindings": [
                 {
-                    "name": "atlases_sampler",
+                    "name": "texture_atlas_sampler",
                     "binding": {"kind": "descriptorTableSlot", "index": 1}
                 },
                 {
@@ -1416,6 +1509,18 @@
                 {
                     "name": "uniforms",
                     "binding": {"kind": "descriptorTableSlot", "index": 0}
+                },
+                {
+                    "name": "glyphs_atlas_sampler",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3}
+                },
+                {
+                    "name": "glyphs_atlas",
+                    "binding": {"kind": "descriptorTableSlot", "index": 4}
+                },
+                {
+                    "name": "glyphs_atlas_map",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5}
                 }
             ]
         },
@@ -1439,7 +1544,7 @@
             "threadGroupSize": [8, 8, 1],
             "bindings": [
                 {
-                    "name": "atlases_sampler",
+                    "name": "texture_atlas_sampler",
                     "binding": {"kind": "descriptorTableSlot", "index": 1}
                 },
                 {
@@ -1497,6 +1602,18 @@
                 {
                     "name": "uniforms",
                     "binding": {"kind": "descriptorTableSlot", "index": 0}
+                },
+                {
+                    "name": "glyphs_atlas_sampler",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3}
+                },
+                {
+                    "name": "glyphs_atlas",
+                    "binding": {"kind": "descriptorTableSlot", "index": 4}
+                },
+                {
+                    "name": "glyphs_atlas_map",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5}
                 }
             ]
         },
@@ -1520,7 +1637,7 @@
             "threadGroupSize": [8, 8, 1],
             "bindings": [
                 {
-                    "name": "atlases_sampler",
+                    "name": "texture_atlas_sampler",
                     "binding": {"kind": "descriptorTableSlot", "index": 1}
                 },
                 {
@@ -1578,6 +1695,18 @@
                 {
                     "name": "uniforms",
                     "binding": {"kind": "descriptorTableSlot", "index": 0}
+                },
+                {
+                    "name": "glyphs_atlas_sampler",
+                    "binding": {"kind": "descriptorTableSlot", "index": 3}
+                },
+                {
+                    "name": "glyphs_atlas",
+                    "binding": {"kind": "descriptorTableSlot", "index": 4}
+                },
+                {
+                    "name": "glyphs_atlas_map",
+                    "binding": {"kind": "descriptorTableSlot", "index": 5}
                 }
             ]
         }

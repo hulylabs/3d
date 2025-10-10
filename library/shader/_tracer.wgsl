@@ -19,7 +19,7 @@ struct Uniforms_std140_0
     pixel_side_subdivision_0 : u32,
     global_time_seconds_0 : f32,
     thread_grid_size_0 : vec3<u32>,
-    empty_slot_2_0 : f32,
+    glyphs_atlas_texel_to_world_scale_0 : f32,
 };
 
 @binding(0) @group(0) var<uniform> uniforms : Uniforms_std140_0;
@@ -76,6 +76,7 @@ struct Sdf_std430_0
     class_index_0 : i32,
     material_id_2 : u32,
     object_uid_2 : u32,
+    payload_0 : u32,
 };
 
 @binding(1) @group(2) var<storage, read> sdf : array<Sdf_std430_0>;
@@ -109,7 +110,7 @@ struct AtlasMapping_std430_0
 
 @binding(2) @group(0) var texture_atlas_page : texture_2d<f32>;
 
-@binding(1) @group(0) var atlases_sampler : sampler;
+@binding(1) @group(0) var texture_atlas_sampler : sampler;
 
 @binding(1) @group(1) var<storage, read_write> object_id_buffer : array<u32>;
 
@@ -118,6 +119,18 @@ struct AtlasMapping_std430_0
 @binding(2) @group(1) var<storage, read_write> normal_buffer : array<vec4<f32>>;
 
 @binding(5) @group(2) var<storage, read> bvh_inflated : array<BvhNode_std430_0>;
+
+@binding(3) @group(0) var glyphs_atlas_sampler : sampler;
+
+@binding(4) @group(0) var glyphs_atlas : texture_2d<f32>;
+
+struct GlyphLocation_std430_0
+{
+    top_left_corner_uv_1 : vec2<f32>,
+    size_1 : vec2<f32>,
+};
+
+@binding(5) @group(0) var<storage, read> glyphs_atlas_map : array<GlyphLocation_std430_0>;
 
 const full_screen_quad_positions_0 : array<vec2<f32>, i32(6)> = array<vec2<f32>, i32(6)>( vec2<f32>(-1.0f, -1.0f), vec2<f32>(1.0f, -1.0f), vec2<f32>(-1.0f, 1.0f), vec2<f32>(-1.0f, 1.0f), vec2<f32>(1.0f, -1.0f), vec2<f32>(1.0f, 1.0f) );
 struct VSOutput_0
@@ -520,11 +533,12 @@ struct Sdf_0
     class_index_0 : i32,
     material_id_2 : u32,
     object_uid_2 : u32,
+    payload_0 : u32,
 };
 
 fn sample_sdf_0( sdf_0 : Sdf_0,  point_1 : vec3<f32>,  time_0 : f32) -> f32
 {
-    var _S15 : f32 = sdf_select(sdf_0.class_index_0, point_1, time_0);
+    var _S15 : f32 = sdf_select(sdf_0.class_index_0, point_1, time_0, sdf_0.payload_0);
     return _S15;
 }
 
@@ -713,7 +727,7 @@ fn read_atlas_0( local_space_position_0 : vec3<f32>,  atlas_region_mapping_0 : A
         }
         i_1 = i_1 + i32(1);
     }
-    return (textureSampleGrad((texture_atlas_page), (atlases_sampler), (atlas_region_mapping_0.top_left_corner_uv_0 + texture_coordinate_0.xy * atlas_region_mapping_0.size_0), (ddx_2.xy), (ddy_2.xy)));
+    return (textureSampleGrad((texture_atlas_page), (texture_atlas_sampler), (atlas_region_mapping_0.top_left_corner_uv_0 + texture_coordinate_0.xy * atlas_region_mapping_0.size_0), (ddx_2.xy), (ddy_2.xy)));
 }
 
 struct Material_0
@@ -867,7 +881,7 @@ fn trace_first_intersection_0( incident_0 : RayAndDifferentials_0) -> FirstHitSu
                 {
                     var _S61 : u32 = sdf[bvh[node_index_0].primitive_index_0].material_id_2;
                     var _S62 : u32 = sdf[bvh[node_index_0].primitive_index_0].object_uid_2;
-                    var _S63 : Sdf_0 = Sdf_0( sdf[bvh[node_index_0].primitive_index_0].location_col_0_0, sdf[bvh[node_index_0].primitive_index_0].location_col_1_0, sdf[bvh[node_index_0].primitive_index_0].location_col_2_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_0_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_1_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_2_0, sdf[bvh[node_index_0].primitive_index_0].ray_marching_step_scale_0, sdf[bvh[node_index_0].primitive_index_0].class_index_0, sdf[bvh[node_index_0].primitive_index_0].material_id_2, sdf[bvh[node_index_0].primitive_index_0].object_uid_2 );
+                    var _S63 : Sdf_0 = Sdf_0( sdf[bvh[node_index_0].primitive_index_0].location_col_0_0, sdf[bvh[node_index_0].primitive_index_0].location_col_1_0, sdf[bvh[node_index_0].primitive_index_0].location_col_2_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_0_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_1_0, sdf[bvh[node_index_0].primitive_index_0].inverse_location_col_2_0, sdf[bvh[node_index_0].primitive_index_0].ray_marching_step_scale_0, sdf[bvh[node_index_0].primitive_index_0].class_index_0, sdf[bvh[node_index_0].primitive_index_0].material_id_2, sdf[bvh[node_index_0].primitive_index_0].object_uid_2, sdf[bvh[node_index_0].primitive_index_0].payload_0 );
                     var _S64 : bool = hit_sdf_0(_S63, sdf_time[bvh[node_index_0].primitive_index_0], incident_0.ray_0, aabb_hit_0.ray_parameter_0, closest_so_far_1);
                     if(_S64)
                     {
@@ -1077,7 +1091,7 @@ fn hit_scene_0( ray_5 : Ray_0,  max_ray_patameter_0 : f32) -> bool
             {
                 if(u32(1) == _S83)
                 {
-                    var _S86 : Sdf_0 = Sdf_0( sdf[bvh[node_index_1].primitive_index_0].location_col_0_0, sdf[bvh[node_index_1].primitive_index_0].location_col_1_0, sdf[bvh[node_index_1].primitive_index_0].location_col_2_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_0_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_1_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_2_0, sdf[bvh[node_index_1].primitive_index_0].ray_marching_step_scale_0, sdf[bvh[node_index_1].primitive_index_0].class_index_0, sdf[bvh[node_index_1].primitive_index_0].material_id_2, sdf[bvh[node_index_1].primitive_index_0].object_uid_2 );
+                    var _S86 : Sdf_0 = Sdf_0( sdf[bvh[node_index_1].primitive_index_0].location_col_0_0, sdf[bvh[node_index_1].primitive_index_0].location_col_1_0, sdf[bvh[node_index_1].primitive_index_0].location_col_2_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_0_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_1_0, sdf[bvh[node_index_1].primitive_index_0].inverse_location_col_2_0, sdf[bvh[node_index_1].primitive_index_0].ray_marching_step_scale_0, sdf[bvh[node_index_1].primitive_index_0].class_index_0, sdf[bvh[node_index_1].primitive_index_0].material_id_2, sdf[bvh[node_index_1].primitive_index_0].object_uid_2, sdf[bvh[node_index_1].primitive_index_0].payload_0 );
                     var _S87 : bool = hit_sdf_0(_S86, sdf_time[bvh[node_index_1].primitive_index_0], ray_5, aabb_hit_1.ray_parameter_0, closest_so_far_3);
                     if(_S87)
                     {
@@ -1636,7 +1650,7 @@ fn sample_signed_distance_0( position_5 : vec3<f32>,  direction_5 : vec3<f32>) -
         {
             if(u32(1) == (bvh_inflated[node_index_2].primitive_type_0))
             {
-                var _S139 : Sdf_0 = Sdf_0( sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_0_0, sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_1_0, sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_2_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_0_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_1_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_2_0, sdf[bvh_inflated[node_index_2].primitive_index_0].ray_marching_step_scale_0, sdf[bvh_inflated[node_index_2].primitive_index_0].class_index_0, sdf[bvh_inflated[node_index_2].primitive_index_0].material_id_2, sdf[bvh_inflated[node_index_2].primitive_index_0].object_uid_2 );
+                var _S139 : Sdf_0 = Sdf_0( sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_0_0, sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_1_0, sdf[bvh_inflated[node_index_2].primitive_index_0].location_col_2_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_0_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_1_0, sdf[bvh_inflated[node_index_2].primitive_index_0].inverse_location_col_2_0, sdf[bvh_inflated[node_index_2].primitive_index_0].ray_marching_step_scale_0, sdf[bvh_inflated[node_index_2].primitive_index_0].class_index_0, sdf[bvh_inflated[node_index_2].primitive_index_0].material_id_2, sdf[bvh_inflated[node_index_2].primitive_index_0].object_uid_2, sdf[bvh_inflated[node_index_2].primitive_index_0].payload_0 );
                 var candidate_distance_0 : f32 = sample_signed_distance_function_0(_S139, position_5, direction_5, sdf_time[bvh_inflated[node_index_2].primitive_index_0]);
                 if(candidate_distance_0 < record_0)
                 {
@@ -1859,5 +1873,103 @@ fn compute_color_buffer_deterministic(@builtin(global_invocation_id) global_invo
     var traced_color_1 : vec3<f32> = path_trace_deterministic_0(camera_7, pixel_8);
     pixel_color_buffer[pixel_index_5] = vec4<f32>(traced_color_1, 1.0f);
     return;
+}
+
+fn evaluate_soft_shadow_0( position_7 : vec3<f32>,  to_light_2 : vec3<f32>,  light_size_0 : f32,  min_ray_offset_1 : f32,  max_ray_offset_1 : f32) -> f32
+{
+    var _S157 : f32 = evaluate_hard_shadow_0(position_7, to_light_2, min_ray_offset_1, max_ray_offset_1);
+    var next_point_0 : vec3<f32> = position_7 + to_light_2 * vec3<f32>(min_ray_offset_1);
+    var result_12 : f32 = _S157;
+    var i_10 : i32 = i32(0);
+    var offset_0 : f32 = min_ray_offset_1;
+    for(;;)
+    {
+        if(i_10 < i32(32))
+        {
+        }
+        else
+        {
+            break;
+        }
+        var signed_distance_2 : f32 = sample_signed_distance_0(next_point_0, to_light_2);
+        var result_13 : f32 = min(result_12, signed_distance_2 * light_size_0 / offset_0);
+        if(result_13 < -1.0f)
+        {
+            result_12 = result_13;
+            break;
+        }
+        var offset_1 : f32 = offset_0 + clamp(signed_distance_2, 0.00999999977648258f, 0.10000000149011612f);
+        if(offset_1 > max_ray_offset_1)
+        {
+            result_12 = result_13;
+            break;
+        }
+        var _S158 : vec3<f32> = position_7 + to_light_2 * vec3<f32>(offset_1);
+        var _S159 : i32 = i_10 + i32(1);
+        next_point_0 = _S158;
+        result_12 = result_13;
+        i_10 = _S159;
+        offset_0 = offset_1;
+    }
+    return smoothstep(-1.0f, 1.0f, max(result_12, -1.0f));
+}
+
+struct GlyphLocation_0
+{
+    top_left_corner_uv_1 : vec2<f32>,
+    size_1 : vec2<f32>,
+};
+
+fn GlyphLocation_evaluate_uv_0( this_1 : GlyphLocation_0,  position_8 : vec2<f32>) -> vec2<f32>
+{
+    return clamp(this_1.top_left_corner_uv_1 + (position_8 * vec2<f32>(1.0f, -1.0f) + this_1.size_1 * vec2<f32>(0.5f)), this_1.top_left_corner_uv_1, this_1.top_left_corner_uv_1 + this_1.size_1);
+}
+
+fn median_0( r_0 : f32,  g_0 : f32,  b_0 : f32) -> f32
+{
+    return max(min(r_0, g_0), min(max(r_0, g_0), b_0));
+}
+
+fn GpuBuffersGlyphStorage_locate_glyph_0( glyphIndex_0 : u32) -> GlyphLocation_0
+{
+    var _S160 : GlyphLocation_0 = GlyphLocation_0( glyphs_atlas_map[glyphIndex_0].top_left_corner_uv_1, glyphs_atlas_map[glyphIndex_0].size_1 );
+    return _S160;
+}
+
+fn GpuBuffersGlyphStorage_x24_syn_locate_glyph_0( glyph_index_0 : i32) -> GlyphLocation_0
+{
+    return GpuBuffersGlyphStorage_locate_glyph_0(u32(glyph_index_0));
+}
+
+fn GpuBuffersGlyphStorage_sample_0( uv_1 : vec2<f32>) -> vec3<f32>
+{
+    return (textureSampleLevel((glyphs_atlas), (glyphs_atlas_sampler), (uv_1), (0.0f))).xyz;
+}
+
+fn GpuBuffersGlyphStorage_texture_to_world_scale_0() -> f32
+{
+    return uniforms.glyphs_atlas_texel_to_world_scale_0;
+}
+
+fn sdf_glyph_xy_0( glyph_index_1 : u32,  position_9 : vec2<f32>) -> f32
+{
+    var _S161 : vec3<f32> = GpuBuffersGlyphStorage_sample_0(GlyphLocation_evaluate_uv_0(GpuBuffersGlyphStorage_x24_syn_locate_glyph_0(i32(glyph_index_1)), position_9));
+    return GpuBuffersGlyphStorage_texture_to_world_scale_0() * (1.0f - median_0(_S161.x, _S161.y, _S161.z) - 0.5f);
+}
+
+fn extrude_0( position_10 : vec3<f32>,  plane_sdf_0 : f32,  depth_0 : f32) -> f32
+{
+    var _S162 : f32 = abs(position_10.z) - depth_0;
+    return min(max(plane_sdf_0, _S162), 0.0f) + length(max(vec2<f32>(plane_sdf_0, _S162), vec2<f32>(0.0f)));
+}
+
+fn sdf_glyph_0( glyph_index_2 : u32,  position_11 : vec3<f32>,  z_extrusion_half_thickness_0 : f32) -> f32
+{
+    return extrude_0(position_11, sdf_glyph_xy_0(glyph_index_2, position_11.xy), z_extrusion_half_thickness_0);
+}
+
+fn sdf_glyph_gpu_hosted_0( glyph_index_3 : u32,  position_12 : vec3<f32>,  z_extrusion_half_thickness_1 : f32) -> f32
+{
+    return sdf_glyph_0(glyph_index_3, position_12, z_extrusion_half_thickness_1);
 }
 

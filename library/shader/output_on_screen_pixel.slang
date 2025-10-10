@@ -2,8 +2,8 @@
 
 module output_on_screen_pixel;
 
-import "uniforms";
-import "tracing_output";
+import uniforms;
+import tracing_output;
 
 // ACES approximation for tone mapping
 // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/:

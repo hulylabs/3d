@@ -52,7 +52,7 @@ impl PipelinesFactory {
                 module: code.module().as_ref(),
                 entry_point: None,
                 compilation_options: Default::default(),
-                buffers: &[], // full screen quad vertices specified as a const in the shader
+                buffers: &[], // fullscreen quad vertices specified as a const in the shader
             },
             fragment: Some(wgpu::FragmentState {
                 module: code.module().as_ref(),

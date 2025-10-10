@@ -18,7 +18,7 @@ use crate::material::procedural_textures::ProceduralTextures;
 use crate::objects::common_properties::Linkage;
 use crate::objects::parallelogram::Parallelogram;
 use crate::objects::sdf_class_index::SdfClassIndex;
-use crate::objects::sdf_instance::SdfInstance;
+use crate::objects::sdf_instance::{SdfInstance, SdfPayload};
 use crate::objects::triangle::Triangle;
 use crate::sdf::framework::named_sdf::UniqueSdfClassName;
 use crate::sdf::framework::sdf_registrator::SdfRegistrator;
@@ -38,7 +38,7 @@ use strum::EnumCount;
 use strum_macros::{AsRefStr, Display, EnumCount, EnumIter};
 
 pub struct VisualObjects {
-    per_object_kind_statistics: Vec<Statistics>,
+    per_object_kind_statistics: Vec<Statistics<VisualObjects>>,
     objects: HashMap<ObjectUid, Box<dyn SceneObject>>,
     triangles: Vec<Triangle>,
     
@@ -59,16 +59,20 @@ pub(crate) enum DataKind {
 
 impl VisualObjects {
     #[must_use]
-    pub fn new(texture_atlas_page_size: Option<BitmapSize>, sdf_classes: Option<SdfRegistrator>, procedural_textures: Option<ProceduralTextures>) -> Self {
+    pub fn new(
+        texture_atlas_page_size: Option<BitmapSize>, 
+        sdf_classes: Option<SdfRegistrator>, 
+        procedural_textures: Option<ProceduralTextures>,
+    ) -> Self {
         let materials = MaterialsWarehouse::new(procedural_textures);
         let texture_atlas_regions = materials.texture_atlas_regions();
-        let atlas_page_composer = TextureAtlasPageComposer::new(texture_atlas_page_size.unwrap_or(BitmapSize::new(1, 1)), texture_atlas_regions);
+        let texture_atlas_page_composer = TextureAtlasPageComposer::new(texture_atlas_page_size.unwrap_or(BitmapSize::new(1, 1)), texture_atlas_regions);
         Self {
-            per_object_kind_statistics: vec![Statistics::default(); DataKind::COUNT],
+            per_object_kind_statistics: vec![Statistics::<VisualObjects>::default(); DataKind::COUNT],
             objects: HashMap::new(),
             triangles: Vec::new(),
             materials,
-            texture_atlas_page_composer: atlas_page_composer,
+            texture_atlas_page_composer,
             sdf_prototypes: SdfWarehouse::new(sdf_classes.unwrap_or_default()),
             uid_generator: UidGenerator::new(),
         }
@@ -163,7 +167,9 @@ impl VisualObjects {
         }
     }
 
-    pub fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
+    pub(crate) fn add_parallelogram(&mut self, origin: Point, local_x: Vector, local_y: Vector, material: MaterialIndex) -> ObjectUid {
+        assert!(self.materials.hosts(material), "invalid material index");
+        
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Parallelogram as usize,
@@ -174,21 +180,25 @@ impl VisualObjects {
         })
     }
 
-    pub fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex) -> ObjectUid {
-        assert!(is_affine(location), "projection matrices are not supported");
+    pub(crate) fn add_sdf(&mut self, location: &Affine, ray_marching_step_scale: f64, class_uid: &UniqueSdfClassName, material: MaterialIndex, payload: SdfPayload) -> ObjectUid {
+        assert!(is_affine(location), "perspective matrices are not supported");
         assert_gt!(ray_marching_step_scale, 0.0);
+        assert!(self.materials.hosts(material), "invalid material index");
+        
         let index = self.sdf_prototypes.properties_for_name(class_uid).unwrap_or_else(|| panic!("registration for the '{class_uid}' sdf has not been found"));
         Self::add_object(&mut self.objects, &mut self.uid_generator, &mut self.per_object_kind_statistics, |uid| {
             Box::new(Monolithic::new(
                 DataKind::Sdf as usize,
-                Box::new(SdfInstance::new(*location, ray_marching_step_scale, *index, Linkage::new(uid, material))),
+                Box::new(SdfInstance::new(*location, ray_marching_step_scale, *index, Linkage::new(uid, material), payload)),
                 index.0,
                 *location,
             ))
         })
     }
 
-    pub fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> ObjectUid {
+    pub(crate) fn add_mesh(&mut self, source: &MeshWarehouse, slot: WarehouseSlot, transformation: &Transformation, material: MaterialIndex) -> ObjectUid {
+        assert!(self.materials.hosts(material), "invalid material index");
+        
         let links = Linkage::new(self.uid_generator.next(), material);
 
         let instance = source.instantiate(slot, transformation, links,);
@@ -293,7 +303,7 @@ impl VisualObjects {
     }
 
     #[must_use]
-    pub(crate) fn data_version(&self, kind: DataKind) -> Version {
+    pub(crate) fn data_version(&self, kind: DataKind) -> Version<VisualObjects> {
         self.per_object_kind_statistics[kind as usize].data_version()
     }
 
@@ -306,7 +316,7 @@ impl VisualObjects {
     fn add_object<Constructor: FnOnce(ObjectUid) -> Box<dyn SceneObject>>(
         container: &mut HashMap<ObjectUid, Box<dyn SceneObject>>,
         uid_generator: &mut UidGenerator<ObjectUid>,
-        statistics: &mut [Statistics],
+        statistics: &mut [Statistics<VisualObjects>],
         create_object: Constructor,
     ) -> ObjectUid {
         let uid = uid_generator.next();
@@ -368,7 +378,7 @@ mod tests {
     use crate::objects::common_properties::Linkage;
     use crate::objects::parallelogram::Parallelogram;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::objects::sdf_instance::SdfInstance;
+    use crate::objects::sdf_instance::{SdfInstance, SdfPayload};
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::framework::sdf_registrator::SdfRegistrator;
     use crate::sdf::object::sdf_sphere::SdfSphere;
@@ -412,7 +422,7 @@ mod tests {
     #[must_use]
     fn make_container_with_animated_texture_and_sdf() -> (VisualObjects, ProceduralTextureUid, UniqueSdfClassName) {
         let mut textures = ProceduralTextures::new(None);
-        let texture_code = format!("return vec3f({point_parameter_name}, 0.0, 0.0);\n", point_parameter_name = conventions::PARAMETER_NAME_THE_TIME);
+        let texture_code = format!("return vec3f({point_parameter_name}, 0.0, 0.0);\n", point_parameter_name = conventions::PARAMETER_NAME_TIME);
         let texture = TextureProcedural3D::from_simple_body(ShaderCode::<FunctionBody>::new(texture_code));
         let texture_uid = textures.add(texture, None);
 
@@ -441,10 +451,10 @@ mod tests {
         let (mut system_under_test, animated_material, sdf_class) = prepare_animated_material_fixture();
 
         let static_material = system_under_test.materials.add(&MaterialProperties::default());
-        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, static_material);
+        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, static_material, SdfPayload(0));
         assert_eq!(system_under_test.any_object_has_animated_texture(), false);
 
-        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, animated_material);
+        system_under_test.add_sdf(&Affine::identity(), 1.0, &sdf_class, animated_material, SdfPayload(0));
         assert!(system_under_test.any_object_has_animated_texture());
     }
 
@@ -463,7 +473,7 @@ mod tests {
     #[test]
     fn test_set_material() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(None, Some(sdf_classes), None)));
+        let system_under_test = Rc::new(RefCell::new(VisualObjects::new(None, Some(sdf_classes), None, )));
         
         let material_one = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
         let material_two = system_under_test.borrow_mut().materials_mutable().add(&MaterialProperties::default());
@@ -481,7 +491,7 @@ mod tests {
         
         assert_material_changed(material_two, material_one, parallelogram);
         
-        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), 1.0, &sphere_sdf_name, material_one);
+        let sdf = system_under_test.borrow_mut().add_sdf(&Affine::identity(), 1.0, &sphere_sdf_name, material_one, SdfPayload(0));
         let version_before = system_under_test.borrow().data_version(DataKind::Sdf);
         assert_material_changed(material_one, material_two, sdf);
         assert_ne!(system_under_test.borrow().data_version(DataKind::Sdf), version_before);
@@ -501,7 +511,7 @@ mod tests {
     #[test]
     fn test_add_sdf() {
         let (sphere_sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut system_under_test = VisualObjects::new(None, Some(sdf_classes), None);
+        let mut system_under_test = VisualObjects::new(None, Some(sdf_classes), None, );
 
         const SDF_TO_ADD: u32 = 5;
 
@@ -520,13 +530,13 @@ mod tests {
         {
             {
                 let linkage = Linkage::new(ObjectUid(i+1), expected_material);
-                let expected_sdf = SdfInstance::new(Affine::identity(), 1.0, SdfClassIndex(0), linkage);
+                let expected_sdf = SdfInstance::new(Affine::identity(), 1.0, SdfClassIndex(0), linkage, SdfPayload(0));
                 expected_sdf.serialize_into(&mut expected_serialized);
             }
             assert_eq!(system_under_test.count_of_a_kind(DataKind::Sdf), i as usize);
             {
                 let data_version_before_addition = system_under_test.data_version(DataKind::Sdf);
-                system_under_test.add_sdf(&expected_transform, 1.0, &sphere_sdf_name, expected_material);
+                system_under_test.add_sdf(&expected_transform, 1.0, &sphere_sdf_name, expected_material, SdfPayload(0));
                 let data_version_after_addition = system_under_test.data_version(DataKind::Sdf);
                 assert_ne!(data_version_before_addition, data_version_after_addition);
             }
@@ -655,7 +665,7 @@ mod tests {
         let mut fixture = make_filled_container();
         
         let sdf_to_be_deleted = fixture.sdf;
-        let sdf_to_be_kept = fixture.container.add_sdf(&Affine::identity(), 1.0, &fixture.sdf_name, fixture.dummy_material);
+        let sdf_to_be_kept = fixture.container.add_sdf(&Affine::identity(), 1.0, &fixture.sdf_name, fixture.dummy_material, SdfPayload(0));
 
         fixture.container.delete(sdf_to_be_deleted);
         
@@ -727,12 +737,12 @@ mod tests {
     #[must_use]
     fn make_filled_container() -> FilledContainerFixture {
         let (sdf_name, sdf_classes) = make_single_sdf_sphere();
-        let mut container = VisualObjects::new(None, Some(sdf_classes), None);
+        let mut container = VisualObjects::new(None, Some(sdf_classes), None, );
 
         let dummy_material = container.materials_mutable().add(&MaterialProperties::default());
         let (mesh_id, meshes) = prepare_test_mesh();
 
-        let sdf = container.add_sdf(&Affine::identity(), 1.0, &sdf_name, dummy_material);
+        let sdf = container.add_sdf(&Affine::identity(), 1.0, &sdf_name, dummy_material, SdfPayload(0));
         let parallelogram = container.add_parallelogram(Point::origin(), Vector::unit_x(), Vector::unit_y(), dummy_material);
         let mesh = container.add_mesh(&meshes, mesh_id, &Transformation::identity(), dummy_material);
 
@@ -740,8 +750,8 @@ mod tests {
     }
 
     #[must_use]
-    fn get_versions(from: &VisualObjects) -> Vec<Version> {
-        let mut result: Vec<Version> = Vec::with_capacity(DataKind::COUNT);
+    fn get_versions(from: &VisualObjects) -> Vec<Version<VisualObjects>> {
+        let mut result: Vec<Version<VisualObjects>> = Vec::with_capacity(DataKind::COUNT);
         for kind in DataKind::iter() {
             result.push(from.data_version(kind));
         }

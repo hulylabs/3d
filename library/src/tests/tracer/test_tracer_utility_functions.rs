@@ -388,7 +388,7 @@ mod tests {
 
         let camera = Camera::new_perspective_camera(3.0, Point::new(3.0, -7.0, 5.0));
         let frame_buffer_size = FrameBufferSize::new(2, 2);
-        let uniforms = Uniforms::new(frame_buffer_size, camera, 3, Instant::now().elapsed());
+        let uniforms = Uniforms::new(frame_buffer_size, camera, 3, Instant::now().elapsed(), 1.0);
 
         let mut execution_config = ExecutionConfig::new();
         execution_config
@@ -518,7 +518,7 @@ mod tests {
             .with_additional_shader_code(shader_code)
             .with_additional_shader_code(
                 r#"fn sample_signed_distance_t(position: vec3f) -> vec3f {
-                    let sdf = Sdf_0(sdf[0].location_col_0_0, sdf[0].location_col_1_0, sdf[0].location_col_2_0, sdf[0].inverse_location_col_0_0, sdf[0].inverse_location_col_1_0, sdf[0].inverse_location_col_2_0, sdf[0].ray_marching_step_scale_0, sdf[0].class_index_0, sdf[0].material_id_2, sdf[0].object_uid_2);
+                    let sdf = Sdf_0(sdf[0].location_col_0_0, sdf[0].location_col_1_0, sdf[0].location_col_2_0, sdf[0].inverse_location_col_0_0, sdf[0].inverse_location_col_1_0, sdf[0].inverse_location_col_2_0, sdf[0].ray_marching_step_scale_0, sdf[0].class_index_0, sdf[0].material_id_2, sdf[0].object_uid_2, 0);
                     return signed_distance_normal_0(sdf, position, 0.0);
                 }"#
             );
@@ -950,7 +950,6 @@ mod tests {
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
-    #[ignore = "Soft shadows are switched off by default, so the code is removed by the Slang compiler; to run this test one needs to switch the shadow style in the shader."]
     fn test_shadow(fixture: &mut GpuCodeExecutionContext) {
         let identity_box_class = NamedSdf::new(SdfBox::new(Vector::new(1.0, 1.0, 1.0)), make_dummy_sdf_name(), );
 

@@ -1,10 +1,11 @@
 #language slang 2026
 
-import "signatures";
-import "ray";
-import "output_on_screen";
-import "tracing_output";
-import "uniforms";
+import signatures;
+import ray;
+import output_on_screen;
+import tracing_output;
+import uniforms;
+import glyph_sdf_gpu_hosted;
 
 [shader("vertex")]
 extern public VSOutput vs(uint in_vertex_index : SV_VertexID);
@@ -58,7 +59,7 @@ static const bool MONTE_CARLO_IMPORTANCE_SAMPLING = true;
 static const int MAX_SDF_RAY_MARCH_STEPS = 120;
 
 [vk::binding(1, 0)]
-SamplerState atlases_sampler;
+SamplerState texture_atlas_sampler;
 [vk::binding(2, 0)]
 Texture2D<float4> texture_atlas_page;
 
@@ -134,10 +135,13 @@ struct Sdf {
     float4 inverse_location_col_0;
     float4 inverse_location_col_1;
     float4 inverse_location_col_2;
+    
     float ray_marching_step_scale;
     int class_index;
     uint material_id;
     uint object_uid;
+    
+    uint32_t payload;
 };
 
 struct BvhNode {
@@ -196,7 +200,7 @@ bool near_zero_scalar(float v) {
 }
 
 float sample_sdf(Sdf sdf, float3 point, float time) {
-    return sdf_select(sdf.class_index, point, time);
+    return sdf_select(sdf.class_index, point, time, sdf.payload);
 }
 
 float3 apply_animation(Sdf sdf, float3 point, float time) {
@@ -769,7 +773,7 @@ float4 read_atlas(float3 local_space_position, AtlasMapping atlas_region_mapping
     }
 
     float2 uv = atlas_region_mapping.top_left_corner_uv + texture_coordinate.xy * atlas_region_mapping.size;
-    float4 texture_sample = texture_atlas_page.SampleGrad(atlases_sampler, uv, ddx.xy, ddy.xy);
+    float4 texture_sample = texture_atlas_page.SampleGrad(texture_atlas_sampler, uv, ddx.xy, ddy.xy);
 
     return texture_sample;
 }
@@ -1296,7 +1300,7 @@ float evaluate_hard_shadow(float3 position, float3 to_light, float min_ray_offse
 }
 
 // 'to_light' expected to be normalized
-float evaluate_soft_shadow(float3 position, float3 to_light, float light_size, float min_ray_offset, float max_ray_offset) {
+export public float evaluate_soft_shadow(float3 position, float3 to_light, float light_size, float min_ray_offset, float max_ray_offset) {
     float result = evaluate_hard_shadow(position, to_light, min_ray_offset, max_ray_offset); // or DETERMINISTIC_SHADOW_MARCHING_MAX
     float offset = min_ray_offset;
     float3 next_point = position + to_light * offset;

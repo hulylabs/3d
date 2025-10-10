@@ -161,7 +161,7 @@ mod tests {
 
     #[test_context(GpuCodeExecutionContext)]
     #[test]
-    fn tes_box_frame(fixture: &mut GpuCodeExecutionContext) {
+    fn test_box_frame(fixture: &mut GpuCodeExecutionContext) {
         let system_under_test =
             SdfTranslation::new(Vector::new(-1.0, -1.0, -1.0), SdfBoxFrame::new(Vector::new(1.0, 2.0, 3.0), 0.1));
 
@@ -465,7 +465,7 @@ mod tests {
         let template = ShaderFunction::new("vec4f", "f32", function_name.0.as_str())
             .with_additional_shader_code(function_code.as_str());
         
-        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz, 0.0"));
+        let function_execution = make_executable(&template, create_argument_formatter!("{argument}.xyz, 0.0, 0"));
 
         executor.execute_code(input, function_execution, ExecutionConfig::default())
     }

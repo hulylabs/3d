@@ -33,13 +33,13 @@ impl TriplanarMapper {
             let w = pow( abs({normal_parameter_name}), vec3({transition_sharpness}) );\n\
             return (x*w.x + y*w.y + z*w.z) / (w.x + w.y + w.z);",
 
-            sample_texture = function_name,
-            point_parameter_name = conventions::PARAMETER_NAME_THE_POINT,
-            normal_parameter_name = conventions::PARAMETER_NAME_THE_NORMAL,
-            time_parameter_name = conventions::PARAMETER_NAME_THE_TIME,
-            dp_dx_parameter = conventions::PARAMETER_DP_DX,
-            dp_dy_parameter = conventions::PARAMETER_DP_DY,
-            transition_sharpness = format_scalar(transition_sharpness),
+                                      sample_texture = function_name,
+                                      point_parameter_name = conventions::PARAMETER_NAME_THE_POINT,
+                                      normal_parameter_name = conventions::PARAMETER_NAME_THE_NORMAL,
+                                      time_parameter_name = conventions::PARAMETER_NAME_TIME,
+                                      dp_dx_parameter = conventions::PARAMETER_DP_DX,
+                                      dp_dy_parameter = conventions::PARAMETER_DP_DY,
+                                      transition_sharpness = format_scalar(transition_sharpness),
         );
 
         let mut utilities_code = surface_texture.utilities().to_string();
@@ -48,7 +48,7 @@ impl TriplanarMapper {
             "fn {function_name}({parameter_uv}: vec2f, {parameter_time}: f32, {dp_dx_parameter}: vec2f, {dp_dy_parameter}: vec2f)->vec3f{{\n{body}\n}}\n",
             function_name = function_name,
             parameter_uv = conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES,
-            parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+            parameter_time = conventions::PARAMETER_NAME_TIME,
             dp_dx_parameter = conventions::PARAMETER_DP_DX,
             dp_dy_parameter = conventions::PARAMETER_DP_DY,
             body = surface_texture.evaluation(),

@@ -1,2 +1,2 @@
-cargo clippy
-cargo clippy --features "denoiser"
+cargo clippy --no-deps
+cargo clippy --no-deps --features "denoiser"

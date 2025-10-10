@@ -216,7 +216,7 @@ pub mod tests {
 
             let universal_usage = BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM;
             let dummy_buffer = self.resources.create_buffer("dummy_buffer", universal_usage, &vec![0_u8; 256]);
-            let dummy_sampler = self.resources.create_sampler("dummy_sampler");
+            let dummy_sampler = self.resources.create_texture_atlas_sampler("dummy_sampler");
             let dummy_texture = self.resources.create_texture("dummy_texture", 1, BitmapSize::new(1, 1));
             let dummy_texture_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
             for (_, group) in config.bind_groups {
@@ -233,7 +233,7 @@ pub mod tests {
                         bind_group.set_sampler_entry(slot, dummy_sampler.clone());
                     }
                     for slot in group.sampler_slots.slots {
-                        bind_group.set_sampler_entry(slot.index, self.resources.create_sampler("custom_sampler"));
+                        bind_group.set_sampler_entry(slot.index, self.resources.create_texture_atlas_sampler("custom_sampler"));
                     }
 
                     for slot in group.texture_slots.dummy_slots {

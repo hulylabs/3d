@@ -4,9 +4,11 @@ use image::{ImageBuffer, Rgba};
 use more_asserts::assert_gt;
 use std::path::Path;
 
+pub(crate) struct BitmapsAtlas;
+
 pub(crate) const BYTES_IN_RGBA_QUARTET: usize = 4;
 
-#[derive(Clone, Copy, Display)]
+#[derive(Clone, Copy, Display, Debug, PartialEq)]
 #[display("{}x{}", width, height)]
 pub struct BitmapSize {
     width: usize,
@@ -17,17 +19,39 @@ impl BitmapSize {
     #[must_use]
     pub fn new(width: usize, height: usize) -> Self {
         assert_gt!(width * height, 0, "bitmap area can't be zero");
-        Self { width, height }
+        Self { width, height, }
     }
+    
     #[must_use]
     pub(crate) fn width(&self) -> usize {
         self.width
     }
+    
     #[must_use]
     pub(crate) fn height(&self) -> usize {
         self.height
     }
 
+    #[must_use]
+    pub(crate) fn normalize_by_height_usize(&self, value: usize) -> f64 {
+        value as f64 / self.height as f64
+    }
+
+    #[must_use]
+    pub(crate) fn normalize_by_height_isize(&self, value: isize) -> f64 {
+        value as f64 / self.height as f64
+    }
+
+    #[must_use]
+    pub(crate) fn normalize_by_width_usize(&self, value: usize) -> f64 {
+        value as f64 / self.width as f64
+    }
+
+    #[must_use]
+    pub(crate) fn normalize_by_width_isize(&self, value: isize) -> f64 {
+        value as f64 / self.width as f64
+    }
+    
     #[must_use]
     pub(crate) const fn bytes_in_bitmap(&self) -> usize {
         self.width * self.height * BYTES_IN_RGBA_QUARTET
@@ -533,5 +557,21 @@ mod tests {
         assert_eq!(&destination_data[4..8],   &[0,   0,   255, 255]);
         assert_eq!(&destination_data[8..12],  &[0,   255, 0,   255]);
         assert_eq!(&destination_data[12..16], &[255, 0,   0,   255]);
+    }
+
+    #[test]
+    fn test_bitmap_size_normalize_by_width() {
+        let system_under_test = BitmapSize::new(3, 7);
+        assert_eq!(system_under_test.normalize_by_width_isize(3_isize), 1.0);
+        assert_eq!(system_under_test.normalize_by_width_isize(-30_isize), -10.0);
+        assert_eq!(system_under_test.normalize_by_width_usize(300), 100.0);
+    }
+
+    #[test]
+    fn test_bitmap_size_normalize_by_height() {
+        let system_under_test = BitmapSize::new(3, 7);
+        assert_eq!(system_under_test.normalize_by_height_isize(7_isize), 1.0);
+        assert_eq!(system_under_test.normalize_by_height_isize(-70_isize), -10.0);
+        assert_eq!(system_under_test.normalize_by_height_usize(700), 100.0);
     }
 }

@@ -3,6 +3,7 @@
 mod sandbox;
 mod tech_world;
 mod beautiful_world;
+mod resources;
 
 use std::env;
 use std::sync::Arc;
