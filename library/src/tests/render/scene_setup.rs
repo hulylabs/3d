@@ -8,10 +8,11 @@ pub(crate) mod tests {
     use crate::gpu::context::Context;
     use crate::gpu::frame_buffer_size::FrameBufferSize;
     use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
-    use crate::gpu::render::tests::{data_folder_path, out_folder_path, save_colors_to_png, shoot_rays_and_transfer_data_to_cpu, test_folder_path};
+    use crate::gpu::render::tests::{save_colors_to_png, shoot_rays_and_transfer_data_to_cpu};
     use crate::gpu::render::{FrameBufferSettings, Renderer};
     use crate::material::atlas_region_mapping::{AtlasRegionMappingBuilder, WrapMode};
     use crate::material::material_properties::{MaterialClass, MaterialProperties};
+    use crate::objects::sdf_instance::SdfPayload;
     use crate::palette::sdf::sdf_box_frame::SdfBoxFrame;
     use crate::palette::sdf::sdf_capsule::SdfCapsule;
     use crate::palette::sdf::sdf_round_box::SdfRoundBox;
@@ -25,11 +26,14 @@ pub(crate) mod tests {
     use crate::tests::render::utils::tests::compare_png_images;
     use crate::utils::bitmap_utils::BitmapSize;
     use crate::utils::tests::common_values::tests::COMMON_PRESENTATION_FORMAT;
+    use crate::utils::tests::conventions::tests::{data_folder_path, out_folder_path, test_folder_path};
     use cgmath::{Deg, Vector4};
     use palette::Srgb;
+    use std::cell::RefCell;
     use std::ops::Deref;
     use std::path::PathBuf;
     use std::rc::Rc;
+    use crate::text::scene_strings::{SceneStringPrologue, SceneStrings};
 
     const TEST_FRAME_BUFFER_WIDTH: u32 = 512;
     const TEST_FRAME_BUFFER_HEIGHT: u32 = 512;
@@ -116,35 +120,35 @@ pub(crate) mod tests {
 
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-1.0, -1.0, 0.9)) * Affine::from_scale(0.5)),
-            1.0, &identity_sphere_sdf, magenta_material);
+            1.0, &identity_sphere_sdf, magenta_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-1.0, -1.0, -0.2)) * Affine::from_scale(0.4)),
-            1.0, &identity_box_sdf, white_material);
+            1.0, &identity_box_sdf, white_material, SdfPayload(0));
 
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-1.0, 1.0, 0.0)) * Affine::from_scale(0.2)),
-            1.0, &identity_sphere_sdf, magenta_material);
+            1.0, &identity_sphere_sdf, magenta_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.0, 1.0, 0.0)) * Affine::from_nonuniform_scale(0.2, 0.1, 0.3)),
-            1.0, &identity_box_sdf, yellow_material);
+            1.0, &identity_box_sdf, yellow_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.0, 1.0, 0.0)) * Affine::from_nonuniform_scale(0.4, 0.4, 1.5)),
-            0.1, &frame_box_sdf, gray_material);
+            0.1, &frame_box_sdf, gray_material, SdfPayload(0));
 
         scene.add_sdf(
             &(Affine::from_angle_x(Deg(45.0))),
-            1.0, &round_box_sdf, white_material);
+            1.0, &round_box_sdf, white_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-1.0, 0.0, 0.0)) * Affine::from_angle_z(Deg(60.0))),
-            1.0, &torus_xz_sdf, cyan_material);
+            1.0, &torus_xz_sdf, cyan_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(1.0, 0.0, 0.0)) * Affine::from_angle_y(Deg(145.0)) * Affine::from_scale(0.2)),
-            1.0, &capsule_sdf, bright_material);
+            1.0, &capsule_sdf, bright_material, SdfPayload(0));
 
         scene.add_parallelogram(Point::new(-2.0, -2.0, -1.0), Vector::new(4.0, 0.0, 0.0), Vector::new(0.0, 4.0, 0.0), white_material);
         scene.add_parallelogram(Point::new(-1.0, -2.0, -1.0), Vector::new(0.0, 0.0, 1.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
 
-        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, scene);
+        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, Rc::new(RefCell::new(scene)), None);
     }
 
     pub(crate) fn compare_test_textures_scene_render_to_reference(
@@ -247,24 +251,56 @@ pub(crate) mod tests {
 
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(-0.8, -0.8, 0.0)) * Affine::from_scale(0.5)),
-            1.0, &identity_sphere_sdf, yellow_material);
+            1.0, &identity_sphere_sdf, yellow_material, SdfPayload(0));
         scene.add_sdf(
             &(Affine::from_translation(Vector::new(0.8, -0.8, -0.2)) * Affine::from_scale(0.4)),
-            1.0, &identity_box_sdf, magenta_material);
+            1.0, &identity_box_sdf, magenta_material, SdfPayload(0));
         scene.add_sdf(
             &( Affine::from_translation(Vector::new(0.8, 0.8, 0.0)) * Affine::from_angle_x(Deg(90.0)) * Affine::from_scale(2.0) ),
-            1.0, &torus_xz_sdf, cyan_material);
+            1.0, &torus_xz_sdf, cyan_material, SdfPayload(0));
 
         scene.add_parallelogram(Point::new(-2.0, -2.0, -1.0), Vector::new(4.0, 0.0, 0.0), Vector::new(0.0, 4.0, 0.0), white_material);
         scene.add_parallelogram(Point::new(-1.0, 0.0, 1.0), Vector::new(0.0, 0.2, 0.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
 
-        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, scene);
+        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, Rc::new(RefCell::new(scene)), None);
     }
 
-    fn render_and_compare_with_reference(render_strategy: RenderStrategyId, test_case_name: &PathBuf, context: Rc<Context>, camera: Camera, scene: VisualObjects) {
+    pub(crate) fn compare_test_text_scene_render_to_reference(
+        render_strategy: RenderStrategyId,
+        test_case_name: &PathBuf,
+    ) {
+        let context = create_headless_wgpu_vulkan_context();
+
+        let look_at = Point::new(0.0, 0.0, 0.0);
+        let mut camera = Camera::new_perspective_camera(3.0, look_at);
+        camera.move_horizontally(-0.2);
+        camera.move_vertically(-0.2);
+
+        let mut sdf_registrator = SdfRegistrator::default();
+        let scene_strings_prologue = SceneStringPrologue::new(data_folder_path().join("glyphs_atlas_ascii_domine.png"), &mut sdf_registrator).unwrap();
+        let scene = Rc::new(RefCell::new(VisualObjects::new(None, Some(sdf_registrator), None)));
+        let mut strings = SceneStrings::new(scene.clone(), scene_strings_prologue);
+
+        let emissive_material = scene.borrow_mut().materials_mutable().add(&MaterialProperties::new().with_emission(2.0, 2.0, 2.0));
+
+        let text_material = scene.borrow_mut().materials_mutable().add(&MaterialProperties::new()
+            .with_albedo(0.0, 1.0, 1.0)
+            .with_specular(1.0, 0.0, 1.0)
+            .with_specular_strength(0.5));
+
+        let placement = Affine::from_translation(Vector::new(-2.1, 0.0, -0.5));
+        let line_text = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ\n[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\nTHIS IS NEW LINE TEST";
+        strings.add(line_text, &placement, text_material);
+
+        scene.borrow_mut().add_parallelogram(Point::new(-1.0, 0.0, 1.0), Vector::new(0.0, 1.0, 0.0), Vector::new(2.0, 0.0, 0.0), emissive_material);
+
+        render_and_compare_with_reference(render_strategy, test_case_name, context, camera, scene, Some(strings));
+    }
+
+    fn render_and_compare_with_reference(render_strategy: RenderStrategyId, test_case_name: &PathBuf, context: Rc<Context>, camera: Camera, scene: Rc<RefCell<VisualObjects>>, strings: Option<SceneStrings>) {
         let frame_buffer_settings = FrameBufferSettings::new(COMMON_PRESENTATION_FORMAT, TEST_FRAME_BUFFER_SIZE, TEST_ANTI_ALIASING_LEVEL);
         let mut system_under_test
-            = Renderer::new(context.clone(), scene, camera, frame_buffer_settings, render_strategy, None)
+            = Renderer::new(context.clone(), scene, strings, camera, frame_buffer_settings, render_strategy, None)
                 .expect("render instantiation has failed");
 
         shoot_rays_and_transfer_data_to_cpu(context.deref(), &mut system_under_test);

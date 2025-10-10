@@ -45,6 +45,15 @@ impl Aabb {
             max: a.component_wise_max(b),
         }
     }
+
+    #[must_use]
+    pub fn from_size(size: Vector) -> Self {
+        let half = size / 2.0;
+        Aabb {
+            min: Point::new(-half.x, -half.y, -half.z),
+            max: Point::new( half.x,  half.y,  half.z),
+        }
+    }
     
     #[must_use]
     pub fn make_union(left: Aabb, right: Aabb) -> Self {
@@ -217,6 +226,17 @@ mod tests {
         let system_under_test = from_segment(start, end);
         assert_eq!(system_under_test.min, Point::new(1.0, 2.0, 3.0));
         assert_eq!(system_under_test.max, Point::new(2.0, 4.0, 5.0));
+    }
+
+
+    #[test]
+    fn test_from_size() {
+        let size_x = 1.0;
+        let size_y = 2.0;
+        let size_z = 3.0;
+        let system_under_test = Aabb::from_size(Vector::new(size_x, size_y, size_z));
+        assert_eq!(system_under_test.min, Point::new(-size_x / 2.0, -size_y / 2.0, -size_z / 2.0));
+        assert_eq!(system_under_test.max, Point::new( size_x / 2.0,  size_y / 2.0,  size_z / 2.0));
     }
 
     #[test]

@@ -13,4 +13,6 @@ Cargo.lock
 library/shader/_run_tests.exe
 /library/font/node_modules
 library/font/package.json
-library/font/glyphs_atlas.*
+library/font/glyphs_atlas*
+tmp/
+scene_bvh.dot

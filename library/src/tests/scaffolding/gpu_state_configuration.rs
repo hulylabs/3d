@@ -13,7 +13,7 @@ pub(crate) mod tests {
     use crate::material::material_index::MaterialIndex;
     use crate::objects::common_properties::Linkage;
     use crate::objects::sdf_class_index::SdfClassIndex;
-    use crate::objects::sdf_instance::SdfInstance;
+    use crate::objects::sdf_instance::{SdfInstance, SdfPayload};
     use crate::scene::camera::Camera;
     use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
     use crate::sdf::framework::sdf_registrator::SdfRegistrator;
@@ -65,7 +65,7 @@ pub(crate) mod tests {
     pub(crate) fn make_test_uniforms() -> Uniforms {
         let dummy_camera = Camera::new_orthographic_camera(1.0, Point::origin());
         let dummy_frame_buffer_size = FrameBufferSize::new(1, 1);
-        Uniforms::new(dummy_frame_buffer_size, dummy_camera, 1, Instant::now().elapsed())
+        Uniforms::new(dummy_frame_buffer_size, dummy_camera, 1, Instant::now().elapsed(), 1.0)
     }
 
     #[must_use]
@@ -112,7 +112,7 @@ pub(crate) mod tests {
     pub(crate) fn make_single_serialized_sdf_instance(class: &NamedSdf, instance_transformation: &Affine) -> SdfInstances {
         let dummy_linkage = Linkage::new(ObjectUid(0), MaterialIndex(0));
 
-        let sdf_instance = SdfInstance::new(instance_transformation.clone(), 1.0, SdfClassIndex(0), dummy_linkage);
+        let sdf_instance = SdfInstance::new(instance_transformation.clone(), 1.0, SdfClassIndex(0), dummy_linkage, SdfPayload(0));
         let mut instances = GpuReadySerializationBuffer::new(1, SdfInstance::SERIALIZED_QUARTET_COUNT);
         sdf_instance.serialize_into(&mut instances);
 

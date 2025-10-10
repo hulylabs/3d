@@ -1,12 +1,12 @@
-use std::rc::Rc;
+﻿use std::rc::Rc;
 use bytemuck::Pod;
 use crate::utils::version::Version;
 use crate::gpu::resizable_buffer::{ResizableBuffer, ResizeStatus};
 use crate::gpu::resources::Resources;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 
-pub(super) struct VersionedBuffer {
-    content_version: Version,
+pub(super) struct VersionedBuffer<DataHostType> {
+    content_version: Version<DataHostType>,
     backend: ResizableBuffer,
 }
 
@@ -44,9 +44,9 @@ impl BufferUpdateStatus {
     }
 }
 
-impl VersionedBuffer {
+impl<DataHostType> VersionedBuffer<DataHostType> {
     #[must_use]
-    pub(super) fn from_generator<Generator>(content_version: Version, resources: &Resources, label: &'static str, generate_data: Generator) -> Self
+    pub(super) fn from_generator<Generator>(content_version: Version<DataHostType>, resources: &Resources, label: &'static str, generate_data: Generator) -> Self
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
@@ -54,17 +54,17 @@ impl VersionedBuffer {
     }
 
     #[must_use]
-    pub(super) fn from_slice<T: Pod>(content_version: Version, resources: &Resources, label: &'static str, slice: &[T]) -> Self {
+    pub(super) fn from_slice<T: Pod>(content_version: Version<DataHostType>, resources: &Resources, label: &'static str, slice: &[T]) -> Self {
         Self { content_version, backend: ResizableBuffer::from_slice(resources, label, slice) }
     }
 
     #[must_use]
-    pub(super) fn version_diverges(&self, another: Version) -> bool {
+    pub(super) fn version_diverges(&self, another: Version<DataHostType>) -> bool {
         self.content_version != another
     }
 
     #[must_use]
-    pub(super) fn try_update_with_generator<Generator>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
+    pub(super) fn try_update_with_generator<Generator>(&mut self, new_version: Version<DataHostType>, resources: &Resources, queue: &wgpu::Queue, generate_data: Generator) -> BufferUpdateStatus
     where
         Generator: FnOnce() -> GpuReadySerializationBuffer,
     {
@@ -79,7 +79,7 @@ impl VersionedBuffer {
     }
 
     #[must_use]
-    pub(super) fn try_update_with_slice<T: Pod>(&mut self, new_version: Version, resources: &Resources, queue: &wgpu::Queue, slice: &[T]) -> BufferUpdateStatus {
+    pub(super) fn try_update_with_slice<T: Pod>(&mut self, new_version: Version<DataHostType>, resources: &Resources, queue: &wgpu::Queue, slice: &[T]) -> BufferUpdateStatus {
         if new_version == self.content_version {
             return BufferUpdateStatus { resized: false, updated: false };
         }
@@ -103,6 +103,8 @@ mod tests {
     use crate::gpu::headless_device::tests::create_headless_wgpu_vulkan_context;
     use super::*;
 
+    struct TestDataHost;
+    
     impl BufferUpdateStatus {
         #[must_use]
         pub(crate) fn new_resized(resized: bool) -> Self {
@@ -116,10 +118,14 @@ mod tests {
     }
 
     const SYSTEM_UNDER_TEST_INITIAL_SLOTS: usize = 2;
-    const SYSTEM_UNDER_TEST_INITIAL_VERSION: Version = Version(0);
+    
+    #[must_use]
+    fn initial_version() -> Version<TestDataHost> {
+        Version::<TestDataHost>::default()
+    }
 
     struct Fixture {
-        system_under_test: VersionedBuffer,
+        system_under_test: VersionedBuffer<TestDataHost>,
         resources: Resources,
         context: Rc<Context>,
     }
@@ -130,7 +136,7 @@ mod tests {
             let resources = Resources::new(context.clone());
             let generate_data = || make_test_content(SYSTEM_UNDER_TEST_INITIAL_SLOTS);
 
-            let system_under_test = VersionedBuffer::from_generator(SYSTEM_UNDER_TEST_INITIAL_VERSION, &resources, "test-buffer", generate_data);
+            let system_under_test = VersionedBuffer::from_generator(initial_version(), &resources, "test-buffer", generate_data);
 
             Fixture { system_under_test, resources, context }
         }
@@ -152,7 +158,7 @@ mod tests {
         let make_new_data = || make_test_content(1);
 
         let status = fixture.system_under_test.try_update_with_generator(
-            SYSTEM_UNDER_TEST_INITIAL_VERSION,
+            initial_version(),
             &fixture.resources,
             fixture.context.queue(),
             make_new_data);
@@ -167,7 +173,7 @@ mod tests {
         let make_new_data = || make_test_content(new_slots_count);
 
         let status = fixture.system_under_test.try_update_with_generator(
-            SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
+            initial_version() + 1,
             &fixture.resources,
             fixture.context.queue(),
             make_new_data);
@@ -184,7 +190,7 @@ mod tests {
         let make_new_data = || make_test_content(new_slots_count);
 
         let status = fixture.system_under_test.try_update_with_generator(
-            SYSTEM_UNDER_TEST_INITIAL_VERSION + 1,
+            initial_version() + 1,
             &fixture.resources,
             fixture.context.queue(),
             make_new_data);

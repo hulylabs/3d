@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn test_animated_true() {
         let mut system_under_test = make_system_under_test();
-        let texture_body = format!("return vec3f({}, 0.2, 0.1);", conventions::PARAMETER_NAME_THE_TIME);
+        let texture_body = format!("return vec3f({}, 0.2, 0.1);", conventions::PARAMETER_NAME_TIME);
         let texture = procedural_texture(texture_body.as_str());
         let uid = system_under_test.add(texture, Some("a"));
 

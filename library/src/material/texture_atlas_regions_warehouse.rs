@@ -1,4 +1,4 @@
-use crate::material::atlas_region_mapping::AtlasRegionMapping;
+﻿use crate::material::atlas_region_mapping::AtlasRegionMapping;
 use crate::material::atlas_region_mapping_uid::AtlasRegionMappingUid;
 use crate::serialization::gpu_ready_serialization_buffer::GpuReadySerializationBuffer;
 use crate::serialization::serializable_for_gpu::serialize_batch;
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::material::bitmap_texture_index::BitmapTextureIndex;
 
 pub(crate) struct TextureAtlasRegionsWarehouse {
-    data_version: Version,
+    data_version: Version<TextureAtlasRegionsWarehouse>,
     uid_generator: UidGenerator<AtlasRegionMappingUid>,
     index_from_uid: HashMap<AtlasRegionMappingUid, usize>,
     regions: Vec<AtlasRegionMapping>,
@@ -18,7 +18,7 @@ impl TextureAtlasRegionsWarehouse {
     #[must_use]
     pub(crate) fn new() -> Self {
         Self {
-            data_version: Version(0),
+            data_version: Version::default(),
             uid_generator: UidGenerator::new(),
             index_from_uid: HashMap::new(),
             regions: Vec::new(),
@@ -40,7 +40,7 @@ impl TextureAtlasRegionsWarehouse {
     }
 
     #[must_use]
-    pub(crate) fn version(&self) -> Version {
+    pub(crate) fn version(&self) -> Version<TextureAtlasRegionsWarehouse> {
         self.data_version
     }
 

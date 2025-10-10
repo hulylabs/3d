@@ -1,6 +1,6 @@
-use std::vec;
 use crate::serialization::single_object_writer::SingleObjectWriter;
 use crate::serialization::single_quartet_writer::SingleQuartetWriter;
+use std::vec;
 
 pub(crate) const ELEMENTS_IN_QUARTET: usize = 4;
 pub(super) const QUARTET_ELEMENT_SIZE_BYTES: usize = size_of::<f32>();
@@ -8,6 +8,7 @@ pub(super) const QUARTET_SIZE_BYTES: usize = QUARTET_ELEMENT_SIZE_BYTES * ELEMEN
 
 pub(crate) const DEFAULT_PAD_VALUE: f32 = -1.0;
 
+#[derive(Clone)]
 pub(crate) struct GpuReadySerializationBuffer {
     backend: Vec<u8>,
     write_pointer: usize,

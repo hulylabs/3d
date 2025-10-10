@@ -1,3 +1,4 @@
+use crate::resources::{get_resource_path, path_to_bitmap, CONTENT_ROOT_FOLDER_NAME};
 use cgmath::{Deg, Vector4};
 use library::container::mesh_warehouse::MeshWarehouse;
 use library::container::texture_atlas_page_composer::{AtlasRegionUid, TextureAtlasPageComposer};
@@ -49,18 +50,8 @@ use library::shader::code::{FunctionBody, Generic, ShaderCode};
 use library::shader::conventions;
 use library::utils::object_uid::ObjectUid;
 use log::error;
-use std::env;
 use std::ops::DerefMut;
-use std::path::{Path, PathBuf};
-
-const CONTENT_ROOT_FOLDER_NAME: &str = "assets";
-
-#[must_use]
-fn get_resource_path(file_name: impl AsRef<Path>) -> PathBuf {
-    let exe_path = env::current_exe().unwrap();
-    let exe_directory = exe_path.parent().unwrap();
-    exe_directory.join(file_name)
-}
+use std::path::Path;
 
 pub(super) struct TechWorldBitmapTextures {
     bitmap_checkerboard_small: AtlasRegionUid,
@@ -72,11 +63,11 @@ pub(super) struct TechWorldBitmapTextures {
 
 impl TechWorldBitmapTextures {
     pub(super) fn new(composer: &mut TextureAtlasPageComposer) -> anyhow::Result<Self> {
-        let bitmap_checkerboard_small= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_checkerboard_small.png"), composer)?;
-        let bitmap_checkerboard_large= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_checkerboard_large.png"), composer)?;
-        let bitmap_huly= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_huly.png"), composer)?;
-        let bitmap_huly_2= load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_huly_2.png"), composer)?;
-        let bitmap_rect_grid = load_bitmap(TechWorldBitmapTextures::path_to_bitmap("bitmap_rect_grid.png"), composer)?;
+        let bitmap_checkerboard_small= load_bitmap(path_to_bitmap("bitmap_checkerboard_small.png"), composer)?;
+        let bitmap_checkerboard_large= load_bitmap(path_to_bitmap("bitmap_checkerboard_large.png"), composer)?;
+        let bitmap_huly= load_bitmap(path_to_bitmap("bitmap_huly.png"), composer)?;
+        let bitmap_huly_2= load_bitmap(path_to_bitmap("bitmap_huly_2.png"), composer)?;
+        let bitmap_rect_grid = load_bitmap(path_to_bitmap("bitmap_rect_grid.png"), composer)?;
 
         composer.save_page_into(Path::new("debug_output").join("textures_atlas.png")).expect("failed to save texture atlas page");
 
@@ -87,12 +78,6 @@ impl TechWorldBitmapTextures {
             bitmap_huly_2,
             bitmap_rect_grid,
         })
-    }
-
-    #[must_use]
-    fn path_to_bitmap(file_name: &str) -> PathBuf {
-        let image_path = Path::new(CONTENT_ROOT_FOLDER_NAME).join(file_name);
-        get_resource_path(&image_path)
     }
 }
 
@@ -602,7 +587,7 @@ impl TechWorldProceduralTextures {
         let body = format!(
             "return {main_function}({uv_parameter_name}, {time_parameter}, {dp_dx_parameter}, {dp_dy_parameter});",
             uv_parameter_name=conventions::PARAMETER_NAME_2D_TEXTURE_COORDINATES,
-            time_parameter=conventions::PARAMETER_NAME_THE_TIME,
+            time_parameter=conventions::PARAMETER_NAME_TIME,
             dp_dx_parameter = conventions::PARAMETER_DP_DX,
             dp_dy_parameter = conventions::PARAMETER_DP_DY,
         );
@@ -1017,6 +1002,26 @@ impl TechWorld {
             Err(mesh_loading_error) => {
                 error!("failed to load cube mesh: {mesh_loading_error}");
             },
+        }
+    }
+
+    pub(super) fn load_text_demo_scene(&mut self, scene: &mut Hub) {
+        self.clear_scene(scene);
+
+        self.light_panel = Some(
+            scene.add_parallelogram(Point::new(0.5, 0.0, 0.0), Vector::new(0.0, 0.5, 0.0), Vector::new(0.4, 0.0, 0.0), self.materials.light)
+        );
+
+        scene.add_parallelogram(Point::new(-1.0, -0.5, 0.0), Vector::new(3.0, 0.0, 0.0), Vector::new(0.0, 0.0, -3.0), self.materials.black);
+
+        let materials = [self.materials.black, self.materials.green, self.materials.red, self.materials.gold_metal, self.materials.checkerboard_small];
+        let lines_count = 5;
+
+        for i in 0..lines_count {
+            let placement = Affine::from_translation(Vector::new(-0.35, 0.5 - i as f64 * 0.2, -0.4)) * Affine::from_nonuniform_scale(0.3, 0.3, 1.0);
+            let line_text = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\nTHIS IS NEW LINE TEST";
+            let material = materials[i % materials.len()];
+            scene.add_text(line_text, &placement, material);
         }
     }
 

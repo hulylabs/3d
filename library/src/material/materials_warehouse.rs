@@ -1,4 +1,4 @@
-use crate::material::material_index::MaterialIndex;
+﻿use crate::material::material_index::MaterialIndex;
 use crate::material::material_properties::MaterialProperties;
 use crate::material::procedural_textures::ProceduralTextures;
 use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
@@ -14,7 +14,7 @@ pub struct MaterialsWarehouse {
     materials: Vec<MaterialProperties>,
     procedural_textures: Option<ProceduralTextures>,
     texture_atlas_regions: Rc<RefCell<TextureAtlasRegionsWarehouse>>,
-    data_version: Version,
+    data_version: Version<MaterialsWarehouse>,
 }
 
 impl MaterialsWarehouse {
@@ -24,7 +24,7 @@ impl MaterialsWarehouse {
             materials: Vec::new(),
             procedural_textures,
             texture_atlas_regions: Rc::new(RefCell::new(TextureAtlasRegionsWarehouse::new())),
-            data_version: Version(0),
+            data_version: Version::default(),
         }
     }
 
@@ -51,7 +51,7 @@ impl MaterialsWarehouse {
     }
 
     #[must_use]
-    pub(crate) fn data_version(&self) -> Version {
+    pub(crate) fn data_version(&self) -> Version<MaterialsWarehouse> {
         self.data_version
     }
 
@@ -72,6 +72,11 @@ impl MaterialsWarehouse {
     #[must_use]
     pub(crate) fn texture_atlas_regions(&self) -> Rc<RefCell<TextureAtlasRegionsWarehouse>> {
         self.texture_atlas_regions.clone()
+    }
+
+    #[must_use]
+    pub(crate) fn hosts(&self, index: MaterialIndex) -> bool {
+        index.0 < self.materials.len()
     }
 }
 
@@ -123,7 +128,7 @@ mod tests {
     
     #[test]
     fn test_animated_true() {
-        let texture_body = format!("return vec3f({}, 0.0, 0.0);\n", conventions::PARAMETER_NAME_THE_TIME);
+        let texture_body = format!("return vec3f({}, 0.0, 0.0);\n", conventions::PARAMETER_NAME_TIME);
         let (texture_uid, mut system_under_test) = make_warehouse_with_a_texture(texture_body);
         
         let material_with_texture = system_under_test.add(&MaterialProperties::default()

@@ -52,7 +52,7 @@ mod tests {
               6.0,
         ];
 
-        let function_execution = make_executable(&template,create_argument_formatter!("i32({argument}.w), {argument}.xyz, 0.0"));
+        let function_execution = make_executable(&template,create_argument_formatter!("i32({argument}.w), {argument}.xyz, 0.0, 0"));
 
         let executor = GpuCodeExecutor::new();
         let actual_distances = executor.execute_code(&input_points, function_execution, ExecutionConfig::default());

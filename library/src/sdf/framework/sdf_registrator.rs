@@ -3,6 +3,7 @@ use crate::sdf::framework::function_body_dossier::FunctionBodyDossier;
 use crate::sdf::framework::named_sdf::{NamedSdf, UniqueSdfClassName};
 use crate::sdf::framework::shader_code_dossier::ShaderCodeDossier;
 use crate::sdf::framework::stack::Stack;
+use crate::sdf::object::reservation::RESERVED_SDF_NAME_PREFIX;
 use crate::shader::code::{FunctionBody, ShaderCode};
 use crate::shader::function_name::FunctionName;
 use crate::utils::uid_generator::UidGenerator;
@@ -24,7 +25,21 @@ pub struct SdfRegistrator {
 }
 
 impl SdfRegistrator {
-    pub fn add(&mut self, target: &NamedSdf) {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            sdf_bodies: FunctionBodyDossier::new(),
+            uid_generator: UidGenerator::new(),
+            registered: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, target: &NamedSdf)  {
+        assert_eq!(target.name().as_str().starts_with(RESERVED_SDF_NAME_PREFIX), false, "prefix {} of the name {} is reserved", RESERVED_SDF_NAME_PREFIX, target.name());
+        self.add_no_name_check(target);
+    }
+
+    pub(crate) fn add_no_name_check(&mut self, target: &NamedSdf) {
         let unique = self.registered.insert(target.name().clone(), target.clone());
         assert!(unique.is_none(), "name {} of given sdf is not unique", target.name());
         
@@ -47,15 +62,6 @@ impl SdfRegistrator {
 
         let (_, children, _) = context;
         debug_assert_eq!(children.size(), 1);
-    }
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            sdf_bodies: FunctionBodyDossier::new(),
-            uid_generator: UidGenerator::new(),
-            registered: HashMap::new(),
-        }
     }
 
     #[must_use]

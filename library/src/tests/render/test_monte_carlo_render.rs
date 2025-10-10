@@ -126,5 +126,17 @@ mod tests {
                     &folder().join(make_png_file_name("textures_with_white_light")));
             }
         }
+
+        mod text_objects {
+            use crate::tests::render::scene_setup::tests::compare_test_text_scene_render_to_reference;
+            use crate::tests::render::test_monte_carlo_render::tests::monte_carlo_render::{folder, RENDER_STRATEGY};
+            use crate::tests::render::utils::tests::make_png_file_name;
+
+            #[test]
+            fn test_text() {
+                compare_test_text_scene_render_to_reference(RENDER_STRATEGY,
+                    &folder().join(make_png_file_name("text")));
+            }
+        }
     }
 }

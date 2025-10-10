@@ -16,23 +16,35 @@ pub(crate) mod sdf_conventions {
 }
 
 #[must_use]
-fn format_common_parameters() -> String {
+fn format_sdf_parameters() -> String {
+    format!(
+        "{parameter_point}: vec3f, {parameter_time}: f32, {parameter_payload}: u32",
+        parameter_point = conventions::PARAMETER_NAME_THE_POINT,
+        parameter_time = conventions::PARAMETER_NAME_TIME,
+        parameter_payload = conventions::PARAMETER_NAME_PAYLOAD,
+    )
+}
+
+#[must_use]
+fn format_animation_parameters() -> String {
     format!(
         "{parameter_point}: vec3f, {parameter_time}: f32",
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
-        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+        parameter_time = conventions::PARAMETER_NAME_TIME,
     )
 }
+
 
 pub(crate) fn format_sdf_selection(function_to_select: &FunctionName, class_index: SdfClassIndex, buffer: &mut String) {
     writeln!(
         buffer,
-        "if ({parameter_sdf_index} == {sdf_index}) {{ return {sdf_function_name}({point_parameter},{time_parameter}); }}",
+        "if ({parameter_sdf_index} == {sdf_index}) {{ return {sdf_function_name}({point_parameter},{time_parameter},{payload_parameter}); }}",
         parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
         sdf_index = class_index,
         sdf_function_name = function_to_select,
         point_parameter = conventions::PARAMETER_NAME_THE_POINT,
-        time_parameter = conventions::PARAMETER_NAME_THE_TIME,
+        time_parameter = conventions::PARAMETER_NAME_TIME,
+        payload_parameter = conventions::PARAMETER_NAME_PAYLOAD,
     )
     .expect("failed to format sdf selection");
 }
@@ -43,7 +55,7 @@ pub(crate) fn format_sdf_selection_function_opening() -> String {
         "fn {selection_function_name}({parameter_sdf_index}: i32, {common_parameters}) -> {return_type} {{\n",
         selection_function_name = sdf_conventions::FUNCTION_NAME_SELECTION,
         parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
-        common_parameters = format_common_parameters(),
+        common_parameters = format_sdf_parameters(),
         return_type = sdf_conventions::SDF_SELECTION_RETURN_TYPE,
     )
 }
@@ -51,10 +63,11 @@ pub(crate) fn format_sdf_selection_function_opening() -> String {
 #[must_use]
 pub(crate) fn format_sdf_invocation(function_name: &FunctionName) -> ShaderCode<FunctionBody> {
     let code = format!(
-        "return {name}({parameter_point},{parameter_time});",
+        "return {name}({parameter_point},{parameter_time},{parameter_payload});",
         name = function_name,
         parameter_point = conventions::PARAMETER_NAME_THE_POINT,
-        parameter_time = conventions::PARAMETER_NAME_THE_TIME,
+        parameter_time = conventions::PARAMETER_NAME_TIME,
+        parameter_payload = conventions::PARAMETER_NAME_PAYLOAD,
     );
     ShaderCode::<FunctionBody>::new(code)
 }
@@ -64,7 +77,7 @@ pub(crate) fn format_sdf_declaration(body: &ShaderCode<FunctionBody>, function_n
         buffer,
         "fn {name}({common_parameters}) -> {return_type} {{\n{body}\n}}\n",
         name = function_name,
-        common_parameters = format_common_parameters(),
+        common_parameters = format_sdf_parameters(),
         return_type = sdf_conventions::SDF_SELECTION_RETURN_TYPE,
         body = body,
     )
@@ -77,7 +90,7 @@ pub(crate) fn format_sdf_animation_undo_function_opening() -> String {
         "fn {selection_function_name}({parameter_sdf_index}: i32, {common_parameters}) -> {return_type} {{\n",
         selection_function_name = sdf_conventions::FUNCTION_NAME_ANIMATION_APPLY,
         parameter_sdf_index = sdf_conventions::PARAMETER_NAME_INDEX,
-        common_parameters = format_common_parameters(),
+        common_parameters = format_animation_parameters(),
         return_type = sdf_conventions::ANIMATION_UNDO_RETURN_TYPE,
     )
 }
@@ -107,7 +120,7 @@ mod tests {
         format_sdf_declaration(&function_body, &function_name, &mut formatted);
 
         let expected = format!(
-            "fn {function}({parameter}: vec3f, time: f32) -> f32 {{\nreturn -7.0;\n}}\n",
+            "fn {function}({parameter}: vec3f, time: f32, payload: u32) -> f32 {{\nreturn -7.0;\n}}\n",
             function = function_name,
             parameter = conventions::PARAMETER_NAME_THE_POINT
         );

@@ -39,6 +39,7 @@ float-cmp = "0.10.0"
 etagere = "0.2.15"
 cast = "0.3.0"
 image = { version = "0.25.8", features = ["png"] }
+roxmltree = "0.21.0"
 
 [dev-dependencies]
 tempfile = "3.23.0"

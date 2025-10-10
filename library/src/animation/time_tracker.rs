@@ -8,13 +8,13 @@ use std::collections::HashMap;
 pub struct TimeTracker {
     animator: Animator,
     tracked: HashMap<ObjectUid, Animatable>,
-    version: Version,
+    version: Version<TimeTracker>,
 }
 
 impl TimeTracker {
     #[must_use]
     pub(crate) fn new() -> Self {
-        Self { animator: Animator::new(), tracked: HashMap::new(), version:Version(0) }
+        Self { animator: Animator::new(), tracked: HashMap::new(), version: Version::default() }
     }
     
     pub(crate) fn update_time(&mut self) {
@@ -45,10 +45,12 @@ impl TimeTracker {
         self.animator.local_time_of(target).is_some()
     }
     
-    pub(crate) fn track(&mut self, target: ObjectUid, new_order: &[ObjectUid]) {
-        assert_eq!(new_order.len(), self.tracked.len()+1);
-        
-        self.tracked.insert(target, Animatable::new(0));
+    pub(crate) fn track(&mut self, target: &[ObjectUid], new_order: &[ObjectUid]) {
+        assert_eq!(new_order.len(), self.tracked.len()+target.len());
+
+        for x in target {
+            self.tracked.insert(*x, Animatable::new(0));
+        }
         self.update_indices(new_order);
         
         self.version += 1;
@@ -93,7 +95,7 @@ impl TimeTracker {
     }
 
     #[must_use]
-    pub(crate) fn version(&self) -> Version {
+    pub(crate) fn version(&self) -> Version<TimeTracker> {
         self.version
     }
     
@@ -166,7 +168,7 @@ mod tests {
 
         let uid = ObjectUid(0);
         let order = vec![uid];
-        system_under_test.track(uid, &order);
+        system_under_test.track(&[uid], &order);
 
         let version_after_track = system_under_test.version();
 
@@ -186,12 +188,12 @@ mod tests {
         let mut system_under_test = TimeTracker::new();
         let uids = [ObjectUid(0), ObjectUid(1), ObjectUid(2)];
 
-        let mut versions: Vec<Version> = Vec::new();
+        let mut versions: Vec<Version<TimeTracker>> = Vec::new();
         versions.push(system_under_test.version());
 
         for i in 0..uids.len() {
             let count_after_add = i + 1;
-            system_under_test.track(uids[i], &uids[..count_after_add]);
+            system_under_test.track(&[uids[i]], &uids[..count_after_add]);
             versions.push(system_under_test.version());
             assert_eq!(system_under_test.tracked_count(), count_after_add);
         }
@@ -209,8 +211,8 @@ mod tests {
         let to_continue = ObjectUid(7);
         let to_stop = ObjectUid(5);
 
-        system_under_test.track(to_continue, &[to_continue]);
-        system_under_test.track(to_stop, &[to_continue, to_stop]);
+        system_under_test.track(&[to_continue], &[to_continue]);
+        system_under_test.track(&[to_stop], &[to_continue, to_stop]);
 
         system_under_test.stop(to_continue);
         system_under_test.stop(to_stop);
@@ -236,8 +238,8 @@ mod tests {
         let to_keep = ObjectUid(7);
         let to_forget = ObjectUid(5);
 
-        system_under_test.track(to_keep, &[to_keep]);
-        system_under_test.track(to_forget, &[to_keep, to_forget]);
+        system_under_test.track(&[to_keep], &[to_keep]);
+        system_under_test.track(&[to_forget], &[to_keep, to_forget]);
 
         let version_before = system_under_test.version();
         system_under_test.forget(to_keep, &[to_forget]);
@@ -257,8 +259,8 @@ mod tests {
         let first = ObjectUid(0);
         let second = ObjectUid(1);
 
-        system_under_test.track(first, &[first]);
-        system_under_test.track(second, &[first, second]);
+        system_under_test.track(&[first], &[first]);
+        system_under_test.track(&[second], &[first, second]);
 
         let version_before = system_under_test.version();
         system_under_test.clear();
@@ -276,12 +278,12 @@ mod tests {
         let animated = ObjectUid(13);
         let animation = ClockAnimationAct::default();
 
-        system_under_test.track(animated, &[animated]);
+        system_under_test.track(&[animated], &[animated]);
         let version_before_launch = system_under_test.version();
         system_under_test.launch(animated, animation);
         let still = ObjectUid(17);
         let version_after_launch = system_under_test.version();
-        system_under_test.track(still, &[animated, still]);
+        system_under_test.track(&[still], &[animated, still]);
         
         let mut times = vec![-5.0f32; system_under_test.tracked_count()];
         system_under_test.write_times(&mut times);
@@ -305,7 +307,7 @@ mod tests {
         let expected_duration = Duration::from_millis(1);
         let one_ms_animation = finite_animation(expected_duration);
 
-        system_under_test.track(uid, &[uid]);
+        system_under_test.track(&[uid], &[uid]);
         system_under_test.launch(uid, infinite_animation);
         system_under_test.launch(uid, one_ms_animation);
         thread::sleep(expected_duration + Duration::from_millis(3));
@@ -322,8 +324,8 @@ mod tests {
         let tiny_uid = ObjectUid(13);
         let huge_uid = ObjectUid(31);
         
-        system_under_test.track(tiny_uid, &[tiny_uid]);
-        system_under_test.track(huge_uid, &[huge_uid, tiny_uid]);
+        system_under_test.track(&[tiny_uid], &[tiny_uid]);
+        system_under_test.track(&[huge_uid], &[huge_uid, tiny_uid]);
 
         let tiny_uid_time = Duration::from_micros(3);
         system_under_test.launch(tiny_uid, finite_animation(tiny_uid_time));

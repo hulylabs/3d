@@ -3,7 +3,7 @@ use crate::material::material_properties::MaterialProperties;
 use crate::material::texture_atlas_regions_warehouse::TextureAtlasRegionsWarehouse;
 use crate::material::texture_reference::TextureReference;
 use crate::material::texture_region::TextureRegion;
-use crate::utils::bitmap_utils::{save_bitmap_to_png, set_texel, write_sub_bitmap, write_sub_bitmap_column, write_sub_bitmap_row, BitmapSize, ImmutableBitmapReference, MutableBitmapReference};
+use crate::utils::bitmap_utils::{save_bitmap_to_png, set_texel, write_sub_bitmap, write_sub_bitmap_column, write_sub_bitmap_row, BitmapSize, BitmapsAtlas, ImmutableBitmapReference, MutableBitmapReference};
 use crate::utils::version::Version;
 use cast::i32;
 use cgmath::Vector2;
@@ -22,7 +22,7 @@ pub struct TextureAtlasPageComposer {
     allocations: HashMap<AllocId, TextureRegion>,
     warehouse: Rc<RefCell<TextureAtlasRegionsWarehouse>>,
     page_size: BitmapSize,
-    atlas_page_data_version: Version,
+    atlas_page_data_version: Version<BitmapsAtlas>,
 }
 
 impl TextureAtlasPageComposer {
@@ -36,7 +36,7 @@ impl TextureAtlasPageComposer {
             allocations: HashMap::new(),
             warehouse,
             page_size,
-            atlas_page_data_version: Version(0),
+            atlas_page_data_version: Version::default(),
         }
     }
 
@@ -46,7 +46,7 @@ impl TextureAtlasPageComposer {
         let width = i32(bitmap.size().width() + BORDER * 2).ok()?;
         let height = i32(bitmap.size().height() + BORDER * 2).ok()?;
         let allocation = self.allocator.allocate(Size::new(width, height))?;
-
+        
         let allocated_rectangle = allocation.rectangle;
         let page_width = self.page_size.width() as f32;
         let page_height = self.page_size.height() as f32;
@@ -62,7 +62,7 @@ impl TextureAtlasPageComposer {
         let mut atlas = MutableBitmapReference::new(&mut self.atlas_page_buffer, self.page_size);
         write_sub_bitmap(&mut atlas, &bitmap, pixel_x, pixel_y);
 
-        // borders for the "repeat" wrapping mode (so the filtering of the edge texels is correct)
+        // borders for the "repeat" wrapping mode (to make correct filtering of the edge texels)
 
         write_sub_bitmap_column(&mut atlas, pixel_x+bitmap.size().width(), pixel_y, &bitmap, 0);
         write_sub_bitmap_column(&mut atlas, pixel_x-1, pixel_y, &bitmap, bitmap.size().width()-1);
@@ -94,7 +94,7 @@ impl TextureAtlasPageComposer {
         Ok(())
     }
     
-    pub(crate) fn try_commit<ConsumerDelegate: FnOnce(Version, &[u8])>(&self, consumer_data_version_or_none: Option<Version>, consume: ConsumerDelegate) {
+    pub(crate) fn try_commit<ConsumerDelegate: FnOnce(Version<BitmapsAtlas>, &[u8])>(&self, consumer_data_version_or_none: Option<Version<BitmapsAtlas>>, consume: ConsumerDelegate) {
         if  consumer_data_version_or_none != Some(self.atlas_page_data_version) {
             consume(self.atlas_page_data_version, &self.atlas_page_buffer);
         }

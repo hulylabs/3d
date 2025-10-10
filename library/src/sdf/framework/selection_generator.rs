@@ -33,7 +33,7 @@ mod tests {
     fn test_no_additions() {
         let system_under_test = SelectionGenerator::new();
         let empty_selection = system_under_test.make();
-        assert_eq!(empty_selection, "fn sdf_select(sdf_index: i32, point: vec3f, time: f32) -> f32 {\nreturn 0.0;\n}\n");
+        assert_eq!(empty_selection, "fn sdf_select(sdf_index: i32, point: vec3f, time: f32, payload: u32) -> f32 {\nreturn 0.0;\n}\n");
     }
 
     #[test]
@@ -42,6 +42,6 @@ mod tests {
         system_under_test.add_selection(&FunctionName("a".to_string()), SdfClassIndex(7));
         system_under_test.add_selection(&FunctionName("b".to_string()), SdfClassIndex(5));
         let empty_selection = system_under_test.make();
-        assert_eq!(empty_selection, "fn sdf_select(sdf_index: i32, point: vec3f, time: f32) -> f32 {\nif (sdf_index == 7) { return a(point,time); }\nif (sdf_index == 5) { return b(point,time); }\nreturn 0.0;\n}\n");
+        assert_eq!(empty_selection, "fn sdf_select(sdf_index: i32, point: vec3f, time: f32, payload: u32) -> f32 {\nif (sdf_index == 7) { return a(point,time,payload); }\nif (sdf_index == 5) { return b(point,time,payload); }\nreturn 0.0;\n}\n");
     }
 }

@@ -3,7 +3,7 @@ fn procedural_texture_select(index: i32, position: vec3f, normal: vec3f, time: f
     return vec3f(0.0);
 }
 
-fn sdf_select(index: i32, position: vec3f, time: f32) -> f32 {
+fn sdf_select(index: i32, position: vec3f, time: f32, payload: u32) -> f32 {
     return 0.0;
 }
 

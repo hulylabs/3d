@@ -34,5 +34,5 @@ public struct Uniforms {
     public float global_time_seconds;
 
     public uint3 thread_grid_size;
-    private float empty_slot__2;
+    public float glyphs_atlas_texel_to_world_scale;
 };

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use crate::beautiful_world::{BeautifulWorldMaterials, BeautifulWorldSdfClasses, BeautifulWorld};
 use crate::tech_world::{TechWorldMaterials, TechWorldSdfClasses, TechWorldProceduralTextures, TechWorld, TechWorldBitmapTextures};
 use cgmath::Deg;
@@ -8,6 +9,7 @@ use library::utils::object_uid::ObjectUid;
 use library::Engine;
 use log::info;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -19,7 +21,9 @@ use library::container::visual_objects::VisualObjects;
 use library::material::material_index::MaterialIndex;
 use library::material::procedural_textures::ProceduralTextures;
 use library::sdf::framework::sdf_registrator::SdfRegistrator;
+use library::text::scene_strings::{SceneStringPrologue, SceneStrings};
 use library::utils::bitmap_utils::BitmapSize;
+use crate::resources::path_to_bitmap;
 
 #[must_use]
 fn make_default_camera() -> Camera {
@@ -183,7 +187,7 @@ impl Sandbox {
                     self.engine.camera().set_kind(Box::new(OrthographicCamera {}));
                 } else if "d" == letter_key {
                     self.engine.objects().dump_scene_bvh("scene_bvh.dot").unwrap_or_else(|e| {
-                        println!("Failed to dump scene_bvh.dot: {e}");
+                        println!("failed to dump scene_bvh.dot: {e}");
                     });
                 } else if "r" == letter_key {
                     self.engine.camera().set_from(&make_default_camera());
@@ -226,6 +230,9 @@ impl Sandbox {
                 } else if "9" == letter_key {
                     self.tech_world.load_bitmap_texturing_demo_scene(self.engine.objects());
                     self.selected_object = None;
+                } else if "0" == letter_key {
+                    self.tech_world.load_text_demo_scene(self.engine.objects());
+                    self.selected_object = None;
                 }
             }
             _ => (),
@@ -240,18 +247,20 @@ impl Sandbox {
         
         let mut sdf_registrator = SdfRegistrator::default();
         let mut procedural_textures_registrator = ProceduralTextures::new(None);
-        
+        let scene_strings_prologue = SceneStringPrologue::new(path_to_bitmap("glyphs_atlas_ascii_domine.png"), &mut sdf_registrator)?;
+
         let tech_sdf_classes = TechWorldSdfClasses::new(&mut sdf_registrator);
         let beautiful_sdf_classes = BeautifulWorldSdfClasses::new(&mut sdf_registrator);
         
         let tech_world_procedural_textures = TechWorldProceduralTextures::new(&mut procedural_textures_registrator);
 
         let texture_atlas_page_size = BitmapSize::new(512, 512);
-        let mut scene = VisualObjects::new(Some(texture_atlas_page_size), Some(sdf_registrator), Some(procedural_textures_registrator));
+        let scene = Rc::new(RefCell::new(VisualObjects::new(Some(texture_atlas_page_size), Some(sdf_registrator), Some(procedural_textures_registrator))));
+        let strings = SceneStrings::new(scene.clone(), scene_strings_prologue);
 
-        let tech_world_bitmap_textures = TechWorldBitmapTextures::new(scene.mutable_texture_atlas_page_composer())?;
-        let tech_materials = TechWorldMaterials::new(&mut scene, tech_world_procedural_textures, tech_world_bitmap_textures);
-        let beautiful_materials = BeautifulWorldMaterials::new(&mut scene);
+        let tech_world_bitmap_textures = TechWorldBitmapTextures::new(scene.borrow_mut().mutable_texture_atlas_page_composer())?;
+        let tech_materials = TechWorldMaterials::new(&mut scene.borrow_mut(), tech_world_procedural_textures, tech_world_bitmap_textures);
+        let beautiful_materials = BeautifulWorldMaterials::new(&mut scene.borrow_mut());
         
         let mut tech_world = TechWorld::new(tech_sdf_classes, tech_materials);
         let selected_object_material = tech_world.selected_object_material();
@@ -259,7 +268,7 @@ impl Sandbox {
         let beautiful_world = BeautifulWorld::new(beautiful_sdf_classes, beautiful_materials);
 
         let caches_path = Some(PathBuf::from("./.caches"));
-        let mut engine = pollster::block_on(Engine::new(window.clone(), scene, camera, caches_path))?;
+        let mut engine = pollster::block_on(Engine::new(window.clone(), scene, Some(strings), camera, caches_path))?;
         
         tech_world.load_bitmap_texturing_demo_scene(engine.objects());
         

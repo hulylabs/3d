@@ -1,12 +1,29 @@
 use crate::utils::version::Version;
 
-#[derive(Default, Copy, Clone)]
-pub(super) struct Statistics {
-    data_version: Version,
+pub(super) struct Statistics<T> {
+    data_version: Version<T>,
     object_count: usize,
 }
 
-impl Statistics {
+impl<T> Default for Statistics<T> {
+    fn default() -> Self {
+        Self {
+            data_version: Version::default(),
+            object_count: 0,
+        }
+    }
+}
+
+impl<T> Clone for Statistics<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for Statistics<T> {
+}
+
+impl<T> Statistics<T> {
     pub(super) fn register_new_object(&mut self) {
         self.object_count += 1;
         self.data_version += 1;
@@ -23,7 +40,7 @@ impl Statistics {
     }
 
     #[must_use]
-    pub(super) fn data_version(&self) -> Version {
+    pub(super) fn data_version(&self) -> Version<T> {
         self.data_version
     }
 
@@ -43,13 +60,15 @@ mod tests {
     use super::*;
     use test_context::{test_context, TestContext};
 
+    struct TestStatisticsTarget;
+
     struct Context {
-        system_under_test: Statistics
+        system_under_test: Statistics<TestStatisticsTarget>
     }
 
     impl TestContext for Context {
         fn setup() -> Context {
-            Context {  system_under_test: Statistics::default() }
+            Context {  system_under_test: Statistics::<TestStatisticsTarget>::default() }
         }
 
         fn teardown(self) {
@@ -59,7 +78,7 @@ mod tests {
     #[test_context(Context)]
     #[test]
     fn test_initial_statistics(fixture: &mut Context) {
-        assert_eq!(fixture.system_under_test.data_version(), Version(0));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::default());
         assert_eq!(fixture.system_under_test.object_count(), 0);
     }
 
@@ -78,11 +97,11 @@ mod tests {
     fn test_register_new_object(fixture: &mut Context) {
         fixture.system_under_test.register_new_object();
         assert_eq!(fixture.system_under_test.object_count(), 1);
-        assert_eq!(fixture.system_under_test.data_version(), Version(1));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(1));
 
         fixture.system_under_test.register_new_object();
         assert_eq!(fixture.system_under_test.object_count(), 2);
-        assert_eq!(fixture.system_under_test.data_version(), Version(2));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(2));
     }
 
     #[test_context(Context)]
@@ -90,15 +109,15 @@ mod tests {
     fn test_register_object_mutation(fixture: &mut Context) {
         fixture.system_under_test.register_new_object();
         assert_eq!(fixture.system_under_test.object_count(), 1);
-        assert_eq!(fixture.system_under_test.data_version(), Version(1));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(1));
 
         fixture.system_under_test.register_object_mutation();
         assert_eq!(fixture.system_under_test.object_count(), 1);
-        assert_eq!(fixture.system_under_test.data_version(), Version(2));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(2));
 
         fixture.system_under_test.register_new_object();
         assert_eq!(fixture.system_under_test.object_count(), 2);
-        assert_eq!(fixture.system_under_test.data_version(), Version(3));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(3));
     }
 
     #[test_context(Context)]
@@ -106,11 +125,11 @@ mod tests {
     fn test_multiple_mutations(fixture: &mut Context) {
         fixture.system_under_test.register_new_object();
         assert_eq!(fixture.system_under_test.object_count(), 1);
-        assert_eq!(fixture.system_under_test.data_version(), Version(1));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(1));
 
         fixture.system_under_test.register_object_mutation();
         fixture.system_under_test.register_object_mutation();
         assert_eq!(fixture.system_under_test.object_count(), 1);
-        assert_eq!(fixture.system_under_test.data_version(), Version(3));
+        assert_eq!(fixture.system_under_test.data_version(), Version::<TestStatisticsTarget>::new(3));
     }
 }

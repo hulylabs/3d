@@ -1,4 +1,4 @@
-pub(super) mod color_buffer_evaluation;
+﻿pub(super) mod color_buffer_evaluation;
 
 pub(crate) mod resources;
 pub(crate) mod headless_device;
@@ -19,4 +19,7 @@ pub(crate) mod adapter_features;
 mod resizable_buffer;
 pub(crate) mod scaffolding;
 pub(crate) mod uniforms;
-mod bitmap_textures;
+mod bitmap_textures_atlas;
+mod bitmap_texture;
+mod glyphs_atlas;
+mod pipeline_code_producer;
