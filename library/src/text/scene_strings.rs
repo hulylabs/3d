@@ -139,6 +139,12 @@ impl SceneStrings {
 
     #[must_use]
     pub(crate) fn texel_to_world_scale(&self) -> f64 {
+        /*
+        0.0005 - tuned by hand constant to adjust SDF values from an MSDF texture
+        for sizes of a real scenes. TODO: evaluate the constant automatically.
+        The value depends on the texture dimention. Also one should use ray differentials
+        for sampling MSDF in the shader.
+        */
         self.atlas_composer.generation_time_distance_range() * 0.0005
     }
 
